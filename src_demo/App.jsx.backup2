@@ -6487,7 +6487,7 @@ export default function App({ onLogout, onBackToCoins }) {
                         cursor: (activeTool && ['dot', 'demonstration', 'magic'].includes(activeTool)) ? 'none' : 'crosshair'
                       }}
                     >
-                      {renderEngine === 'webgl' ? (
+                      {(renderEngine === 'webgl') ? (
                         <WebGLErrorBoundary onError={(error) => {
                           setRenderEngine('canvas2d');
                           showToast('WebGL Error: ' + error.message);
@@ -6528,10 +6528,10 @@ export default function App({ onLogout, onBackToCoins }) {
                             initialVisibleRange={viewportSnapshotRef.current}
                             onCrosshairMove={(x, y) => { /* Optional crosshair sync */ }}
                             onVisibleRangeChange={(range) => {
-                              if (drawingLayerRef.current) drawingLayerRef.current.draw();
                               if (range?.from && range?.to) {
                                 if (allCandles.length > 0) {
                                   const avgTime = (allCandles[allCandles.length - 1].time - allCandles[0].time) / allCandles.length;
+                                  // If we pan to the left, within 100 candles of the oldest data
                                   if (range.from < allCandles[0].time + (avgTime * 100)) {
                                     loadOlderData();
                                   }
@@ -6544,59 +6544,11 @@ export default function App({ onLogout, onBackToCoins }) {
                           />
                         </Suspense>
                         </WebGLErrorBoundary>
-                      ) : renderEngine === 'webgpu' ? (
-                        <Suspense fallback={
-                          <div className="w-full h-full flex items-center justify-center"
-                               style={{ background: '#0d1117' }}>
-                            <div className="flex flex-col items-center gap-3 animate-pulse">
-                              <Rocket size={36} className="text-purple-400" />
-                              <span className="text-sm font-medium text-purple-300">WebGPU Engine Loading...</span>
-                            </div>
-                          </div>
-                        }>
-                          <WebGPUChartEngine
-                            ref={webGLEngineRef}
-                            candles={allCandles}
-                            darkMode={darkMode}
-                            chartStyle={chartStyle}
-                            autoScale={autoScale}
-                            invertScale={invertScale}
-                            priceScaleMode={priceScaleMode}
-                            timezoneOffset={timezoneOffset}
-                            activeTool={activeTool}
-                            isHoveringDrawing={isHoveringDrawing}
-                            drawings={drawings}
-                            tempShape={tempShape}
-                            drawStart={drawStart}
-                            visualIndicators={visualIndicators}
-                            indicatorDataMap={indicatorDataMapRef.current}
-                            volumeProfile={volumeProfile}
-                            hoverCoords={hoverCoords}
-                            selectedDrawingId={selectedDrawingId}
-                            hideDrawings={hideDrawings}
-                            cursorSettings={cursorSettings}
-                            initialVisibleRange={viewportSnapshotRef.current}
-                            onVisibleRangeChange={(range) => {
-                              if (drawingLayerRef.current) drawingLayerRef.current.draw();
-                              if (range?.from && range?.to) {
-                                if (allCandles.length > 0) {
-                                  const avgTime = (allCandles[allCandles.length - 1].time - allCandles[0].time) / allCandles.length;
-                                  if (range.from < allCandles[0].time + (avgTime * 100)) {
-                                    loadOlderData();
-                                  }
-                                }
-                              }
-                            }}
-                            onChartReady={() => {
-                              viewportSnapshotRef.current = null;
-                            }}
-                          />
-                        </Suspense>
                       ) : (
                         <div ref={chartRef} className="w-full h-full absolute top-0 left-0" />
                       )}
           <PixiDrawingLayer
-            preference="webgl" 
+            preference={renderEngine === 'webgpu' ? 'webgpu' : 'webgl'} 
             ref={drawingLayerRef}
             drawings={drawings}
             brushPath={brushPath}
@@ -6634,7 +6586,7 @@ export default function App({ onLogout, onBackToCoins }) {
                       >
                         <div ref={chartRef} className="w-full h-full absolute top-0 left-0" />
           <PixiDrawingLayer
-            preference="webgl" 
+            preference={renderEngine === 'webgpu' ? 'webgpu' : 'webgl'} 
             ref={drawingLayerRef}
             drawings={drawings}
             brushPath={brushPath}
@@ -6674,7 +6626,7 @@ export default function App({ onLogout, onBackToCoins }) {
                       >
                         <div ref={chartRef} className="w-full h-full absolute top-0 left-0" />
           <PixiDrawingLayer
-            preference="webgl" 
+            preference={renderEngine === 'webgpu' ? 'webgpu' : 'webgl'} 
             ref={drawingLayerRef}
             drawings={drawings}
             brushPath={brushPath}
@@ -6714,7 +6666,7 @@ export default function App({ onLogout, onBackToCoins }) {
                       >
                         <div ref={chartRef} className="w-full h-full absolute top-0 left-0" />
           <PixiDrawingLayer
-            preference="webgl" 
+            preference={renderEngine === 'webgpu' ? 'webgpu' : 'webgl'} 
             ref={drawingLayerRef}
             drawings={drawings}
             brushPath={brushPath}

@@ -104,46 +104,63 @@ export function renderSessionDividers(graphics, options, getPixel) {
 }
 
 export function renderHoverTools(graphics, drawText, options) {
-  const { hoverCoords, activeTool, cursorSettings, magicTrail, width, height, coordinateToTimePrice } = options;
+  const { hoverCoords, activeTool, cursorSettings, magicTrail, width, height, coordinateToTimePrice, getPixel } = options;
   if (!hoverCoords || !activeTool) return;
 
   const hexColor = cursorSettings.color.startsWith('#') ? parseInt(cursorSettings.color.slice(1), 16) : 0xffffff;
   const opacity = cursorSettings.opacity / 100;
 
+  let x = hoverCoords.x;
+  let y = hoverCoords.y;
+  
+  if (hoverCoords.time !== undefined && hoverCoords.price !== undefined && getPixel) {
+    const coords = getPixel(hoverCoords.time, hoverCoords.price);
+    if (coords) {
+      x = coords.x;
+      y = coords.y;
+    }
+  }
+  
+  if (x === undefined || y === undefined) return;
+
   if (activeTool === 'crosshair') {
     if (cursorSettings.extendLines) {
-      graphics.moveTo(hoverCoords.x, 0);
-      graphics.lineTo(hoverCoords.x, height);
-      graphics.moveTo(0, hoverCoords.y);
-      graphics.lineTo(width, hoverCoords.y);
+      graphics.moveTo(x, 0);
+      graphics.lineTo(x, height);
+      graphics.moveTo(0, y);
+      graphics.lineTo(width, y);
     } else {
-      graphics.moveTo(hoverCoords.x - 8, hoverCoords.y);
-      graphics.lineTo(hoverCoords.x + 8, hoverCoords.y);
-      graphics.moveTo(hoverCoords.x, hoverCoords.y - 8);
-      graphics.lineTo(hoverCoords.x, hoverCoords.y + 8);
+      graphics.moveTo(x - 8, y);
+      graphics.lineTo(x + 8, y);
+      graphics.moveTo(x, y - 8);
+      graphics.lineTo(x, y + 8);
     }
     graphics.stroke({ color: hexColor, width: cursorSettings.size, alpha: opacity });
   } 
   else if (activeTool === 'dot') {
-    graphics.circle(hoverCoords.x, hoverCoords.y, cursorSettings.size * 1.5 + 2);
+    graphics.circle(x, y, 4);
     graphics.fill({ color: hexColor, alpha: opacity });
-    graphics.stroke({ color: 0x000000, width: 1 });
   } 
+  else if (activeTool === 'magic') {
+    graphics.circle(x, y, 3);
+    graphics.fill({ color: hexColor, alpha: 0.8 });
+    
+    if (magicTrail && magicTrail.length > 0) {
+      graphics.moveTo(magicTrail[0].x, magicTrail[0].y);
+      for (let i = 1; i < magicTrail.length; i++) {
+        graphics.lineTo(magicTrail[i].x, magicTrail[i].y);
+      }
+      graphics.stroke({ color: hexColor, width: 2, alpha: Math.max(0.2, opacity - 0.3) });
+    }
+  }
   else if (activeTool === 'demonstration') {
-    graphics.circle(hoverCoords.x, hoverCoords.y, 4);
+    graphics.circle(x, y, 4);
     graphics.fill({ color: hexColor, alpha: 1 });
     
     const pulseRadius = cursorSettings.size * 4 + Math.sin(Date.now() / 120) * 3;
-    graphics.circle(hoverCoords.x, hoverCoords.y, pulseRadius);
+    graphics.circle(x, y, pulseRadius);
     graphics.fill({ color: hexColor, alpha: opacity * 0.3 });
     graphics.stroke({ color: hexColor, width: 1, alpha: 0.5 });
-  } 
-  else if (activeTool === 'magic' && magicTrail) {
-    magicTrail.forEach((p, idx) => {
-      const alpha = ((idx + 1) / magicTrail.length) * opacity;
-      drawText('⭐', p.x - p.size/2, p.y - p.size/2, { fontSize: p.size + cursorSettings.size, fill: hexColor, alpha });
-    });
-    drawText('🪄', hoverCoords.x, hoverCoords.y, { fontSize: 16 });
   }
 
   if (cursorSettings.showTooltip && ['crosshair', 'dot', 'demonstration', 'magic'].includes(activeTool) && coordinateToTimePrice) {

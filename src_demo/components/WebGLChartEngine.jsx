@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import { WebGLErrorBoundary } from '../WebGLErrorBoundary';
+import { INDICATOR_REGISTRY } from '../indicatorsRegistry';
 import { calculateHorizontalTimeAxisLabels, calculateVerticalPriceAxisLabels } from '../utils/axisCollisionEngine';
 import { Application, Graphics, Container, Text, TextStyle } from 'pixi.js';
 
@@ -30,7 +32,8 @@ const drawDashedLine = (g, x1, y1, x2, y2, dash = 4, gap = 4) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const WebGLChartEngine = forwardRef(({
   width, height, candles, visualIndicators, indicatorDataMap, darkMode, autoScale,
-  initialVisibleRange, onVisibleRangeChange, onChartReady, activeTool, isHoveringDrawing, timezoneOffset = 0
+  initialVisibleRange, onVisibleRangeChange, onChartReady, activeTool, isHoveringDrawing, timezoneOffset = 0,
+  onRequestDraw
 }, ref) => {
 
   const containerRef   = useRef(null);
@@ -105,9 +108,11 @@ const WebGLChartEngine = forwardRef(({
       if (arr[mid].time < time)  lo = mid + 1;
       else                        hi = mid - 1;
     }
-    // Interpolate between lo-1 and lo
-    const t1 = arr[hi].time, t2 = arr[lo].time;
-    return t2 === t1 ? hi : hi + (time - t1) / (t2 - t1);
+    if (hi < 0) return 0;
+    if (lo >= arr.length) return arr.length - 1;
+    const t0 = arr[hi].time;
+    const t1 = arr[lo].time;
+    return hi + (time - t0) / (t1 - t0);
   };
 
   // Float index → interpolated timestamp
@@ -432,6 +437,57 @@ const WebGLChartEngine = forwardRef(({
       }
     }
 
+    // ── Indicators (Overlays) ─────────────────────────────────────────────
+    if (!isPanOnly && visualIndicators && indicatorDataMap) {
+      const activeOverlays = visualIndicators.filter(i => i.visible && INDICATOR_REGISTRY[i.type]?.kind === 'overlay');
+      activeOverlays.forEach(ind => {
+        const reg = INDICATOR_REGISTRY[ind.type];
+        const dataObj = indicatorDataMap[ind.id];
+        if (!reg || !dataObj) return;
+        
+        reg.seriesConfig.forEach(series => {
+          const lineData = dataObj[series.key];
+          if (!lineData || lineData.length === 0) return;
+          const opts = series.options(ind.params, ind.color);
+          
+          let colorStr = opts.color || '#2962ff';
+          let colorNum = 0x2962ff;
+          let alpha = 1.0;
+          if (colorStr.startsWith('#')) {
+            colorNum = parseInt(colorStr.replace('#', '0x'), 16) || 0x2962ff;
+          } else if (colorStr.startsWith('rgba')) {
+            const parts = colorStr.match(/[\d.]+/g);
+            if (parts && parts.length >= 4) {
+              colorNum = (parseInt(parts[0]) << 16) + (parseInt(parts[1]) << 8) + parseInt(parts[2]);
+              alpha = parseFloat(parts[3]);
+            }
+          }
+          
+          const thickness = opts.lineWidth || 1.5;
+          let started = false;
+          
+          for (let i = 0; i < lineData.length; i++) {
+            const pt = lineData[i];
+            const idx = timeToIndex(pt.time);
+            if (idx < v.timeRange.from - 5 || idx > v.timeRange.to + 5) continue;
+            
+            const sx = (idx - v.lastDrawnFrom) * scaleX;
+            const sy = py(pt.value);
+            
+            if (!started) {
+              indicatorLayerRef.current.moveTo(sx, sy);
+              started = true;
+            } else {
+              indicatorLayerRef.current.lineTo(sx, sy);
+            }
+          }
+          if (started) {
+            indicatorLayerRef.current.stroke({ width: thickness, color: colorNum, alpha: alpha });
+          }
+        });
+      });
+    }
+
     // ── Live price line ───────────────────────────────────────────────────
     const lastC  = candles[candles.length - 1];
     const isUp   = lastC.close >= lastC.open;
@@ -513,6 +569,10 @@ const WebGLChartEngine = forwardRef(({
     }
 
     hideUnusedTexts(textIndex);
+
+    if (onRequestDraw) {
+      onRequestDraw();
+    }
   };
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -581,7 +641,6 @@ const WebGLChartEngine = forwardRef(({
 
       // ── Wheel: zoom or horizontal pan ────────────────────────────────
       app.canvas.addEventListener('wheel', (e) => {
-        if (activeToolRef.current) return;
         e.preventDefault();
         const v = viewportRef.current;
         const cW = app.screen.width;
@@ -611,19 +670,23 @@ const WebGLChartEngine = forwardRef(({
 
       // ── Pointer down ──────────────────────────────────────────────────
       app.canvas.addEventListener('pointerdown', (e) => {
-        if (activeToolRef.current || isHoveringDrawingRef.current) return;
         const v  = viewportRef.current;
         const cW = app.screen.width;
         const cH = app.screen.height;
+        
+        let dragType = 'chart';
+        if      (e.offsetX > cW - (v.pAxisW || 64)) dragType = 'price';
+        else if (e.offsetY > cH - 26)               dragType = 'time';
+        
+        if (dragType === 'chart' && (activeToolRef.current || isHoveringDrawingRef.current)) return;
+        
         interactionRef.current.isDragging   = true;
         interactionRef.current.isGliding    = false;
         interactionRef.current.velocityX    = 0;
         interactionRef.current.lastX        = e.offsetX;
         interactionRef.current.lastY        = e.offsetY;
         interactionRef.current.lastDragTime = performance.now();
-        if      (e.offsetX > cW - (v.pAxisW || 64)) interactionRef.current.dragType = 'price';
-        else if (e.offsetY > cH - 26)               interactionRef.current.dragType = 'time';
-        else                                         interactionRef.current.dragType = 'chart';
+        interactionRef.current.dragType     = dragType;
       });
 
       // ── Double-click: reset price scale ──────────────────────────────

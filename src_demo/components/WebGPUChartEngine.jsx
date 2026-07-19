@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useImperativeHandle } from 'react';
 import { lineToQuad, raycastDrawings } from '../utils/webgpuMath';
 import { calculateHorizontalTimeAxisLabels, calculateVerticalPriceAxisLabels } from '../utils/axisCollisionEngine';
+import { INDICATOR_REGISTRY } from '../indicatorsRegistry';
 
 // Basic utility to map time to index
 function timeToIndex(time, candles) {
@@ -58,26 +59,31 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 `;
 
 const WebGPUChartEngine = React.forwardRef(({
-  data = [],
-  layout = {},
-  theme = {},
+  candles = [],
+  darkMode = false,
+  chartStyle = 'Candles',
   priceScaleMode = 0,
   autoScale = true,
+  invertScale = false,
+  timezoneOffset = 0,
   initialVisibleRange,
   onVisibleRangeChange,
   onChartReady,
-  activeTool,
+  activeTool = null,
   isHoveringDrawing,
-  timezoneOffset = 0,
-  preference = 'webgpu',
   drawings = [],
   tempShape = null,
   drawStart = null,
-  activeTool = null,
   onDrawingComplete,
   onDrawingDelete,
   visualIndicators = [],
-  indicatorDataMap = {}
+  indicatorDataMap = {},
+  volumeProfile = [],
+  hoverCoords,
+  selectedDrawingId,
+  hideDrawings = false,
+  cursorSettings = {},
+  onRequestDraw
 }, ref) => {
   const containerRef = useRef(null);
   const gpuCanvasRef = useRef(null);
@@ -110,12 +116,13 @@ const WebGPUChartEngine = React.forwardRef(({
   const dpr = window.devicePixelRatio || 1;
 
   
-  const timeToIndex = (time, data) => {
-    let l = 0, r = data.length - 1;
+  const timeToIndex = (time, arr) => {
+    if (!arr || arr.length === 0) return 0;
+    let l = 0, r = arr.length - 1;
     while (l <= r) {
       const m = (l + r) >> 1;
-      if (data[m].time === time) return m;
-      if (data[m].time < time) l = m + 1;
+      if (arr[m].time === time) return m;
+      if (arr[m].time < time) l = m + 1;
       else r = m - 1;
     }
     return l;
@@ -392,8 +399,9 @@ const WebGPUChartEngine = React.forwardRef(({
           entries: [{ binding: 0, resource: { buffer: uniformBuffer } }]
         });
         
+        gpu.current.lineBufferSize = 1000 * 48; // 1000 lines * 2 verts * 6 floats * 4 bytes
         gpu.current.lineBuffer = device.createBuffer({
-          size: 1000 * 48, // 1000 lines * 2 verts * 6 floats * 4 bytes
+          size: gpu.current.lineBufferSize,
           usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
         });
         
@@ -424,7 +432,7 @@ const WebGPUChartEngine = React.forwardRef(({
     const timeAxisY = ch - (26 * dpr);
     
     // Generate Buffer Data for Candlesticks
-    if (data && data.length > 0) {
+    if (candles && candles.length > 0) {
       const logicalRange = vState.current.logicalRange;
       const rangeLen = logicalRange.to - logicalRange.from;
       const candleW = Math.max(1, ((cw - pAxisW) / rangeLen) * 0.8);
@@ -438,7 +446,7 @@ const WebGPUChartEngine = React.forwardRef(({
       
       // Calculate visible slice
       const fromIdx = Math.max(0, Math.floor(logicalRange.from));
-      const toIdx = Math.min(data.length - 1, Math.ceil(logicalRange.to));
+      const toIdx = Math.min(candles.length - 1, Math.ceil(logicalRange.to));
       
       const candlesToDraw = toIdx - fromIdx + 1;
       if (candlesToDraw > 0) {
@@ -473,7 +481,7 @@ const WebGPUChartEngine = React.forwardRef(({
         };
         
         for (let i = fromIdx; i <= toIdx; i++) {
-          const c = data[i];
+          const c = candles[i];
           const px = ((i - logicalRange.from) / rangeLen) * (cw - pAxisW);
           const isUp = c.close >= c.open;
           const color = isUp ? upColor : downColor;
@@ -532,8 +540,8 @@ const WebGPUChartEngine = React.forwardRef(({
       renderPass.draw(gpu.current.vertexCount);
     }
     
-    // NATIVE WEBGPU DRAWINGS RENDERER (Trendlines, etc)
-    if (drawings && drawings.length > 0 && gpu.current.linePipeline) {
+    // NATIVE WEBGPU DRAWINGS & INDICATORS RENDERER
+    if (gpu.current.linePipeline) {
        const cw = vState.current.width * dpr;
        const ch = vState.current.height * dpr;
        const pAxisW = 64 * dpr;
@@ -547,45 +555,125 @@ const WebGPUChartEngine = React.forwardRef(({
        const rangeLen = logicalRange.to - logicalRange.from;
        
        const px = (time) => {
-         const idx = timeToIndex(time, data);
+         const idx = timeToIndex(time, candles);
          return ((idx - logicalRange.from) / rangeLen) * (cw - pAxisW);
        };
        const py = (price) => timeAxisY - ((price - min) * priceScale);
 
-       const lineData = new Float32Array((drawings.length + 1) * 36); // +1 for internal tempShape. 6 verts per quad, 6 floats per vert = 36 floats per line
-       let ptr = 0;
-       const color = [0.2, 0.6, 1.0, 1.0]; // Blue
+       // First pass: Calculate total line segments needed
+       let totalSegments = 0;
        
-       const drawThickLine = (p1, p2, thickness = 2) => {
-           const v1 = { x: px(p1.time), y: py(p1.price) };
-           const v2 = { x: px(p2.time), y: py(p2.price) };
-           const quadVertices = lineToQuad(v1, v2, thickness);
-           
-           for (const v of quadVertices) {
-               lineData[ptr++] = v.x; lineData[ptr++] = v.y;
-               lineData[ptr++] = color[0]; lineData[ptr++] = color[1]; lineData[ptr++] = color[2]; lineData[ptr++] = color[3];
+       // Trendlines count
+       if (drawings && drawings.length > 0) {
+           for (let i = 0; i < drawings.length; i++) {
+               if (drawings[i].tool === 'trendline' && drawings[i].points.length >= 2) totalSegments++;
            }
-       };
-
-       for (let i=0; i<drawings.length; i++) {
-          const d = drawings[i];
-          if (d.tool === 'trendline' && d.points.length >= 2) {
-             drawThickLine(d.points[0], d.points[1], 2);
-          }
        }
-       
-       // Draw autonomous internal active shape
        if (activeTool === 'trendline' && gpu.current.activeDrawStart && gpu.current.activeTempShape) {
-          drawThickLine(gpu.current.activeDrawStart, gpu.current.activeTempShape, 2);
+           totalSegments++;
        }
        
-       if (ptr > 0) {
-          gpu.current.device.queue.writeBuffer(gpu.current.lineBuffer, 0, lineData, 0, ptr);
-          renderPass.setPipeline(gpu.current.linePipeline);
-          renderPass.setBindGroup(0, gpu.current.lineBindGroup);
-          renderPass.setVertexBuffer(0, gpu.current.lineBuffer);
-          renderPass.draw(ptr / 6); // 6 floats per vertex
-       } // 6 floats per vertex
+       // Indicators count
+       const activeOverlays = visualIndicators ? visualIndicators.filter(i => i.visible && INDICATOR_REGISTRY[i.type]?.kind === 'overlay') : [];
+       let indicatorRenderData = []; 
+       activeOverlays.forEach(ind => {
+           const reg = INDICATOR_REGISTRY[ind.type];
+           const dataObj = indicatorDataMap ? indicatorDataMap[ind.id] : null;
+           if (!reg || !dataObj) return;
+           
+           reg.seriesConfig.forEach(series => {
+               const lineData = dataObj[series.key];
+               if (!lineData || lineData.length < 2) return;
+               
+               const opts = series.options(ind.params, ind.color);
+               let colorStr = opts.color || '#2962ff';
+               let colorArr = [0.16, 0.38, 1.0, 1.0]; // default blue
+               if (colorStr.startsWith('#')) {
+                   const hex = parseInt(colorStr.replace('#', '0x'), 16) || 0x2962ff;
+                   colorArr = [((hex >> 16) & 0xFF)/255, ((hex >> 8) & 0xFF)/255, (hex & 0xFF)/255, 1.0];
+               } else if (colorStr.startsWith('rgba')) {
+                   const parts = colorStr.match(/[\d.]+/g);
+                   if (parts && parts.length >= 4) {
+                       colorArr = [parseInt(parts[0])/255, parseInt(parts[1])/255, parseInt(parts[2])/255, parseFloat(parts[3])];
+                   }
+               }
+               const thickness = (opts.lineWidth || 1.5) * dpr;
+               
+               // Collect segments in visible range
+               let validPoints = [];
+               for (let i = 0; i < lineData.length; i++) {
+                   const pt = lineData[i];
+                   const idx = timeToIndex(pt.time, candles);
+                   // Only collect if somewhat near visible range
+                   if (idx >= logicalRange.from - 5 && idx <= logicalRange.to + 5) {
+                       validPoints.push({ x: px(pt.time), y: py(pt.value) });
+                   }
+               }
+               
+               if (validPoints.length >= 2) {
+                   totalSegments += (validPoints.length - 1);
+                   indicatorRenderData.push({ points: validPoints, color: colorArr, thickness });
+               }
+           });
+       });
+       
+       if (totalSegments > 0) {
+           const floatsRequired = totalSegments * 36; // 6 vertices * 6 floats per line segment
+           
+           // Ensure buffer is large enough
+           if (!gpu.current.lineBuffer || gpu.current.lineBufferSize < floatsRequired * 4) {
+               if (gpu.current.lineBuffer) gpu.current.lineBuffer.destroy();
+               gpu.current.lineBufferSize = floatsRequired * 4 * 1.5; // 50% headroom
+               gpu.current.lineBuffer = gpu.current.device.createBuffer({
+                   size: gpu.current.lineBufferSize,
+                   usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+               });
+           }
+           
+           const lineData = new Float32Array(floatsRequired);
+           let ptr = 0;
+           
+           const pushThickLine = (v1, v2, thickness, color) => {
+               const quadVertices = lineToQuad(v1, v2, thickness);
+               for (const v of quadVertices) {
+                   lineData[ptr++] = v.x; lineData[ptr++] = v.y;
+                   lineData[ptr++] = color[0]; lineData[ptr++] = color[1]; lineData[ptr++] = color[2]; lineData[ptr++] = color[3];
+               }
+           };
+
+           // 1. Draw indicator lines
+           for (const item of indicatorRenderData) {
+               const { points, color, thickness } = item;
+               for (let i = 0; i < points.length - 1; i++) {
+                   pushThickLine(points[i], points[i+1], thickness, color);
+               }
+           }
+           
+           // 2. Draw drawings lines
+           const drawingColor = [0.2, 0.6, 1.0, 1.0];
+           if (drawings && drawings.length > 0) {
+               for (let i=0; i<drawings.length; i++) {
+                   const d = drawings[i];
+                   if (d.tool === 'trendline' && d.points.length >= 2) {
+                       const v1 = { x: px(d.points[0].time), y: py(d.points[0].price) };
+                       const v2 = { x: px(d.points[1].time), y: py(d.points[1].price) };
+                       pushThickLine(v1, v2, 2 * dpr, drawingColor);
+                   }
+               }
+           }
+           if (activeTool === 'trendline' && gpu.current.activeDrawStart && gpu.current.activeTempShape) {
+               const v1 = { x: px(gpu.current.activeDrawStart.time), y: py(gpu.current.activeDrawStart.price) };
+               const v2 = { x: px(gpu.current.activeTempShape.time), y: py(gpu.current.activeTempShape.price) };
+               pushThickLine(v1, v2, 2 * dpr, drawingColor);
+           }
+           
+           if (ptr > 0) {
+               gpu.current.device.queue.writeBuffer(gpu.current.lineBuffer, 0, lineData, 0, ptr);
+               renderPass.setPipeline(gpu.current.linePipeline);
+               renderPass.setBindGroup(0, gpu.current.lineBindGroup);
+               renderPass.setVertexBuffer(0, gpu.current.lineBuffer);
+               renderPass.draw(ptr / 6);
+           }
        }
     }
     
@@ -593,7 +681,7 @@ const WebGPUChartEngine = React.forwardRef(({
     renderPass.end();
     gpu.current.device.queue.submit([commandEncoder.finish()]);
     
-    
+    if (onRequestDraw) onRequestDraw();
   };
 
   const renderTextOverlay = (renderPass) => {
@@ -683,13 +771,13 @@ const WebGPUChartEngine = React.forwardRef(({
         }
         
         // Auto-scale price initially if needed
-        if (autoScale && data.length > 0) {
+        if (autoScale && candles.length > 0) {
            let minP = Infinity, maxP = -Infinity;
            const from = Math.max(0, Math.floor(vState.current.logicalRange.from));
-           const to = Math.min(data.length - 1, Math.ceil(vState.current.logicalRange.to));
+           const to = Math.min(candles.length - 1, Math.ceil(vState.current.logicalRange.to));
            for (let i=from; i<=to; i++) {
-              if (data[i].low < minP) minP = data[i].low;
-              if (data[i].high > maxP) maxP = data[i].high;
+              if (candles[i].low < minP) minP = candles[i].low;
+              if (candles[i].high > maxP) maxP = candles[i].high;
            }
            if (minP !== Infinity && maxP !== -Infinity) {
               const pad = (maxP - minP) * 0.1;
@@ -702,7 +790,7 @@ const WebGPUChartEngine = React.forwardRef(({
     });
     observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, [data, autoScale]);
+  }, [candles, autoScale]);
 
   // Pointer Events for Panning and Zooming
   useEffect(() => {
@@ -716,8 +804,17 @@ const WebGPUChartEngine = React.forwardRef(({
     let startLogicalTo = 0;
     
     const onPointerDown = (e) => {
+      const { left, top } = canvas.getBoundingClientRect();
+      const px = e.clientX - left;
+      const py = e.clientY - top;
+      
+      const cw = vState.current.width;
+      const ch = vState.current.height;
+      
+      const isAxisClick = (px > cw - 64) || (py > ch - 26);
+      
       // INTERNAL DRAWING LOGIC (Autonomous WebGPU)
-      if (activeTool === 'eraser') {
+      if (!isAxisClick && activeTool === 'eraser') {
          const { left, top } = canvas.getBoundingClientRect();
          const mouseX = e.clientX - left;
          const mouseY = e.clientY - top;
@@ -732,7 +829,7 @@ const WebGPUChartEngine = React.forwardRef(({
          const logicalRange = vState.current.logicalRange;
          const rangeLen = logicalRange.to - logicalRange.from;
          const px = (time) => {
-            const idx = timeToIndex(time, data);
+            const idx = timeToIndex(time, candles);
             return ((idx - logicalRange.from) / rangeLen) * (cw - 64);
          };
          
@@ -743,7 +840,7 @@ const WebGPUChartEngine = React.forwardRef(({
          return;
       }
       
-      if (activeTool && activeTool !== 'cursor') {
+      if (!isAxisClick && activeTool && activeTool !== 'cursor') {
          const { left, top } = canvas.getBoundingClientRect();
          const px = e.clientX - left;
          const py = e.clientY - top;
@@ -760,7 +857,7 @@ const WebGPUChartEngine = React.forwardRef(({
          const rangeLen = logicalRange.to - logicalRange.from;
          const idx = logicalRange.from + ((px / (cw - 64)) * rangeLen);
          
-         const time = data[Math.min(data.length - 1, Math.max(0, Math.floor(idx)))]?.time || 0;
+         const time = candles[Math.min(candles.length - 1, Math.max(0, Math.floor(idx)))]?.time || 0;
          const coordinate = { time, price };
          
          if (!gpu.current.activeDrawStart) {
@@ -810,8 +907,8 @@ const WebGPUChartEngine = React.forwardRef(({
          const rangeLen = logicalRange.to - logicalRange.from;
          const idx = logicalRange.from + ((px / (cw - 64)) * rangeLen);
          
-         const cIdx = Math.min(data.length - 1, Math.max(0, Math.floor(idx)));
-         const c = data[cIdx];
+         const cIdx = Math.min(candles.length - 1, Math.max(0, Math.floor(idx)));
+         const c = candles[cIdx];
          const time = c?.time || 0;
          
          // Crosshair Magnet Snapping
@@ -852,7 +949,6 @@ const WebGPUChartEngine = React.forwardRef(({
     };
     
     const onPointerUp = (e) => {
-      if (activeTool && activeTool !== 'cursor') return;
       isDragging = false;
       canvas.releasePointerCapture(e.pointerId);
     };
@@ -863,7 +959,7 @@ const WebGPUChartEngine = React.forwardRef(({
        const rangeLen = vState.current.logicalRange.to - vState.current.logicalRange.from;
        const center = vState.current.logicalRange.from + (rangeLen / 2);
        
-       const newLen = Math.max(10, Math.min(data.length, rangeLen * zoomFactor));
+       const newLen = Math.max(10, Math.min(candles.length, rangeLen * zoomFactor));
        vState.current.logicalRange.from = center - (newLen / 2);
        vState.current.logicalRange.to = center + (newLen / 2);
        
@@ -886,7 +982,7 @@ const WebGPUChartEngine = React.forwardRef(({
       canvas.removeEventListener('pointercancel', onPointerUp);
       canvas.removeEventListener('wheel', onWheel);
     };
-  }, [data, activeTool, onVisibleRangeChange]);
+  }, [candles, activeTool, onVisibleRangeChange]);
 
   useImperativeHandle(ref, () => ({
     timeScale: () => ({
@@ -910,7 +1006,7 @@ const WebGPUChartEngine = React.forwardRef(({
        const logicalRange = vState.current.logicalRange;
        const rangeLen = logicalRange.to - logicalRange.from;
        
-       const idx = timeToIndex(time, data);
+       const idx = timeToIndex(time, candles);
        const x = ((idx - logicalRange.from) / rangeLen) * (cw - pAxisW);
        const y = timeAxisY - ((price - min) * priceScale);
        return { x, y };
