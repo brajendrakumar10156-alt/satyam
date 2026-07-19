@@ -1,0 +1,64 @@
+# Tri-Engine Architecture: Canvas 2D, WebGL & WebGPU
+
+We will completely separate the architectures into three distinct engines in `src_demo`: **Canvas 2D (Lightweight Charts)**, **WebGL (PixiJS)**, and a new **WebGPU (PixiJS v8 / Native WGSL)** engine. We will implement native drawing tools and indicators for each engine in its respective native language, ensuring peak performance. Finally, we will build a universal bridge between all three engines so data is perfectly preserved when toggling between them via a 3-way switch.
+
+## User Review Required
+> [!IMPORTANT]
+> This is a major architectural overhaul. We will do this **strictly in `src_demo`** so your original `src` remains completely untouched and safe. We will use `src` only as a reference for your original logic.
+
+## Open Questions
+> [!NOTE]
+> All questions have been answered. You confirmed that ALL indicators, graphs, and drawing tools must be implemented natively for each engine, sharing a common logic (Time/Price coordinates) to ensure zero data loss when switching.
+
+## Proposed Changes
+
+---
+
+### Phase 1: Clean Architecture Separation (3-Way Switch)
+
+We will extract the charting logic from `App.jsx` into a unified `ChartController`. This controller will mount either Canvas 2D, WebGL, or WebGPU based on a 3-way toggle switch.
+
+#### [NEW] `src_demo/components/ChartController.jsx`
+- Acts as the parent container.
+- Holds the shared state for the viewport (visible time range and price range).
+- Renders `<Canvas2DEngine />`, `<WebGLChartEngine />`, or `<WebGPUChartEngine />`.
+
+#### [NEW] `src_demo/components/Canvas2DEngine.jsx`
+- A clean, isolated component containing ONLY the Lightweight Charts logic.
+
+#### [NEW] `src_demo/components/WebGPUChartEngine.jsx`
+- A dedicated engine utilizing modern WebGPU for ultra-high-performance rendering.
+- Custom WGSL (WebGPU Shading Language) pipelines for complex visual effects if needed.
+
+---
+
+### Phase 2: Native WebGL & WebGPU Drawings
+
+We will add dedicated interactive layers for both GPU engines to draw and manipulate tools natively on the GPU.
+
+#### [MODIFY] `src_demo/components/WebGLChartEngine.jsx` & [NEW] `src_demo/components/WebGPUChartEngine.jsx`
+- Implement native interaction events (`pointerdown`, `pointermove`, `pointerup`) to allow the user to draw directly on the GPU canvas.
+- Create native rendering pipelines for:
+  - Lines (Trendlines, Rays, Horizontal Lines)
+  - Text (Labels)
+  - Polygons (Fibonacci Retracements)
+  - Indicators (SMA, EMA, RSI)
+- For WebGPU, drawing pipelines will be strictly optimized for `preference: 'webgpu'` using Pixi v8.
+
+---
+
+### Phase 3: Universal State Synchronization (The "Bridge")
+
+When the user clicks the 3-way toggle (Canvas 2D -> WebGL -> WebGPU), we must ensure zero data loss.
+
+#### [MODIFY] `src_demo/store/drawingStore.js`
+- Ensure the store holds purely mathematical data (e.g., `{ id, type, points: [{time, price}], color }`).
+- Both engines will strictly read and write to this unified format.
+- When toggling, the `ChartController` will fetch the exact `visibleLogicalRange` from the active engine and pass it as the `initialViewport` to the incoming engine.
+
+## Verification Plan
+
+### Manual Verification
+1. **Toggle Test:** Draw a trendline in Canvas 2D. Toggle to WebGL. Toggle to WebGPU. Verify the drawings appear exactly in the same place across all 3 engines.
+2. **Native Drawing Test:** While in WebGPU mode, draw a new Fibonacci. Toggle back to Canvas 2D. Verify the transfer.
+3. **Performance:** Ensure panning and zooming in WebGPU with millions of points/drawings handles gracefully at 60FPS+.

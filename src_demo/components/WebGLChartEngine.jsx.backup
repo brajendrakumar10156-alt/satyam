@@ -1,0 +1,706 @@
+import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
+import { Application, Graphics, Container, Text, TextStyle } from 'pixi.js';
+
+const drawDashedLine = (graphics, x1, y1, x2, y2, dash = 4, gap = 4) => {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.sqrt(dx*dx + dy*dy);
+    if (len === 0) return;
+    const steps = len / (dash + gap);
+    for (let i = 0; i < steps; i++) {
+        const sx = x1 + (dx / len) * (i * (dash + gap));
+        const sy = y1 + (dy / len) * (i * (dash + gap));
+        let ex = sx + (dx / len) * dash;
+        let ey = sy + (dy / len) * dash;
+        
+        if ((dx > 0 && ex > x2) || (dx < 0 && ex < x2)) ex = x2;
+        if ((dy > 0 && ey > y2) || (dy < 0 && ey < y2)) ey = y2;
+        
+        graphics.moveTo(sx, sy).lineTo(ex, ey);
+    }
+};
+
+const WebGLChartEngine = forwardRef(({
+  width, height, candles, visualIndicators, indicatorDataMap, darkMode, autoScale,
+  initialVisibleRange, onVisibleRangeChange, onChartReady, activeTool, timezoneOffset = 0
+}, ref) => {
+  const containerRef = useRef(null);
+  const appRef = useRef(null);
+  const activeToolRef = useRef(activeTool);
+  
+  useEffect(() => {
+    activeToolRef.current = activeTool;
+  }, [activeTool]);
+
+  // Layers
+  const gridLayerRef = useRef(null);
+  const volumeLayerRef = useRef(null);
+  const candleLayerRef = useRef(null);
+  const indicatorLayerRef = useRef(null);
+  const crosshairLayerRef = useRef(null);
+  const livePriceLayerRef = useRef(null);
+  const axesTextContainerRef = useRef(null);
+  const axesBgLayerRef = useRef(null);
+  
+  // State
+  const viewportRef = useRef({
+    timeRange: { from: 0, to: 0 },
+    priceRange: { min: 0, max: 0 },
+    scaleX: 1, scaleY: 1,
+    manualPriceScale: false
+  });
+  
+  const cachedStyles = useRef({ darkMode: null, axisText: null, crosshairText: null, livePriceText: null });
+  
+  const interactionRef = useRef({ 
+      isDragging: false, hoverX: -1, hoverY: -1, isHovering: false, lastX: 0, lastY: 0,
+      velocityX: 0, isGliding: false, lastDragTime: 0, dragType: 'chart'
+  });
+  
+  // Text Pooling
+  const textPoolRef = useRef([]);
+
+  const getPooledText = (index, style) => {
+    let t = textPoolRef.current[index];
+    if (!t) {
+      t = new Text({ text: '', style });
+      axesTextContainerRef.current.addChild(t);
+      textPoolRef.current[index] = t;
+    }
+    t.visible = true;
+    t.style = style;
+    return t;
+  };
+  
+  const hideUnusedTexts = (startIndex) => {
+    for (let i = startIndex; i < textPoolRef.current.length; i++) {
+      textPoolRef.current[i].visible = false;
+    }
+  };
+
+  const getP = (price, cH) => {
+      const v = viewportRef.current;
+      return (v.priceRange.max - price) * v.scaleY + ((cH - 26) * 0.10);
+  };
+  
+  const getTStatic = (time) => {
+      const v = viewportRef.current;
+      return (time - (v.lastDrawnTimeFrom ?? v.timeRange.from)) * v.scaleX;
+  };
+
+  const getTDynamic = (time) => {
+      const v = viewportRef.current;
+      return (time - v.timeRange.from) * v.scaleX;
+  };
+
+  useImperativeHandle(ref, () => ({
+    getPixel: (time, price) => {
+      if (!appRef.current) return { x: 0, y: 0 };
+      const cH = appRef.current.screen.height;
+      return { x: getTDynamic(time), y: getP(price, cH) };
+    },
+    coordinateToTimePrice: (x, y) => {
+      if (!appRef.current) return { time: 0, price: 0 };
+      const v = viewportRef.current;
+      const cH = appRef.current.screen.height;
+      return {
+        time: (x / v.scaleX) + v.timeRange.from,
+        price: v.priceRange.max - ((y - ((cH - 26) * 0.10)) / v.scaleY)
+      };
+    }
+  }));
+
+  const formatTime = (ts) => {
+    const d = new Date(ts * 1000);
+    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+  };
+
+  const drawAll = (isPanOnly = false) => {
+    if (!appRef.current || !candleLayerRef.current) return;
+    const v = viewportRef.current;
+    const cW = appRef.current.screen.width;
+    const cH = appRef.current.screen.height;
+
+    if (isPanOnly && v.lastDrawnTimeFrom !== undefined) {
+        const offset = (v.lastDrawnTimeFrom - v.timeRange.from) * v.scaleX;
+        if (Math.abs(offset) > cW) isPanOnly = false;
+    }
+
+    let visibleCandles = [];
+    if (!isPanOnly && candles && candles.length > 0) {
+       let minP = Infinity;
+       let maxP = -Infinity;
+       let maxVol = 0;
+       
+       const range = v.timeRange.to - v.timeRange.from;
+       const overscanFrom = v.timeRange.from - range;
+       const overscanTo = v.timeRange.to + range;
+       
+       for (let i=0; i<candles.length; i++) {
+         const c = candles[i];
+         // Auto-scale based on strict visible range
+         if (c.time >= v.timeRange.from && c.time <= v.timeRange.to) {
+           if (autoScale && !v.manualPriceScale) {
+             if (c.low < minP) minP = c.low;
+             if (c.high > maxP) maxP = c.high;
+           }
+         }
+         // Draw based on overscan range
+         if (c.time >= overscanFrom && c.time <= overscanTo) {
+             visibleCandles.push(c);
+             if (c.volume > maxVol) maxVol = c.volume;
+         }
+       }
+       if (autoScale && !v.manualPriceScale && minP !== Infinity) {
+         v.priceRange.min = minP;
+         v.priceRange.max = maxP;
+       }
+       v.maxVol = maxVol;
+       
+       v.scaleX = cW / (range || 1);
+       v.scaleY = ((cH - 26) * 0.80) / (v.priceRange.max - v.priceRange.min || 1);
+       v.lastDrawnTimeFrom = v.timeRange.from;
+    }
+
+    gridLayerRef.current.clear();
+    
+    if (!isPanOnly) {
+       volumeLayerRef.current.clear();
+       candleLayerRef.current.clear();
+       indicatorLayerRef.current.clear();
+       
+       candleLayerRef.current.position.x = 0;
+       volumeLayerRef.current.position.x = 0;
+       indicatorLayerRef.current.position.x = 0;
+    } else {
+       const offset = (v.lastDrawnTimeFrom - v.timeRange.from) * v.scaleX;
+       candleLayerRef.current.position.x = offset;
+       volumeLayerRef.current.position.x = offset;
+       indicatorLayerRef.current.position.x = offset;
+    }
+    
+    crosshairLayerRef.current.clear();
+    livePriceLayerRef.current.clear();
+    axesBgLayerRef.current.clear();
+    
+    // Update background color dynamically to fix Day/Light mode toggle
+    if (appRef.current) {
+        appRef.current.renderer.background.color = darkMode ? 0x0d1117 : 0xffffff;
+    }
+    
+    const axisBgColor = darkMode ? 0x0d1117 : 0xffffff;
+    
+    // Bottom time scale background
+    axesBgLayerRef.current.rect(0, cH - 26, cW, 26).fill({ color: axisBgColor });
+    // Right price scale background
+    axesBgLayerRef.current.rect(cW - 55, 0, 55, cH).fill({ color: axisBgColor });
+
+    const gridColor = darkMode ? 0x2A2E39 : 0xE0E3EB;
+    const gridAlpha = darkMode ? 0.6 : 0.8;
+    
+    if (cachedStyles.current.darkMode !== darkMode) {
+        cachedStyles.current.darkMode = darkMode;
+        const fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif";
+        cachedStyles.current.axisText = new TextStyle({
+            fontFamily, fontSize: 11, fontWeight: '500', fill: darkMode ? '#8b93a6' : '#4b5563'
+        });
+        cachedStyles.current.axisTextBoldDark = new TextStyle({
+            fontFamily, fontSize: 11, fontWeight: 'bold', fill: '#d1d5db'
+        });
+        cachedStyles.current.axisTextBoldLight = new TextStyle({
+            fontFamily, fontSize: 11, fontWeight: 'bold', fill: '#1f2937'
+        });
+        cachedStyles.current.crosshairText = new TextStyle({
+            fontFamily, fontSize: 11, fontWeight: '600', fill: darkMode ? '#ffffff' : '#131722'
+        });
+        cachedStyles.current.livePriceText = new TextStyle({
+            fontFamily, fontSize: 11, fontWeight: '600', fill: '#ffffff'
+        });
+    }
+    const textStyle = cachedStyles.current.axisText;
+    
+    let textIndex = 0;
+
+    // Helper to calculate nice grid steps for prices based on pixel gap constraint
+    const getNicePriceStep = (scaleY) => {
+        const minPixelGap = 28; // Minimum 28px height per label
+        const roughStep = minPixelGap / scaleY;
+        if (!roughStep || roughStep === Infinity) return 1;
+        const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+        const normalizedStep = roughStep / magnitude;
+        let niceMultiplier;
+        if (normalizedStep <= 1) niceMultiplier = 1;
+        else if (normalizedStep <= 2) niceMultiplier = 2;
+        else if (normalizedStep <= 2.5) niceMultiplier = 2.5;
+        else if (normalizedStep <= 5) niceMultiplier = 5;
+        else niceMultiplier = 10;
+        return niceMultiplier * magnitude;
+    };
+
+    // Helper to format time nicely for crosshair
+    const formatTimeLabel = (ts) => {
+        const d = new Date((ts + timezoneOffset) * 1000);
+        const dateStr = `${d.getUTCDate()} ${d.toLocaleString('default', { month: 'short', timeZone: 'UTC' })}`;
+        const timeStr = `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+        return `${dateStr}  ${timeStr}`;
+    };
+
+    // Time steps logic
+    const timeSteps = [
+        1, 5, 10, 15, 30, // seconds
+        60, 60*5, 60*10, 60*15, 60*30, // minutes
+        3600, 3600*2, 3600*4, 3600*8, 3600*12, // hours
+        86400, 86400*2, 86400*7, 86400*14, // days
+        86400*30, 86400*90, 86400*365 // months, year
+    ];
+
+    // Horizontal grid lines (Price)
+    const pStep = getNicePriceStep(v.scaleY);
+    for (let p = Math.floor(v.priceRange.min / pStep) * pStep; p <= v.priceRange.max; p += pStep) {
+        const y = Math.round(getP(p, cH)) + 0.5; // Sub-pixel snapping for razor sharp lines
+        drawDashedLine(gridLayerRef.current, 0, y, cW - 55, y, 1, 4);
+        gridLayerRef.current.stroke({ width: 1, color: gridColor, alpha: gridAlpha * 0.7 });
+        
+        const txt = getPooledText(textIndex++, textStyle);
+        txt.text = p.toFixed(2);
+        txt.x = cW - 47;
+        txt.y = y - 7;
+    }
+
+    // Vertical grid lines (Time) - Next-Gen Alpha Lerp & Dynamic AABB Collision
+    const firstT = v.timeRange.from;
+    const lastT = v.timeRange.to;
+    
+    let tStep = timeSteps[timeSteps.length - 1];
+    for (let i = 0; i < timeSteps.length; i++) {
+        if (timeSteps[i] * v.scaleX >= 45) { // Absolute minimum 45px to start drawing (fully faded out)
+            tStep = timeSteps[i];
+            break;
+        }
+    }
+    
+    // The Fade Formula (Lerping alpha between 45px and 90px gaps)
+    const physicalGap = tStep * v.scaleX;
+    const rawAlpha = (physicalGap - 45) / (90 - 45);
+    const minorAlpha = Math.max(0, Math.min(1, rawAlpha));
+    
+    let lastRenderedX = -1000;
+    
+    for (let t = Math.floor(firstT / tStep) * tStep; t <= lastT; t += tStep) {
+        if (t < firstT) continue;
+        const x = Math.round(getTDynamic(t)) + 0.5; // Razor sharp grid lines
+        
+        const d = new Date((t + timezoneOffset) * 1000);
+        
+        // Hierarchy Engine
+        const isNewDay = d.getUTCHours() === 0 && d.getUTCMinutes() === 0;
+        const isNewMonth = isNewDay && d.getUTCDate() === 1;
+        const isNewYear = isNewMonth && d.getUTCMonth() === 0;
+
+        let labelStr = '';
+        if (isNewYear) labelStr = d.getUTCFullYear().toString();
+        else if (isNewMonth) labelStr = d.toLocaleString('default', { month: 'short', timeZone: 'UTC' });
+        else if (isNewDay || tStep >= 86400) labelStr = `${d.getUTCDate()} ${d.toLocaleString('default', { month: 'short', timeZone: 'UTC' })}`;
+        else labelStr = `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+
+        // Dynamic AABB Math (Calculate exact text width dynamically)
+        const requiredGap = (labelStr.length * 6.5) + 12; // ~6.5px per char + 12px padding
+        
+        // Label Pruning
+        if (x - lastRenderedX < requiredGap) continue;
+
+        const isMajor = isNewYear || isNewMonth || isNewDay;
+        
+        // Alpha Interpolation
+        const finalAlpha = isMajor ? 1.0 : minorAlpha;
+        if (finalAlpha <= 0) continue; // Fully invisible, skip
+        
+        lastRenderedX = x; // Claim space
+        
+        if (isMajor) {
+            gridLayerRef.current.moveTo(x, 0).lineTo(x, cH - 26);
+            gridLayerRef.current.stroke({ width: 1, color: gridColor, alpha: gridAlpha * finalAlpha });
+        } else {
+            drawDashedLine(gridLayerRef.current, x, 0, x, cH - 26, 1, 4);
+            gridLayerRef.current.stroke({ width: 1, color: gridColor, alpha: gridAlpha * 0.4 * finalAlpha });
+        }
+        
+        const styleToUse = isMajor ? (darkMode ? cachedStyles.current.axisTextBoldDark : cachedStyles.current.axisTextBoldLight) : textStyle;
+        const txt = getPooledText(textIndex++, styleToUse);
+        txt.text = labelStr;
+        txt.x = x - (txt.width / 2);
+        txt.y = cH - 20;
+        txt.alpha = finalAlpha; // Apply smooth fade
+    }
+
+    const candleWidth = Math.max(1, v.scaleX * 0.8 * (candles?.[1]?.time - candles?.[0]?.time || 60));
+    if (!isPanOnly && visibleCandles.length > 0 && v.maxVol > 0) {
+      for (const c of visibleCandles) {
+          const x = getTStatic(c.time);
+          const volH = (c.volume / v.maxVol) * (cH * 0.15);
+          const isUp = c.close >= c.open;
+          volumeLayerRef.current.rect(x - candleWidth/2, cH - 26 - volH, candleWidth, volH).fill({ color: isUp ? 0x089981 : 0xf23645, alpha: 0.35 });
+      }
+    }
+
+    if (!isPanOnly) {
+      for (const c of visibleCandles) {
+        const x = getTStatic(c.time);
+      const yOpen = getP(c.open, cH);
+      const yClose = getP(c.close, cH);
+      const yHigh = getP(c.high, cH);
+      const yLow = getP(c.low, cH);
+
+      const isUp = c.close >= c.open;
+      const color = isUp ? 0x089981 : 0xf23645;
+      
+      candleLayerRef.current.moveTo(x, yHigh).lineTo(x, yLow).stroke({ width: 1, color: color });
+      
+      const top = Math.min(yOpen, yClose);
+      const bottom = Math.max(yOpen, yClose);
+      const bodyHeight = Math.max(1, bottom - top);
+      
+      candleLayerRef.current.rect(x - candleWidth / 2, top, candleWidth, bodyHeight).fill({ color: color });
+      }
+    }
+    
+    if (candles && candles.length > 0) {
+        const lastC = candles[candles.length - 1];
+        const isUp = lastC.close >= lastC.open;
+        const color = isUp ? 0x089981 : 0xf23645;
+        const lastY = getP(lastC.close, cH);
+        
+        drawDashedLine(livePriceLayerRef.current, 0, lastY, cW - 55, lastY, 4, 4);
+        livePriceLayerRef.current.stroke({ width: 1, color: color, alpha: 0.8 });
+        
+        const pTxt = getPooledText(textIndex++, cachedStyles.current.livePriceText);
+        pTxt.text = ` ${lastC.close.toFixed(2)} `;
+        livePriceLayerRef.current.rect(cW - 55, lastY - 10, 55, 20).fill({ color: color });
+        pTxt.x = cW - 55 + (55 - pTxt.width) / 2;
+        pTxt.y = lastY - 7;
+    }
+
+    if (!isPanOnly && visualIndicators && indicatorDataMap) {
+        visualIndicators.forEach(ind => {
+            const data = indicatorDataMap[ind.id];
+            if (!data || data.length === 0) return;
+            
+            const indColor = parseInt(ind.color.replace('#',''), 16) || 0xffaa00;
+            let first = true;
+            for (const d of data) {
+                if (d.time >= v.timeRange.from - 3600 * 5 && d.time <= v.timeRange.to + 3600 * 5) {
+                   const x = getTStatic(d.time);
+                   const y = getP(d.value, cH);
+                   if (first) {
+                       indicatorLayerRef.current.moveTo(x, y);
+                       first = false;
+                   } else {
+                       indicatorLayerRef.current.lineTo(x, y);
+                   }
+                }
+            }
+            if (!first) {
+                indicatorLayerRef.current.stroke({ width: 2, color: indColor });
+            }
+        });
+    }
+
+    const { isHovering, hoverX, hoverY } = interactionRef.current;
+    if (isHovering && hoverX >= 0 && hoverX <= cW && hoverY >= 0 && hoverY <= cH) {
+       const crossColor = darkMode ? 0xB4BED2 : 0x646E82;
+       
+       drawDashedLine(crosshairLayerRef.current, 0, hoverY, cW - 55, hoverY, 4, 4);
+       drawDashedLine(crosshairLayerRef.current, hoverX, 0, hoverX, cH - 26, 4, 4);
+       crosshairLayerRef.current.stroke({ width: 1, color: crossColor, alpha: 0.4 });
+
+       const tAtMouse = (hoverX / v.scaleX) + v.timeRange.from;
+       const pAtMouse = v.priceRange.max - ((hoverY - ((cH - 26) * 0.10)) / v.scaleY);
+
+       const boxColor = darkMode ? 0x2a2e39 : 0xe0e3eb; // Match TradingView's light mode background color
+
+       const pTxt = getPooledText(textIndex++, cachedStyles.current.crosshairText);
+       pTxt.text = pAtMouse.toFixed(2);
+       crosshairLayerRef.current.roundRect(cW - 55 + 2, hoverY - 11, 51, 22, 4).fill({ color: boxColor });
+       pTxt.x = cW - 55 + 2 + (51 - pTxt.width) / 2;
+       pTxt.y = hoverY - 7;
+
+       const tTxt = getPooledText(textIndex++, cachedStyles.current.crosshairText);
+       // Just pass a small tStep for the hover label to always show time format (unless it's exactly midnight)
+       tTxt.text = formatTimeLabel(tAtMouse, 0); 
+       crosshairLayerRef.current.roundRect(hoverX - tTxt.width/2 - 8, cH - 24, tTxt.width + 16, 22, 4).fill({ color: boxColor });
+       tTxt.x = hoverX - tTxt.width/2;
+       tTxt.y = cH - 18;
+    }
+
+    hideUnusedTexts(textIndex);
+  };
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    
+    let isMounted = true;
+    const initPixi = async () => {
+      const app = new Application();
+      await app.init({
+        resizeTo: containerRef.current,
+        backgroundColor: darkMode ? 0x0d1117 : 0xffffff,
+        preference: 'webgl',
+        antialias: false,
+        resolution: window.devicePixelRatio || 1,
+        autoDensity: true,
+      });
+
+      if (!isMounted) {
+        app.destroy(true, { children: true });
+        return;
+      }
+      
+      app.canvas.style.position = 'absolute';
+      app.canvas.style.top = '0';
+      app.canvas.style.left = '0';
+      containerRef.current.appendChild(app.canvas);
+
+      gridLayerRef.current = new Graphics();
+      volumeLayerRef.current = new Graphics();
+      candleLayerRef.current = new Graphics();
+      indicatorLayerRef.current = new Graphics();
+      crosshairLayerRef.current = new Graphics();
+      livePriceLayerRef.current = new Graphics();
+      axesBgLayerRef.current = new Graphics();
+      axesTextContainerRef.current = new Container();
+
+      app.stage.addChild(gridLayerRef.current);
+      app.stage.addChild(volumeLayerRef.current);
+      app.stage.addChild(candleLayerRef.current);
+      app.stage.addChild(indicatorLayerRef.current);
+      app.stage.addChild(livePriceLayerRef.current);
+      app.stage.addChild(axesBgLayerRef.current);
+      app.stage.addChild(axesTextContainerRef.current);
+      app.stage.addChild(crosshairLayerRef.current); // Rendered last to stay on top of axes text
+      
+      appRef.current = app;
+
+      if (candles && candles.length > 0) {
+        if (initialVisibleRange && initialVisibleRange.visibleRange) {
+          viewportRef.current.timeRange = { ...initialVisibleRange.visibleRange };
+        } else {
+          const lastTime = candles[candles.length - 1].time;
+          viewportRef.current.timeRange = { from: lastTime - 3600 * 5, to: lastTime + 3600 };
+        }
+      }
+
+      const resizeOb = new ResizeObserver(() => drawAll());
+      resizeOb.observe(containerRef.current);
+
+      app.canvas.addEventListener('wheel', (e) => {
+        if (activeToolRef.current) return;
+        e.preventDefault();
+        const v = viewportRef.current;
+        
+        const isPan = Math.abs(e.deltaX) > Math.abs(e.deltaY) && !e.ctrlKey;
+        
+        if (!isPan) {
+            const zoom = Math.exp(-e.deltaY * 0.001);
+            const mouseX = e.offsetX;
+            const timeAtMouse = (mouseX / v.scaleX) + v.timeRange.from;
+            
+            const range = v.timeRange.to - v.timeRange.from;
+            const newRange = range / zoom;
+            const ratio = mouseX / app.screen.width;
+            
+            v.timeRange.from = timeAtMouse - (newRange * ratio);
+            v.timeRange.to = timeAtMouse + (newRange * (1 - ratio));
+            
+            if (onVisibleRangeChange) onVisibleRangeChange({ from: v.timeRange.from, to: v.timeRange.to });
+            drawAll();
+        } else {
+            const timeShift = e.deltaX / v.scaleX;
+            v.timeRange.from += timeShift;
+            v.timeRange.to += timeShift;
+            
+            if (onVisibleRangeChange) onVisibleRangeChange({ from: v.timeRange.from, to: v.timeRange.to });
+            drawAll(true);
+        }
+      });
+
+      app.canvas.addEventListener('pointerdown', (e) => {
+        if (activeToolRef.current) return; // Disable drag while drawing
+        interactionRef.current.isDragging = true;
+        interactionRef.current.isGliding = false;
+        interactionRef.current.velocityX = 0;
+        interactionRef.current.lastX = e.offsetX;
+        interactionRef.current.lastY = e.offsetY;
+        interactionRef.current.lastDragTime = performance.now();
+        
+        const cW = app.screen.width;
+        const cH = app.screen.height;
+        if (e.offsetX > cW - 55) interactionRef.current.dragType = 'price';
+        else if (e.offsetY > cH - 26) interactionRef.current.dragType = 'time';
+        else interactionRef.current.dragType = 'chart';
+      });
+
+      app.canvas.addEventListener('dblclick', () => {
+          viewportRef.current.manualPriceScale = false;
+          drawAll();
+      });
+
+      window.addEventListener('pointerup', () => {
+        if (interactionRef.current.isDragging) {
+            interactionRef.current.isDragging = false;
+            // If released recently with momentum, start gliding
+            const now = performance.now();
+            if (now - interactionRef.current.lastDragTime < 100 && Math.abs(interactionRef.current.velocityX) > 0.05) {
+                interactionRef.current.isGliding = true;
+            } else {
+                interactionRef.current.velocityX = 0;
+            }
+        }
+      });
+      
+      app.canvas.addEventListener('pointerleave', () => {
+        interactionRef.current.isHovering = false;
+        drawAll(true);
+      });
+      
+      app.canvas.addEventListener('pointerenter', () => {
+        interactionRef.current.isHovering = true;
+      });
+
+      app.canvas.addEventListener('pointermove', (e) => {
+        interactionRef.current.hoverX = e.offsetX;
+        interactionRef.current.hoverY = e.offsetY;
+        const cW = app.screen.width;
+        const cH = app.screen.height;
+        
+        if (!interactionRef.current.isDragging && !activeToolRef.current) {
+            if (e.offsetX > cW - 55) app.canvas.style.cursor = 'ns-resize';
+            else if (e.offsetY > cH - 26) app.canvas.style.cursor = 'ew-resize';
+            else app.canvas.style.cursor = 'crosshair';
+        }
+        
+        if (interactionRef.current.isDragging && !activeToolRef.current) {
+           const now = performance.now();
+           const dx = e.offsetX - interactionRef.current.lastX;
+           const dy = e.offsetY - interactionRef.current.lastY;
+           const dt = Math.max(1, now - interactionRef.current.lastDragTime);
+           const v = viewportRef.current;
+           
+           if (interactionRef.current.dragType === 'chart') {
+               interactionRef.current.velocityX = dx / dt;
+               const timeShift = dx / v.scaleX;
+               v.timeRange.from -= timeShift;
+               v.timeRange.to -= timeShift;
+               
+               if (v.manualPriceScale) {
+                   const priceShift = dy / v.scaleY;
+                   v.priceRange.min += priceShift;
+                   v.priceRange.max += priceShift;
+               }
+               if (onVisibleRangeChange) onVisibleRangeChange({ from: v.timeRange.from, to: v.timeRange.to });
+               drawAll(true);
+           } else if (interactionRef.current.dragType === 'price') {
+               v.manualPriceScale = true;
+               const zoomY = Math.exp(dy * 0.005);
+               const priceAtMouse = v.priceRange.max - ((e.offsetY - ((cH - 26) * 0.10)) / v.scaleY);
+               const pRange = v.priceRange.max - v.priceRange.min;
+               const newPRange = pRange / zoomY;
+               const ratioY = (e.offsetY - ((cH - 26) * 0.10)) / ((cH - 26) * 0.80);
+               
+               v.priceRange.max = priceAtMouse + (newPRange * ratioY);
+               v.priceRange.min = priceAtMouse - (newPRange * (1 - ratioY));
+               drawAll();
+           } else if (interactionRef.current.dragType === 'time') {
+               const zoomX = Math.exp(-dx * 0.005);
+               const timeAtMouse = (e.offsetX / v.scaleX) + v.timeRange.from;
+               const tRange = v.timeRange.to - v.timeRange.from;
+               const newTRange = tRange / zoomX;
+               const ratioX = e.offsetX / cW;
+               
+               v.timeRange.from = timeAtMouse - (newTRange * ratioX);
+               v.timeRange.to = timeAtMouse + (newTRange * (1 - ratioX));
+               if (onVisibleRangeChange) onVisibleRangeChange({ from: v.timeRange.from, to: v.timeRange.to });
+               drawAll();
+           }
+           
+           interactionRef.current.lastX = e.offsetX;
+           interactionRef.current.lastY = e.offsetY;
+           interactionRef.current.lastDragTime = now;
+           return;
+        }
+        drawAll(true);
+      });
+
+      // Add momentum loop
+      app.ticker.add((ticker) => {
+          if (interactionRef.current.isGliding) {
+              let vx = interactionRef.current.velocityX;
+              if (Math.abs(vx) < 0.01) {
+                  interactionRef.current.isGliding = false;
+                  interactionRef.current.velocityX = 0;
+                  return;
+              }
+              // Calculate delta x for this frame (approx 16ms * dt multiplier)
+              const dt = ticker.deltaTime || 1; 
+              const dx = vx * 16 * dt;
+              
+              const v = viewportRef.current;
+              const timeShift = dx / v.scaleX;
+              v.timeRange.from -= timeShift;
+              v.timeRange.to -= timeShift;
+              
+              // Apply friction
+              interactionRef.current.velocityX *= 0.90;
+              
+              if (onVisibleRangeChange) onVisibleRangeChange({ from: v.timeRange.from, to: v.timeRange.to });
+              drawAll(true);
+          }
+      });
+
+      if (onChartReady) onChartReady();
+      drawAll();
+    };
+
+    initPixi();
+
+    return () => {
+      isMounted = false;
+      if (appRef.current) {
+        appRef.current.destroy(true, { children: true });
+        appRef.current = null;
+      }
+    };
+  }, []);
+
+  const lastCandleTimeRef = useRef(null);
+
+  useEffect(() => {
+    if (candles && candles.length > 0 && viewportRef.current) {
+        const v = viewportRef.current;
+        const currentLastTime = candles[candles.length - 1].time;
+        const prevLastTime = lastCandleTimeRef.current;
+
+        if (prevLastTime && currentLastTime > prevLastTime) {
+            // New candle added. Check if we are at the live edge.
+            // (If the end of the viewport is at least at the previous candle's time)
+            if (v.timeRange.to >= prevLastTime) {
+                const shift = currentLastTime - prevLastTime;
+                v.timeRange.from += shift;
+                v.timeRange.to += shift;
+                if (onVisibleRangeChange) onVisibleRangeChange({ from: v.timeRange.from, to: v.timeRange.to });
+            }
+        }
+        lastCandleTimeRef.current = currentLastTime;
+    }
+    drawAll();
+  }, [candles, visualIndicators, indicatorDataMap, darkMode, autoScale]);
+
+  return (
+    <div 
+      ref={containerRef} 
+      className="absolute top-0 left-0 w-full h-full"
+      style={{ touchAction: 'none' }}
+    />
+  );
+});
+
+export default WebGLChartEngine;

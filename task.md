@@ -1,0 +1,8 @@
+- [x] Live OHLC Header (Priority 1)
+- [x] Price Alerts as chart price lines (Priority 1)
+- [x] "Jump to Realtime" button (Priority 2)
+- [x] Quick Buy/Sell buttons directly on the chart (Priority 2)
+- [x] Indicator legend overlay (name + live value) (Priority 3)
+- [x] Compare/Overlay symbol (Priority 3)
+- [x] Session/day divider lines (Priority 3)
+- [x] Run production build and verify

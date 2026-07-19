@@ -1,0 +1,808 @@
+Created At: 2026-07-18T16:05:09Z
+Completed At: 2026-07-18T16:05:10Z
+File Path: `file:///c:/Users/satya/OneDrive/Documents/Desktop/satyam/src/App.jsx`
+Total Lines: 9098
+Total Bytes: 462480
+Showing lines 1 to 800
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+2: import Editor from '@monaco-editor/react';
+3: import logo from './assets/logo.png';
+4: import { createChart } from 'lightweight-charts';
+5: import {
+6:   Clock, Sliders, Radio, Activity, TrendingUp, Search, Percent, ListFilter,
+7:   Database, RefreshCw, ChevronUp, ChevronDown, Play, Undo, Redo, Bell,
+8:   History, Settings, Camera, Maximize2, Layers, Upload, FileDiff, X, Shapes,
+9:   ChevronRight, ChevronDown as ChevronDownIcon, Download, Sun, Moon,
+10:   Crosshair, Square, Type, Eraser, Menu, Sparkles, Send, Bot, Code2, FileCode,
+11:   Brush, Ruler, Trash2, Eye, EyeOff, Calendar, ArrowLeft, AlignJustify, GitMerge,
+12:   MousePointer, Circle, Disc, Triangle, FileText, DollarSign, MessageSquare,
+13:   Flag, Target, Shield, Move, Maximize, Magnet, Lock, Unlock, Smile, Compass, Minus,
+14:   ArrowRight, ArrowUpRight, GitCommit, Info, MoveVertical, Plus, Columns, Award, GitBranch,
+15:   MousePointer2, Spline, GitPullRequest, PenTool, MessageSquareText, Waypoints, Focus,
+16:   Wand2, Route, MoveHorizontal, SplitSquareHorizontal, Grid3x3, Tag, Signpost, TrendingDown, Baseline, ListTree,
+17:   ArrowUp, ArrowDown, Star, Heart, Box, ZoomIn, ZoomOut, Briefcase, Ghost, RotateCcw, Check, Pin, PinOff,
+18:   Cloud, Save, Copy, Edit2, LayoutGrid, CandlestickChart, Scale, LineChart, Rewind, Braces, BarChartHorizontal, Minimize2, Filter, Code, FlaskConical, Zap
+19: } from 'lucide-react';
+20: import { 
+21:   ComposedChart, Area, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+22:   PieChart, Pie, Cell, BarChart, AreaChart, Legend 
+23: } from 'recharts';
+24: import {
+25:   EXCHANGE_LIST,
+26:   getExchangeMeta,
+27:   fetchExchangeSymbols,
+28:   fetchExchangeCandles,
+29:   subscribeExchangeKline,
+30:   fetchJson,
+31:   isPerpetualSymbol,
+32:   parseUnifiedSymbol,
+33: } from './exchanges';
+34: import {
+35:   INDICATOR_LIBRARY,
+36:   DEFAULT_PYTHON_STRATEGY,
+37:   exportTradesCsv,
+38:   downloadStrategyFile,
+39:   parseBacktestNumber,
+40:   normalizeEquityCurve,
+41: } from './tradingFeatures';
+42: import { loadCandleCache, saveCandleCache } from './candleCache';
+43: import { INDICATOR_REGISTRY } from './indicatorsRegistry';
+44: import ArbitrageBot from './components/ArbitrageBot';
+45: import StrategyTester from './components/StrategyTester';
+46: 
+47: /** Pure helper: convert OHLCV candles to Heikin-Ashi candles */
+48: function toHeikinAshi(candles) {
+49:   if (!candles || candles.length === 0) return [];
+50:   const ha = [];
+51:   let prevHaOpen = (candles[0].open + candles[0].close) / 2;
+52:   let prevHaClose = (candles[0].open + candles[0].high + candles[0].low + candles[0].close) / 4;
+53:   ha.push({ time: candles[0].time, open: prevHaOpen, high: candles[0].high, low: candles[0].low, close: prevHaClose });
+54:   for (let i = 1; i < candles.length; i++) {
+55:     const c = candles[i];
+56:     const haClose = (c.open + c.high + c.low + c.close) / 4;
+57:     const haOpen = (prevHaOpen + prevHaClose) / 2;
+58:     const haHigh = Math.max(c.high, haOpen, haClose);
+59:     const haLow = Math.min(c.low, haOpen, haClose);
+60:     ha.push({ time: c.time, open: haOpen, high: haHigh, low: haLow, close: haClose });
+61:     prevHaOpen = haOpen;
+62:     prevHaClose = haClose;
+63:   }
+64:   return ha;
+65: }
+66: 
+67: /** Backtest / AI server — must run: npm run backend (port 8000) */
+68: const API_BASE = import.meta.env.VITE_BACKEND_URL ?? `http://${window.location.hostname}:8000`;
+69: const CANDLE_BATCH_SIZE = 1000;
+70: const INITIAL_HISTORY_BATCHES = 10;  // load 10k candles on startup
+71: const MAX_CANDLES_IN_MEMORY = 100000; // allow more in memory
+72: const SIX_YEARS_SECONDS = 6 * 365 * 24 * 60 * 60;
+73: 
+74: // Known interval -> seconds. Anything not listed here is parsed on the fly
+75: // (e.g. "45m", "3h", "9d") so users can type a fully custom timeframe.
+76: const INTERVAL_SECONDS_MAP = {
+77:   '1m': 60, '3m': 180, '5m': 300, '15m': 900, '30m': 1800,
+78:   '1h': 3600, '2h': 7200, '4h': 14400, '6h': 21600, '8h': 28800, '12h': 43200,
+79:   '1d': 86400, '3d': 259200, '1w': 604800, '1M': 2592000,
+80: };
+81: const CUSTOM_TIMEFRAME_REGEX = /^(\d{1,4})(m|h|d|w|M)$/;
+82: 
+83: function intervalToSeconds(interval) {
+84:   if (INTERVAL_SECONDS_MAP[interval]) return INTERVAL_SECONDS_MAP[interval];
+85:   const match = String(interval || '').match(CUSTOM_TIMEFRAME_REGEX);
+86:   if (!match) return 60;
+87:   const amount = Number(match[1]);
+88:   const unit = match[2];
+89:   const unitSeconds = unit === 'm' ? 60 : unit === 'h' ? 3600 : unit === 'd' ? 86400 : unit === 'w' ? 604800 : 2592000;
+90:   return amount * unitSeconds;
+91: }
+92: 
+93: // How many candles we need in memory to cover 6 years at this interval
+94: function getHistoryCandleCap(interval) {
+95:   const secs = intervalToSeconds(interval);
+96:   const neededForSixYears = Math.ceil(SIX_YEARS_SECONDS / secs);
+97:   return Math.max(2000, Math.min(neededForSixYears, MAX_CANDLES_IN_MEMORY));
+98: }
+99: 
+100: const QUOTE_ASSETS = [
+101:   'USDT', 'USDC', 'BUSD', 'FDUSD', 'TUSD', 'DAI', 'BTC', 'ETH', 'BNB', 'EUR', 'TRY',
+102:   'BRL', 'AUD', 'GBP', 'RUB', 'UAH', 'IDR', 'ZAR', 'NGN', 'PLN', 'RON', 'ARS', 'JPY',
+103:   'MXN', 'CZK', 'CAD', 'VAI', 'USDP', 'UST', 'BKRW', 'BVND', 'TRX', 'XRP', 'DOGE',
+104: ].sort((a, b) => b.length - a.length);
+105: 
+106: function parseSymbolParts(symbol) {
+107:   const upper = String(symbol || '').toUpperCase();
+108:   for (const quote of QUOTE_ASSETS) {
+109:     if (upper.endsWith(quote) && upper.length > quote.length) {
+110:       return { base: upper.slice(0, -quote.length), quote };
+111:     }
+112:   }
+113:   return { base: upper, quote: '' };
+114: }
+115: 
+116: function getBaseAsset(symbol) {
+117:   return parseSymbolParts(symbol).base;
+118: }
+119: 
+120: function getQuoteAsset(symbol) {
+121:   return parseSymbolParts(symbol).quote;
+122: }
+123: 
+124: function getFngColor(val) {
+125:   if (val >= 76) return '#00c853'; // Extreme Greed
+126:   if (val >= 55) return '#089981'; // Greed
+127:   if (val >= 45) return '#ffb300'; // Neutral
+128:   if (val >= 25) return '#ff9800'; // Fear
+129:   return '#f23645'; // Extreme Fear
+130: }
+131: 
+132: function formatUSD(val) {
+133:   if (val === undefined || val === null || isNaN(val)) return 'N/A';
+134:   if (val >= 1e9) return `$${(val / 1e9).toFixed(2)}B`;
+135:   if (val >= 1e6) return `$${(val / 1e6).toFixed(2)}M`;
+136:   return `$${val.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+137: }
+138: 
+139: function formatShortNumber(val) {
+140:   if (val === undefined || val === null || isNaN(val)) return 'N/A';
+141:   if (val >= 1e9) return `${(val / 1e9).toFixed(2)}B`;
+142:   if (val >= 1e6) return `${(val / 1e6).toFixed(2)}M`;
+143:   if (val >= 1e3) return `${(val / 1e3).toFixed(1)}K`;
+144:   return val.toLocaleString(undefined, { maximumFractionDigits: 1 });
+145: }
+146: 
+147: const COINGECKO_ID_MAP = {
+148:   'BTC': 'bitcoin',
+149:   'ETH': 'ethereum',
+150:   'SOL': 'solana',
+151:   'BNB': 'binancecoin',
+152:   'XRP': 'ripple',
+153:   'ADA': 'cardano',
+154:   'DOGE': 'dogecoin',
+155:   'SHIB': 'shiba-inu',
+156:   'DOT': 'polkadot',
+157:   'LTC': 'litecoin',
+158:   'LINK': 'chainlink',
+159:   'AVAX': 'avalanche-2',
+160:   'UNI': 'uniswap',
+161:   'TRX': 'tron',
+162:   'XLM': 'stellar',
+163:   'ICP': 'internet-computer',
+164:   'ETC': 'ethereum-classic',
+165:   'BCH': 'bitcoin-cash',
+166:   'FIL': 'filecoin',
+167:   'XMR': 'monero',
+168:   'ATOM': 'cosmos',
+169:   'APT': 'aptos',
+170:   'NEAR': 'near',
+171:   'OP': 'optimism',
+172:   'ARB': 'arbitrum',
+173:   'TIA': 'celestia',
+174:   'IMX': 'immutable-x',
+175:   'LDO': 'lido-finance',
+176:   'MNT': 'mantle',
+177:   'INJ': 'injective-protocol',
+178:   'SUI': 'sui',
+179:   'RUNE': 'thorchain',
+180:   'MKR': 'maker',
+181:   'GRT': 'the-graph',
+182:   'AAVE': 'aave',
+183:   'FET': 'fetch-ai',
+184:   'FLOW': 'flow',
+185:   'EGLD': 'elrond-erd-2',
+186:   'SAND': 'the-sandbox',
+187:   'MANA': 'decentraland',
+188:   'THETA': 'theta-token',
+189:   'ALGO': 'algorand',
+190:   'VET': 'vechain',
+191:   'QNT': 'quant-network',
+192:   'AXS': 'axie-infinity',
+193:   'FTM': 'fantom',
+194:   'HBAR': 'hedera-hashgraph',
+195:   'XTZ': 'tezos',
+196:   'EOS': 'eos',
+197:   'NEO': 'neo',
+198:   'WAVES': 'waves',
+199: };
+200: 
+201: function getCoinGeckoId(symbol) {
+202:   const base = getBaseAsset(symbol).toUpperCase();
+203:   return COINGECKO_ID_MAP[base] || base.toLowerCase();
+204: }
+205: 
+206: function coinIconUrl(symbol, tier = 0) {
+207:   const base = getBaseAsset(symbol).toLowerCase();
+208:   const tiers = [
+209:     `https://assets.coincap.io/assets/icons/${base}@2x.png`,
+210:     `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${base}.png`,
+211:     `https://cryptoicons.org/api/icon/${base}/200`,
+212:     `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/32/color/${base}.png`,
+213:   ];
+214:   return tiers[tier] || 'https://cryptologos.cc/logos/bnb-bnb-logo.png';
+215: }
+216: 
+217: function handleCoinIconError(e, coin) {
+218:   const currentTier = parseInt(e.target.getAttribute('data-tier') || '0');
+219:   if (currentTier < 3) {
+220:     const nextTier = currentTier + 1;
+221:     e.target.setAttribute('data-tier', nextTier);
+222:     e.target.src = coinIconUrl(coin, nextTier);
+223:   } else {
+224:     e.target.onerror = null;
+225:     e.target.src = 'https://cryptologos.cc/logos/bnb-bnb-logo.png';
+226:   }
+227: }
+228: 
+229: function mergeCandles(...groups) {
+230:   const byTime = new Map();
+231:   groups.flat().forEach(c => {
+232:     if (c && Number.isFinite(c.time)) byTime.set(c.time, c);
+233:   });
+234:   return Array.from(byTime.values()).sort((a, b) => a.time - b.time);
+235: }
+236: 
+237: // ─── Helper for eraser hit testing ───
+238: function distanceToLineSegment(px, py, x1, y1, x2, y2) {
+239:   const A = px - x1, B = py - y1, C = x2 - x1, D = y2 - y1;
+240:   const dot = A * C + B * D;
+241:   const len_sq = C * C + D * D;
+242:   let param = -1;
+243:   if (len_sq !== 0) param = dot / len_sq;
+244:   let xx, yy;
+245:   if (param < 0) { xx = x1; yy = y1; }
+246:   else if (param > 1) { xx = x2; yy = y2; }
+247:   else { xx = x1 + param * C; yy = y1 + param * D; }
+248:   const dx = px - xx, dy = py - yy;
+249:   return Math.sqrt(dx * dx + dy * dy);
+250: }
+251: 
+252: 
+253: function hexToRGBA(hex, alpha) {
+254:   try {
+255:     if (!hex) return `rgba(124, 92, 255, ${alpha})`;
+256:     const h = hex.replace('#', '');
+257:     const r = parseInt(h.substring(0, 2), 16);
+258:     const g = parseInt(h.substring(2, 4), 16);
+259:     const b = parseInt(h.substring(4, 6), 16);
+260:     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+261:   } catch (e) {
+262:     return `rgba(124, 92, 255, ${alpha})`;
+263:   }
+264: }
+265: 
+266: function throttle(func, limit) {
+267:   let inThrottle;
+268:   return function(...args) {
+269:     if (!inThrottle) {
+270:       func.apply(this, args);
+271:       inThrottle = true;
+272:       setTimeout(() => inThrottle = false, limit);
+273:     }
+274:   };
+275: }
+276: 
+277: export default function App({ onLogout, onBackToCoins }) {
+278:   const chartRef = useRef(null);
+279:   const chartInstance = useRef(null);
+280:   const candleSeries = useRef(null);
+281:   const volumeSeries = useRef(null);
+282:   const canvasRef = useRef(null);
+283:   const latestCandleRef = useRef(null);
+284:   const isFirstLoad = useRef(true);
+285:   const isLoadingMoreRef = useRef(false);
+286:   const [isLoadingOlderData, setIsLoadingOlderData] = useState(false);
+287:   const allCandlesRef = useRef([]);
+288:   const monacoEditorRef = useRef(null);
+289:   const lastCacheSaveRef = useRef(0);
+290:   const indicatorSeriesRef = useRef({});
+291:   const newsPriceLineRef = useRef(null);
+292:   const newsMarkerPlacedRef = useRef(false);
+293:   const subChartsMapRef = useRef({});
+294:   const positionLinesRef = useRef([]);
+295:   const [chartCreated, setChartCreated] = useState(false);
+296:   const skipNextFullRedrawRef = useRef(false);
+297:   const fetchGenerationRef = useRef(0);
+298:   const [indicatorStructureTick, setIndicatorStructureTick] = useState(0);
+299:   const lastProcessedCandleRef = useRef({ time: 0, close: 0, length: 0 });
+300:   const lastStructureTickRef = useRef(0);
+301:   // Removed hoveredCandle from React state for DOM bypass performance
+302:   const [quickTradeQty, setQuickTradeQty] = useState(0.01);
+303:   const latestNewsListRef = useRef([]);
+304:   const lastReactUpdateRef = useRef(0);
+305:   const prevPriceRef = useRef(0);
+306:   const newsMarkerTimeRef = useRef(null);
+307:   const lastBacktestResultsRef = useRef({});
+308:   const saveRangeTimeoutRef = useRef(null);
+309:   const indicatorDataMapRef = useRef({});
+310:   const [backendOfflineNotice, setBackendOfflineNotice] = useState('');
+311:   const [newsFilterType, setNewsFilterType] = useState('symbol');
+312: 
+313: 
+314:   // ─── Theme Management ───
+315:   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
+316:   const [stealthMode, setStealthMode] = useState(false);
+317:   const [focusMode, setFocusMode] = useState(false);
+318:   useEffect(() => {
+319:     document.documentElement.classList.toggle('dark', darkMode);
+320:     localStorage.setItem('theme', darkMode ? 'dark' : 'light');
+321:   }, [darkMode]);
+322: 
+323:   useEffect(() => {
+324:     const handleGlobalKeyDown = (e) => {
+325:       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+326:         e.preventDefault();
+327:         const searchInput = document.getElementById('smart-search');
+328:         if (searchInput) {
+329:           searchInput.focus();
+330:         }
+331:       }
+332:     };
+333:     window.addEventListener('keydown', handleGlobalKeyDown);
+334:     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+335:   }, []);
+336: 
+337:   const t = useMemo(() => ({
+338:     bg: darkMode ? 'bg-[#131722]' : 'bg-[#ffffff]',
+339:     sec: darkMode ? 'bg-[#1e222d]' : 'bg-[#f1f3f6]',
+340:     text: darkMode ? 'text-[#d1d4dc]' : 'text-[#131722]',
+341:     muted: darkMode ? 'text-[#8a919e]' : 'text-[#5d606b]',
+342:     border: darkMode ? 'border-[#2a2e39]' : 'border-[#d1d4dc]',
+343:     hover: darkMode ? 'hover:bg-[#2a2e39] hover:text-[#ffffff]' : 'hover:bg-[#e0e3eb] hover:text-[#000000]',
+344:     glass: darkMode ? 'bg-[#1e222d]/70 backdrop-blur-md' : 'bg-[#ffffff]/80 backdrop-blur-md',
+345:   }), [darkMode]);
+346: 
+347:   // ─── States ───
+348:   const [editorMode, setEditorMode] = useState('pine');
+349:   const [selectedExchange, setSelectedExchange] = useState(() => {
+350:     const saved = localStorage.getItem('exchange');
+351:     return EXCHANGE_LIST.some((e) => e.id === saved) ? saved : 'binance';
+352:   });
+353:   const [selectedCoin, setSelectedCoin] = useState(() => {
+354:     const saved = localStorage.getItem('selectedCoin');
+355:     return saved ? String(saved).toUpperCase() : 'SOLUSDT';
+356:   });
+357: 
+358:   const [activeTab, setActiveTab] = useState('Performance Summary');
+359:   const [loading, setLoading] = useState(false);
+360:   const [chartInterval, setChartInterval] = useState('1m');
+361:   const [customTimeframeInput, setCustomTimeframeInput] = useState('');
+362:   const [allCandles, setAllCandles] = useState([]);
+363:   const [livePrice, setLivePrice] = useState(0);
+364:   const [priceColor, setPriceColor] = useState('#089981');
+365:   const [coinInput, setCoinInput] = useState('');
+366:   const [syntaxStatus, setSyntaxStatus] = useState('System Idle. Waiting for strategy injection...');
+367:   const [marketStatus, setMarketStatus] = useState('Connected');
+368:   const [binanceCoins, setBinanceCoins] = useState([]);
+369:   const [coinsLoading, setCoinsLoading] = useState(true);
+370:   const binanceCoinSetRef = useRef(new Set());
+371:   const [lowerBoxState, setLowerBoxState] = useState('minimized');
+372:   const [isReportPinned, setIsReportPinned] = useState(true);
+373:   const [isEditorOpen, setIsEditorOpen] = useState(false);
+374:   const [isArbitrageBotOpen, setIsArbitrageBotOpen] = useState(false);
+375:   const [chartStyle, setChartStyle] = useState('Candles');
+376:   const [replayMode, setReplayMode] = useState(false);
+377:   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+378:   const [activeModal, setActiveModal] = useState(null);
+379:   const [isStyleDropdownOpen, setIsStyleDropdownOpen] = useState(false);
+380:   const [isTimeframeDropdownOpen, setIsTimeframeDropdownOpen] = useState(false);
+381:   const [isActionsDropdownOpen, setIsActionsDropdownOpen] = useState(false);
+382:   const [isLayoutMenuOpen, setIsLayoutMenuOpen] = useState(false);
+383:   const [layoutName, setLayoutName] = useState('Unnamed');
+384:   const [isAutosave, setIsAutosave] = useState(true);
+385:   const [isShareLayout, setIsShareLayout] = useState(false);
+386:   const [volumeProfile, setVolumeProfile] = useState(false);
+387:   const [selectedIndicatorTab, setSelectedIndicatorTab] = useState('Technicals');
+388:   const [indicatorCategorySubTab, setIndicatorCategorySubTab] = useState('Indicators');
+389:   const [indicatorSearchQuery, setIndicatorSearchQuery] = useState('');
+390:   const [toastMsg, setToastMsg] = useState('');
+391:   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+392:   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+393:   const [mobileActiveTab, setMobileActiveTab] = useState('chart');
+394:   const [mobileDrawingMenuOpen, setMobileDrawingMenuOpen] = useState(false);
+395: 
+396:   useEffect(() => {
+397:     const mq = window.matchMedia('(max-width: 767px)');
+398:     const handler = (e) => {
+399:       setIsMobile(e.matches);
+400:       if (!e.matches) setMobileMenuOpen(false);
+401:     };
+402:     handler(mq);
+403:     mq.addEventListener('change', handler);
+404:     return () => mq.removeEventListener('change', handler);
+405:   }, []);
+406: 
+407:   useEffect(() => {
+408:     const resizeChart = () => {
+409:       if (chartRef.current && chartInstance.current) {
+410:         chartInstance.current.applyOptions({
+411:           width: chartRef.current.clientWidth,
+412:           height: chartRef.current.clientHeight,
+413:         });
+414:       }
+415:       Object.keys(subChartsMapRef.current).forEach(id => {
+416:         const container = document.getElementById(`subchart-container-${id}`);
+417:         if (container && subChartsMapRef.current[id]?.chart) {
+418:           subChartsMapRef.current[id].chart.applyOptions({
+419:             width: container.clientWidth,
+420:             height: container.clientHeight,
+421:           });
+422:         }
+423:       });
+424:     };
+425:     document.addEventListener('fullscreenchange', resizeChart);
+426:     window.addEventListener('orientationchange', resizeChart);
+427:     window.addEventListener('resize', resizeChart);
+428:     return () => {
+429:       document.removeEventListener('fullscreenchange', resizeChart);
+430:       window.removeEventListener('orientationchange', resizeChart);
+431:       window.removeEventListener('resize', resizeChart);
+432:     };
+433:   }, []);
+434: 
+435:   // ─── Drawing Tools ───
+436:   const [activeTool, setActiveTool] = useState(null);
+437:   const [drawings, setDrawings] = useState([]);
+438:   const [tempShape, setTempShape] = useState(null);
+439:   const [isDrawing, setIsDrawing] = useState(false);
+440:   const [drawStart, setDrawStart] = useState(null);
+441:   const [brushPath, setBrushPath] = useState([]); // Temporary path for active brush drawing
+442:   const [magnetMode, setMagnetMode] = useState('off'); // 'off', 'weak', 'strong'
+443:   const [keepDrawing, setKeepDrawing] = useState(false);
+444:   const [lockDrawings, setLockDrawings] = useState(false);
+445:   const [hideDrawings, setHideDrawings] = useState(false);
+446:   const [activeFlyout, setActiveFlyout] = useState(null);
+447:   const [hoverCoords, setHoverCoords] = useState(null);
+448:   const [magicTrail, setMagicTrail] = useState([]);
+449:   const [isCursorStudioOpen, setIsCursorStudioOpen] = useState(false);
+450:   const [isTrendStudioOpen, setIsTrendStudioOpen] = useState(false);
+451:   const [cursorSettings, setCursorSettings] = useState({
+452:     color: '#FF007F',
+453:     size: 3,
+454:     opacity: 85,
+455:     showTooltip: true,
+456:     autoSnap: true,
+457:     extendLines: true,
+458:     tooltipOnLongPress: true
+459:   });
+460:   
+461:   // Track selected sub-tool per category
+462:   const [selectedTools, setSelectedTools] = useState({
+463:     cursor: 'crosshair',
+464:     trend: 'trendline',
+465:     gann_fib: 'fibonacci',
+466:     shape: 'rectangle',
+467:     annotation: 'text',
+468:     pattern: 'abcd',
+469:     forecast: 'long_position',
+470:     icon_stickers: 'icon_up'
+471:   });
+472: 
+473:   // ─── Visual Indicators Overlays ───
+474:   const [visualIndicators, setVisualIndicators] = useState([
+475:     { id: 'ema_9', type: 'ema', name: 'EMA 9', params: { period: 9 }, color: '#ff9800', visible: false },
+476:     { id: 'ema_21', type: 'ema', name: 'EMA 21', params: { period: 21 }, color: '#ea39ff', visible: false },
+477:     { id: 'sma_50', type: 'sma', name: 'SMA 50', params: { period: 50 }, color: '#2962ff', visible: false },
+478:     { id: 'sma_200', type: 'sma', name: 'SMA 200', params: { period: 200 }, color: '#f44336', visible: false },
+479:     { id: 'bb_20_2', type: 'bb', name: 'Bollinger Bands', params: { period: 20, stdDev: 2 }, color: '#26a69a', visible: false },
+480:     { id: 'vwap', type: 'vwap', name: 'VWAP', params: {}, color: '#00e676', visible: false },
+481:     { id: 'rsi_14', type: 'rsi', name: 'RSI', params: { period: 14 }, color: '#e040fb', visible: false },
+482:     { id: 'macd_12_26_9', type: 'macd', name: 'MACD', params: { fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 }, color: '#29b6f6', visible: false },
+483:     { id: 'atr_14', type: 'atr', name: 'ATR', params: { period: 14 }, color: '#ff5252', visible: false },
+484:     { id: 'adx_14', type: 'adx', name: 'ADX', params: { period: 14 }, color: '#ffd700', visible: false },
+485:     { id: 'cci_20', type: 'cci', name: 'CCI', params: { period: 20 }, color: '#00bcd4', visible: false },
+486:     { id: 'obv', type: 'obv', name: 'OBV', params: {}, color: '#ec407a', visible: false },
+487:     { id: 'williams_14', type: 'williams', name: 'Williams %R', params: { period: 14 }, color: '#ab47bc', visible: false },
+488:     { id: 'stochastic_14_3_3', type: 'stochastic', name: 'Stochastic', params: { period: 14, kPeriod: 3, dPeriod: 3 }, color: '#2962ff', visible: false },
+489:     { id: 'mfi_14', type: 'mfi', name: 'MFI', params: { period: 14 }, color: '#4caf50', visible: false },
+490:     { id: 'supertrend_10_3', type: 'supertrend', name: 'SuperTrend', params: { period: 10, multiplier: 3 }, color: '#089981', visible: false },
+491:     { id: 'psar_02_2', type: 'psar', name: 'Parabolic SAR', params: { step: 0.02, maxStep: 0.2 }, color: '#ff6d00', visible: false },
+492:     { id: 'ichimoku_9_26_52', type: 'ichimoku', name: 'Ichimoku Cloud', params: { tenkan: 9, kijun: 26, senkouB: 52 }, color: '#e91e63', visible: false },
+493:   ]);
+494:   const [editingIndicatorId, setEditingIndicatorId] = useState(null);
+495:   const [selectedDrawingIndex, setSelectedDrawingIndex] = useState(null);
+496:   const [floatingToolbarCoords, setFloatingToolbarCoords] = useState(null);
+497:   const [editingModalTab, setEditingModalTab] = useState('inputs');
+498:   const [tempIndicatorParams, setTempIndicatorParams] = useState({});
+499:   const [tempIndicatorColor, setTempIndicatorColor] = useState('#7C5CFF');
+500:   const [tempIndicatorWidth, setTempIndicatorWidth] = useState(2);
+501:   const [chartLayout, setChartLayout] = useState('1');
+502:   const [isAtLiveEdge, setIsAtLiveEdge] = useState(true);
+503:   const [isLegendExpanded, setIsLegendExpanded] = useState(true);
+504:   const [compareSymbol, setCompareSymbol] = useState(null);
+505:   const [compareCandles, setCompareCandles] = useState([]);
+506:   const [priceScaleMode, setPriceScaleMode] = useState(0); // 0=Normal, 1=Logarithmic, 2=Percentage, 3=IndexedTo100
+507:   const [autoScale, setAutoScale] = useState(true);
+508:   const [invertScale, setInvertScale] = useState(false);
+509:   const [isPriceScaleMenuOpen, setIsPriceScaleMenuOpen] = useState(false);
+510: 
+511:   // ─── Collapsible Right Sidebar ───
+512:   const [rightSidebar, setRightSidebar] = useState(null); // 'watchlist', 'details', 'alerts', 'news', or null
+513:   const [watchlist, setWatchlist] = useState(() => {
+514:     try {
+515:       const saved = localStorage.getItem('watchList');
+516:       return saved ? JSON.parse(saved) : ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'LTCUSDT'];
+517:     } catch {
+518:       return ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'LTCUSDT'];
+519:     }
+520:   });
+521:   const [watchlistTickers, setWatchlistTickers] = useState({});
+522:   const [selectedCoinStats, setSelectedCoinStats] = useState(null);
+523:   const [newsList, setNewsList] = useState([]);
+524:   const [newsLoading, setNewsLoading] = useState(false);
+525:   const [newsError, setNewsError] = useState(false);
+526:   const [coinFundamentals, setCoinFundamentals] = useState(null);
+527:   const [fundamentalsLoading, setFundamentalsLoading] = useState(false);
+528:   const [fundamentalsError, setFundamentalsError] = useState(false);
+529:   const fundamentalsCacheRef = useRef({});
+530:   const [fearGreedIndex, setFearGreedIndex] = useState(null);
+531:   const [fundingRate, setFundingRate] = useState(null);
+532:   const [openInterest, setOpenInterest] = useState(null);
+533:   const [futuresLoading, setFuturesLoading] = useState(false);
+534:   const [showNewsPanel, setShowNewsPanel] = useState(false);
+535: 
+536:   // ─── Paper Trading (Broker Console) ───
+537:   const [balance, setBalance] = useState(() => {
+538:     const saved = localStorage.getItem('paper_balance');
+539:     return saved ? parseFloat(saved) : 10000;
+540:   });
+541:   const [positions, setPositions] = useState(() => {
+542:     const saved = localStorage.getItem('paper_positions');
+543:     return saved ? JSON.parse(saved) : [];
+544:   });
+545:   const [paperOrders, setPaperOrders] = useState(() => {
+546:     const saved = localStorage.getItem('paper_orders');
+547:     return saved ? JSON.parse(saved) : [];
+548:   });
+549: 
+550:   const indicatorWorkerRef = useRef(null);
+551:   const visualIndicatorsRef = useRef(visualIndicators);
+552:   useEffect(() => { visualIndicatorsRef.current = visualIndicators; }, [visualIndicators]);
+553:   
+554:   useEffect(() => {
+555:     const worker = new Worker(new URL('./indicatorWorker.js', import.meta.url), { type: 'module' });
+556:     indicatorWorkerRef.current = worker;
+557:     
+558:     worker.onmessage = (e) => {
+559:       const { type, resultsMap } = e.data;
+560:       if (type === 'computeAllDone') {
+561:         indicatorDataMapRef.current = { ...indicatorDataMapRef.current, ...resultsMap };
+562:         
+563:         const vInds = visualIndicatorsRef.current || [];
+564:         const sMap = indicatorSeriesRef.current;
+565:         const scMap = subChartsMapRef.current;
+566:         
+567:         vInds.forEach(ind => {
+568:           if (!ind.visible || !resultsMap[ind.id]) return;
+569:           const reg = INDICATOR_REGISTRY[ind.type];
+570:           if (!reg) return;
+571:           
+572:           const results = resultsMap[ind.id];
+573:           
+574:           if (reg.kind === 'overlay') {
+575:             reg.seriesConfig.forEach(s => {
+576:               const seriesKey = `${ind.id}_${s.key}`;
+577:               const series = sMap[seriesKey];
+578:               const data = results[s.key];
+579:               if (series && data) {
+580:                 series.setData(data);
+581:               }
+582:             });
+583:           } else if (reg.kind === 'subchart') {
+584:             const subChartObj = scMap[ind.id];
+585:             if (subChartObj && subChartObj.seriesList) {
+586:               reg.seriesConfig.forEach(s => {
+587:                 const series = subChartObj.seriesList[s.key];
+588:                 const data = results[s.key];
+589:                 if (series && data) {
+590:                   if (s.type === 'histogram') {
+591:                     const coloredData = data.map(h => ({
+592:                       time: h.time,
+593:                       value: h.value,
+594:                       color: h.value >= 0 ? 'rgba(8, 153, 129, 0.5)' : 'rgba(242, 54, 69, 0.5)'
+595:                     }));
+596:                     series.setData(coloredData);
+597:                   } else {
+598:                     series.setData(data);
+599:                   }
+600:                 }
+601:               });
+602:             }
+603:           }
+604:         });
+605:       }
+606:     };
+607:     
+608:     return () => worker.terminate();
+609:   }, []);
+610:   const [watchlistSearchInput, setWatchlistSearchInput] = useState('');
+611:   const [watchlistDropdownOpen, setWatchlistDropdownOpen] = useState(false);
+612:   const [orderType, setOrderType] = useState('MARKET'); // 'MARKET' or 'LIMIT'
+613:   const [orderSide, setOrderSide] = useState('BUY'); // 'BUY' or 'SELL'
+614:   const [orderQty, setOrderQty] = useState('');
+615:   const [orderLimitPrice, setOrderLimitPrice] = useState('');
+616:   const [marginMode, setMarginMode] = useState('Cross');
+617:   const [leverage, setLeverage] = useState(20);
+618:   const [useTPSL, setUseTPSL] = useState(false);
+619:   const [tpPrice, setTpPrice] = useState('');
+620:   const [slPrice, setSlPrice] = useState('');
+621:   const [postOnly, setPostOnly] = useState(false);
+622:   const [tradingTab, setTradingTab] = useState('Positions');
+623: 
+624: 
+625:   useEffect(() => { localStorage.setItem('paper_balance', balance); }, [balance]);
+626:   useEffect(() => { localStorage.setItem('paper_positions', JSON.stringify(positions)); }, [positions]);
+627:   useEffect(() => { localStorage.setItem('paper_orders', JSON.stringify(paperOrders)); }, [paperOrders]);
+628:   useEffect(() => { localStorage.setItem('watchList', JSON.stringify(watchlist)); }, [watchlist]);
+629: 
+630:   // ─── Watchlist, News, Stats Data Fetchers ───
+631:   useEffect(() => {
+632:     const fetchWatchlistPrices = async () => {
+633:       try {
+634:         const res = await fetch('https://api.binance.com/api/v3/ticker/24hr');
+635:         const data = await res.json();
+636:         if (Array.isArray(data)) {
+637:           const tickerMap = {};
+638:           data.forEach(item => {
+639:             tickerMap[item.symbol] = {
+640:               price: parseFloat(item.lastPrice),
+641:               change: parseFloat(item.priceChangePercent)
+642:             };
+643:           });
+644:           setWatchlistTickers(tickerMap);
+645:         }
+646:       } catch (e) {
+647:         console.warn("Could not fetch watchlist prices:", e);
+648:       }
+649:     };
+650:     fetchWatchlistPrices();
+651:     const id = setInterval(fetchWatchlistPrices, 5000);
+652:     return () => clearInterval(id);
+653:   }, []);
+654: 
+655:   useEffect(() => {
+656:     const fetchStats = async () => {
+657:       try {
+658:         const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${selectedCoin}`);
+659:         const data = await res.json();
+660:         if (data && !data.code) {
+661:           setSelectedCoinStats({
+662:             high: parseFloat(data.highPrice),
+663:             low: parseFloat(data.lowPrice),
+664:             volume: parseFloat(data.volume),
+665:             quoteVolume: parseFloat(data.quoteVolume),
+666:             priceChange: parseFloat(data.priceChange),
+667:             priceChangePercent: parseFloat(data.priceChangePercent)
+668:           });
+669:         }
+670:       } catch (e) {
+671:         console.warn("Could not fetch stats for coin:", selectedCoin, e);
+672:       }
+673:     };
+674:     fetchStats();
+675:     const id = setInterval(fetchStats, 8000);
+676:     return () => clearInterval(id);
+677:   }, [selectedCoin]);
+678: 
+679:   useEffect(() => {
+680:     const fetchNews = async () => {
+681:       setNewsLoading(true);
+682:       setNewsError(false);
+683:       try {
+684:         const coinBase = getBaseAsset(selectedCoin);
+685:         const res = await fetch(`${API_BASE}/api/news?symbol=${coinBase}`);
+686:         if (!res.ok) throw new Error("Local news fetch failed");
+687:         const data = await res.json();
+688:         
+689:         let articles = [];
+690:         if (data && data.news && data.news.length > 0) {
+691:           articles = data.news;
+692:         }
+693: 
+694:         const parsed = articles.slice(0, 20).map(item => ({
+695:           id: item.id,
+696:           title: item.title,
+697:           source: item.source,
+698:           url: item.url,
+699:           desc: "", // Our local api might not have body/desc, fallback to empty string
+700:           timestamp: item.timestamp,
+701:           sentiment: item.sentiment,
+702:           time: new Date(item.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+703:         }));
+704:         setNewsList(parsed);
+705:         latestNewsListRef.current = parsed;
+706:       } catch (e) {
+707:         console.error("Failed to fetch news from backend:", e);
+708:         setNewsList([]);
+709:         latestNewsListRef.current = [];
+710:         setNewsError(true);
+711:       } finally {
+712:         setNewsLoading(false);
+713:       }
+714:     };
+715:     fetchNews();
+716:     const id = setInterval(fetchNews, 60000);
+717:     return () => clearInterval(id);
+718:   }, [selectedCoin]);
+719: 
+720:   // Fetch CoinGecko Fundamentals
+721:   useEffect(() => {
+722:     if (rightSidebar !== 'details' || !selectedCoin) return;
+723: 
+724:     let active = true;
+725:     const coinId = getCoinGeckoId(selectedCoin);
+726:     
+727:     // Check cache
+728:     const cacheKey = `fundamentals_${coinId}`;
+729:     const cachedData = sessionStorage.getItem(cacheKey);
+730:     if (cachedData) {
+731:       try {
+732:         const { data, timestamp } = JSON.parse(cachedData);
+733:         if (Date.now() - timestamp < 5 * 60 * 1000) {
+734:           setCoinFundamentals(data);
+735:           setFundamentalsError(false);
+736:           setFundamentalsLoading(false);
+737:           return;
+738:         }
+739:       } catch (e) {
+740:         console.warn("Failed to parse cached fundamentals:", e);
+741:       }
+742:     }
+743: 
+744:     const fetchFundamentals = async () => {
+745:       setFundamentalsLoading(true);
+746:       setFundamentalsError(false);
+747:       try {
+748:         const url = `https://api.coingecko.com/api/v3/coins/${coinId}?localization=false&tickers=false&market_data=true`;
+749:         const data = await fetchJson(url);
+750:         
+751:         if (data && active) {
+752:           sessionStorage.setItem(cacheKey, JSON.stringify({
+753:             data,
+754:             timestamp: Date.now()
+755:           }));
+756:           setCoinFundamentals(data);
+757:         }
+758:       } catch (err) {
+759:         console.error("Error fetching fundamentals:", err);
+760:         if (active) {
+761:           setFundamentalsError(true);
+762:         }
+763:       } finally {
+764:         if (active) {
+765:           setFundamentalsLoading(false);
+766:         }
+767:       }
+768:     };
+769: 
+770:     fetchFundamentals();
+771: 
+772:     return () => {
+773:       active = false;
+774:     };
+775:   }, [selectedCoin, rightSidebar]);
+776: 
+777:   // Fetch Fear & Greed Index
+778:   useEffect(() => {
+779:     let active = true;
+780:     
+781:     const cacheKey = 'fear_greed_index';
+782:     const cachedData = sessionStorage.getItem(cacheKey);
+783:     if (cachedData) {
+784:       try {
+785:         const { data, timestamp } = JSON.parse(cachedData);
+786:         if (Date.now() - timestamp < 60 * 60 * 1000) {
+787:           setFearGreedIndex(data);
+788:           return;
+789:         }
+790:       } catch (e) {
+791:         console.warn("Failed to parse cached fear/greed:", e);
+792:       }
+793:     }
+794: 
+795:     const fetchFearGreed = async () => {
+796:       try {
+797:         const url = 'https://api.alternative.me/fng/?limit=1';
+798:         const res = await fetch(url);
+799:         if (!res.ok) throw new Error("Fear and Greed fetch failed");
+800:         const data = await res.json();
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

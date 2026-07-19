@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPU/WebGL Chart Demo (Apache ECharts)</title>
+    <!-- Load ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; background-color: #131722; color: #d1d4dc; font-family: sans-serif; }
+        #chart-container { width: 100vw; height: 90vh; }
+        .header { padding: 15px; text-align: center; background: #1e222d; border-bottom: 1px solid #2a2e39; }
+        .stats { color: #089981; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>🚀 High-Performance Chart Demo (Apache ECharts)</h2>
+        <p>Rendering <span class="stats" id="count">...</span> Candlesticks instantly using Canvas/GPU acceleration.</p>
+    </div>
+    
+    <div id="chart-container"></div>
+
+    <script>
+        // 1. Initialize ECharts instance
+        const chartDom = document.getElementById('chart-container');
+        const myChart = echarts.init(chartDom, 'dark'); // Use dark theme
+        
+        // 2. Generate Massive Dummy Data (100,000 Candles)
+        const candleCount = 100000;
+        document.getElementById('count').innerText = candleCount.toLocaleString();
+        
+        console.time("GenerateData");
+        let baseTime = new Date('2020-01-01').getTime();
+        let basePrice = 10000;
+        const data = [];
+        const times = [];
+        
+        for (let i = 0; i < candleCount; i++) {
+            baseTime += 60000; // +1 minute
+            
+            // Random walk
+            const open = basePrice + (Math.random() - 0.5) * 20;
+            const close = open + (Math.random() - 0.5) * 20;
+            const high = Math.max(open, close) + Math.random() * 10;
+            const low = Math.min(open, close) - Math.random() * 10;
+            
+            basePrice = close;
+            
+            // ECharts format: [open, close, low, high]
+            data.push([open, close, low, high]);
+            
+            const date = new Date(baseTime);
+            times.push(`${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()} ${date.getHours()}:${date.getMinutes()}`);
+        }
+        console.timeEnd("GenerateData");
+
+        // 3. Chart Configuration
+        const option = {
+            backgroundColor: '#131722',
+            animation: false, // Turn off animation for max performance on big data
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'cross' }
+            },
+            grid: { left: '3%', right: '3%', bottom: '15%', top: '5%' },
+            xAxis: {
+                type: 'category',
+                data: times,
+                scale: true,
+                boundaryGap: false,
+                axisLine: { lineStyle: { color: '#8392A5' } },
+                splitLine: { show: false }
+            },
+            yAxis: {
+                scale: true,
+                axisLine: { lineStyle: { color: '#8392A5' } },
+                splitLine: { show: true, lineStyle: { color: '#2a2e39' } }
+            },
+            dataZoom: [
+                { type: 'inside', start: 98, end: 100 }, // Enable mouse zooming
+                { show: true, type: 'slider', bottom: '2%', start: 98, end: 100, textStyle: { color: '#8392A5' } }
+            ],
+            series: [
+                {
+                    name: 'BTC/USDT',
+                    type: 'candlestick',
+                    data: data,
+                    itemStyle: {
+                        color: '#089981',      // Up candle
+                        color0: '#f23645',     // Down candle
+                        borderColor: '#089981',
+                        borderColor0: '#f23645'
+                    },
+                    // Optimization for large data (culling & sampling)
+                    large: true,
+                    largeThreshold: 1000,
+                }
+            ]
+        };
+
+        // 4. Render Chart
+        console.time("RenderChart");
+        myChart.setOption(option);
+        console.timeEnd("RenderChart");
+
+        // Handle window resize
+        window.addEventListener('resize', () => myChart.resize());
+    </script>
+</body>
+</html>
