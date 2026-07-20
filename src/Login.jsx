@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, KeyRound, Lock, Mail, RefreshCw, ShieldCheck, UserPlus } from 'lucide-react';
 import logo from './assets/logo.png';
 
-const API_BASE = import.meta.env.VITE_BACKEND_URL ?? `http://${window.location.hostname}:8000`;
+const API_BASE = import.meta.env.VITE_BACKEND_URL ?? '/api';
 
 function isGmailAddress(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim());

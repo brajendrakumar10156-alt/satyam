@@ -71,7 +71,7 @@ function toHeikinAshi(candles) {
 }
 
 /** Backtest / AI server — must run: npm run backend (port 8000) */
-const API_BASE = import.meta.env.VITE_BACKEND_URL ?? `http://${window.location.hostname}:8000`;
+const API_BASE = import.meta.env.VITE_BACKEND_URL ?? '/api';
 const CANDLE_BATCH_SIZE = 1000;
 const INITIAL_HISTORY_BATCHES = 10;  // load 10k candles on startup
 const MAX_CANDLES_IN_MEMORY = 100000; // allow more in memory
