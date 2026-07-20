@@ -1,7 +1,7 @@
 /** Multi-exchange market data (Binance + OKX, KuCoin, Bybit, Kraken, Gate.io, MEXC) */
 
 const FETCH_TIMEOUT = 8000;
-const API_BASE = import.meta.env.VITE_BACKEND_URL ?? 'http://127.0.0.1:8000';
+const API_BASE = import.meta.env.VITE_BACKEND_URL ?? '/api';
 
 import { getLocalCandles, saveLocalCandles } from './db/indexedDB';
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, LogOut, RefreshCw, Search, Star, TrendingUp, HelpCircle, ArrowUpRight, ArrowDownRight, Eye } from 'lucide-react';
 import { EXCHANGE_LIST, fetchExchangeSymbols } from './exchanges';
 
-const API_BASE = import.meta.env.VITE_BACKEND_URL ?? `http://${window.location.hostname}:8000`;
+const API_BASE = import.meta.env.VITE_BACKEND_URL ?? '/api';
 const PAGE_SIZE = 60;
 
 // Helper to read watchlist from local storage by tab number
