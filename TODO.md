@@ -1,30 +1,34 @@
-# TODO - JARVIS AI integration
+# TODO
 
-## Info gathered
-- SATYAM AI Terminal backend has `/ai/assist` that calls `backend/ai_service.py` providers (Groq/Gemini).
-- New AI project: `c:/Users/satya/OneDrive/Documents/Desktop/jarvis`
-  - FastAPI server file: `main.py`
-  - Chat endpoint: `POST /api/chat`
-  - It expects JSON: `{ "messages": [{"role": "user"|"assistant"|... , "content": "..."}] }`
-  - Response: `{ "message": { "role": "assistant", "content": "..." } }` (no code-fence contract guaranteed).
+## AI Guardrail Interface (Score-only AI) — Implementation Tracker
 
-## Step plan
-1. Create a backend adapter in `backend/ai_service.py` for provider="jarvis".
-2. Update `/ai/status` to include `jarvis` health/config.
-3. Update `/ai/assist` to accept provider jarvis and route request.
-4. Add environment variables support:
-   - `JARVIS_API_URL` (default `http://127.0.0.1:8000/api/chat`)
-   - `JARVIS_TIMEOUT_SECONDS` (optional)
-5. Ensure frontend provider dropdown includes `jarvis` (recommended).
-6. Test locally:
-   - Start JARVIS server: `cd jarvis && python main.py`
-   - Start SATYAM AI Terminal backend: `npm run backend`
-   - In UI select provider jarvis and send prompt.
+### Step 1: Inspect existing arbitrage/signal pipeline
+- [ ] Read `src_demo/arbitrageWorker.js`
+- [ ] Read `src_demo/components/ArbitrageBot.jsx`
+- [ ] Read corresponding logic under `src/` (non-demo) if used by default
 
+### Step 2: Inspect backend AI + routing
+- [ ] Read `backend/ai_service.py`
+- [ ] Read `backend/main.py` to find current API routes
 
-## Progress tracking
-- [ ] Adapter implementation
-- [ ] ai_status update
-- [ ] Frontend update (optional)
-- [ ] End-to-end test
+### Step 3: Add backend endpoint for AI advisor (score-only)
+- [ ] Implement route like `POST /api/v1/ai-advisor/score`
+- [ ] Implement response schema: `{ pair, timestamp, aiSentimentScore, confidence }`
+
+### Step 4: Wire frontend demo to call AI advisor
+- [ ] In `src_demo/arbitrageWorker.js`, request score from backend
+- [ ] Pass score back to `ArbitrageBot.jsx`
+
+### Step 5: Enforce guardrail in pipeline
+- [ ] Ensure AI score does NOT directly place orders
+- [ ] Only math/risk gate triggers execution (or create stub gate if missing)
+
+### Step 6: Add logging + shadow mode behavior
+- [ ] Log AI score vs decision
+- [ ] Confirm no real execution is triggered during shadow mode
+
+### Step 7: Run + smoke test
+- [ ] Start backend
+- [ ] Run frontend demo
+- [ ] Trigger an arbitrage scan and verify score is shown/logged
 

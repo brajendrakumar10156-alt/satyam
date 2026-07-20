@@ -1,3 +1,74 @@
+/* ──────────────────────────────────────────────
+   SATYAM AI TERMINAL — ENTERPRISE DESIGN SYSTEM
+   Premium Dark Mode | Glassmorphism | Inter Font
+────────────────────────────────────────────── */
+
+/* === 1. GOOGLE FONTS === */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* === 2. CSS VARIABLES (Design Tokens) === */
+:root {
+  /* Core Backgrounds */
+  --bg-base:        #0B0E14;
+  --bg-surface:     #0F1117;
+  --bg-elevated:    #141820;
+  --bg-glass:       rgba(15, 17, 23, 0.75);
+  --bg-glass-light: rgba(20, 24, 32, 0.85);
+  --bg-hover:       rgba(255, 255, 255, 0.04);
+  --bg-active:      rgba(41, 98, 255, 0.15);
+
+  /* Borders */
+  --border-subtle:  rgba(255, 255, 255, 0.06);
+  --border-dim:     rgba(255, 255, 255, 0.09);
+  --border-glow:    rgba(41, 98, 255, 0.35);
+
+  /* Text */
+  --text-primary:   #E2E8F0;
+  --text-secondary: #94A3B8;
+  --text-muted:     #475569;
+  --text-accent:    #FFFFFF;
+
+  /* Accent Colors */
+  --accent-blue:    #2962FF;
+  --accent-blue-glow: rgba(41, 98, 255, 0.4);
+  --accent-green:   #00E676;
+  --accent-red:     #FF3D57;
+  --accent-purple:  #7C5CFF;
+  --accent-cyan:    #00B8D9;
+
+  /* Premium Gradients */
+  --gradient-blue:  linear-gradient(135deg, #1a4fff 0%, #0041cc 100%);
+  --gradient-green: linear-gradient(135deg, #00e676 0%, #00a152 100%);
+  --gradient-surface: linear-gradient(180deg, #141820 0%, #0F1117 100%);
+
+  /* Blur & Glass */
+  --blur-sm:   blur(8px);
+  --blur-md:   blur(12px);
+  --blur-lg:   blur(20px);
+
+  /* Shadows */
+  --shadow-sm:  0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md:  0 4px 16px rgba(0,0,0,0.5);
+  --shadow-lg:  0 8px 32px rgba(0,0,0,0.6);
+  --shadow-blue: 0 0 20px rgba(41,98,255,0.25);
+  --shadow-glow: 0 0 30px rgba(41,98,255,0.15);
+
+  /* Transitions */
+  --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-med:  all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Spacing & Radius */
+  --radius-sm:  4px;
+  --radius-md:  8px;
+  --radius-lg:  12px;
+  --radius-xl:  16px;
+  --radius-2xl: 20px;
+}
+
+/* === 3. BASE RESET === */
+*, *::before, *::after { box-sizing: border-box; }
+
 html, body, #root {
   width: 100%;
   height: 100%;
@@ -8,62 +79,153 @@ html, body, #root {
 body {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: #f8f9fa;
-  color: #1e2329;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  background-color: var(--bg-base);
+  color: var(--text-primary);
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+/* === 4. SAFE AREA === */
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.safe-top    { padding-top: env(safe-area-inset-top, 0px); }
+
+/* === 5. PREMIUM SCROLLBARS === */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+
+.dark-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+.dark-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.dark-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
+.dark-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
+
+/* === 6. GLASSMORPHISM UTILITIES === */
+.glass {
+  background: var(--bg-glass);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+  border: 1px solid var(--border-subtle);
 }
 
-.safe-top {
-  padding-top: env(safe-area-inset-top, 0px);
+.glass-elevated {
+  background: var(--bg-glass-light);
+  backdrop-filter: var(--blur-lg);
+  -webkit-backdrop-filter: var(--blur-lg);
+  border: 1px solid var(--border-dim);
+  box-shadow: var(--shadow-md);
 }
 
-/* Premium Scrollbars for Light Mode */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #f1f3f5;
-}
-::-webkit-scrollbar-thumb {
-  background: #dee2e6;
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #ced4da;
-}
-/* ☢️ TRADINGVIEW LOGO KILLER (NUCLEAR OPTION) ☢️ */
-a[href*="tradingview.com"] {
-    display: none !important;
-    opacity: 0 !important;
-    visibility: hidden !important;
-    width: 0px !important;
-    height: 0px !important;
-    position: absolute !important;
-    z-index: -9999 !important;
-    pointer-events: none !important;
+.glass-panel {
+  background: linear-gradient(135deg, rgba(20,24,32,0.9) 0%, rgba(15,17,23,0.95) 100%);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-lg);
 }
 
-/* Keep the chart time axis visible. Attribution links are hidden by the
-   targeted selector above; hiding the final chart row also hides timestamps. */
+/* === 7. ACCENT GLOW EFFECTS === */
+.glow-blue  { box-shadow: var(--shadow-blue); }
+.glow-green { box-shadow: 0 0 20px rgba(0,230,118,0.25); }
+.glow-red   { box-shadow: 0 0 20px rgba(255,61,87,0.25); }
 
-/* Order Book Row Flash Animations */
+/* === 8. ANIMATED GRADIENT BORDER === */
+.border-gradient {
+  position: relative;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+.border-gradient::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(41,98,255,0.4), rgba(124,92,255,0.2), rgba(0,184,217,0.2));
+  z-index: -1;
+}
+
+/* === 9. MICRO-ANIMATIONS === */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(41,98,255,0.3); }
+  50%       { box-shadow: 0 0 20px rgba(41,98,255,0.6); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+@keyframes priceFlash {
+  0%   { background: rgba(0,230,118,0.2); }
+  100% { background: transparent; }
+}
+
+.animate-fade-in  { animation: fadeIn  0.2s ease forwards; }
+.animate-slide-up { animation: slideUp 0.25s ease forwards; }
+.animate-slide-down { animation: slideDown 0.2s ease forwards; }
+.pulse-glow { animation: pulseGlow 2s ease-in-out infinite; }
+
+/* === 10. INTERACTIVE ELEMENTS === */
+button, [role="button"] {
+  transition: var(--transition-fast);
+  cursor: pointer;
+}
+button:active { transform: scale(0.97); }
+
+/* Premium button hover brightening */
+.btn-primary {
+  background: var(--gradient-blue);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  transition: var(--transition-fast);
+  box-shadow: 0 2px 8px rgba(41,98,255,0.3);
+}
+.btn-primary:hover {
+  filter: brightness(1.1);
+  box-shadow: var(--shadow-blue);
+  transform: translateY(-1px);
+}
+
+/* === 11. CANDLE COLORS === */
+.bullish { color: var(--accent-green); }
+.bearish { color: var(--accent-red); }
+
+/* === 12. ORDER BOOK FLASH ANIMATIONS === */
 @keyframes orderBookFlashGreen {
-  0% { background-color: rgba(16, 185, 129, 0.25); }
+  0%   { background-color: rgba(0, 230, 118, 0.2); }
   100% { background-color: transparent; }
 }
 @keyframes orderBookFlashRed {
-  0% { background-color: rgba(239, 68, 68, 0.25); }
+  0%   { background-color: rgba(255, 61, 87, 0.2); }
   100% { background-color: transparent; }
 }
-.flash-green {
-  animation: orderBookFlashGreen 0.5s ease-out;
+.flash-green { animation: orderBookFlashGreen 0.5s ease-out; }
+.flash-red   { animation: orderBookFlashRed   0.5s ease-out; }
+
+/* === 13. MONOSPACE NUMBERS (for prices/values) === */
+.font-mono-nums {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-feature-settings: 'tnum';
 }
-.flash-red {
-  animation: orderBookFlashRed 0.5s ease-out;
+
+/* === 14. HIDE TRADINGVIEW WATERMARKS === */
+a[href*="tradingview.com"] {
+  display: none !important; opacity: 0 !important;
+  visibility: hidden !important; width: 0 !important;
+  height: 0 !important; position: absolute !important;
+  z-index: -9999 !important; pointer-events: none !important;
 }

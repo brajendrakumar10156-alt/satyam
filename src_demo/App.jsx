@@ -366,14 +366,18 @@ export default function App({ onLogout, onBackToCoins }) {
   }, []);
 
   const t = useMemo(() => ({
-    bg: darkMode ? 'bg-[#131722]' : 'bg-[#ffffff]',
-    sec: darkMode ? 'bg-[#1e222d]' : 'bg-[#f1f3f6]',
-    text: darkMode ? 'text-[#d1d4dc]' : 'text-[#131722]',
-    muted: darkMode ? 'text-[#8a919e]' : 'text-[#5d606b]',
-    border: darkMode ? 'border-[#2a2e39]' : 'border-[#d1d4dc]',
-    hover: darkMode ? 'hover:bg-[#2a2e39] hover:text-[#ffffff]' : 'hover:bg-[#e0e3eb] hover:text-[#000000]',
-    glass: darkMode ? 'bg-[#1e222d]/70 backdrop-blur-md' : 'bg-[#ffffff]/80 backdrop-blur-md',
+    bg:     darkMode ? 'bg-[#0B0E14]'  : 'bg-[#ffffff]',
+    sec:    darkMode ? 'bg-[#0F1117]'  : 'bg-[#f1f3f6]',
+    ter:    darkMode ? 'bg-[#141820]'  : 'bg-[#e8eaf0]',
+    text:   darkMode ? 'text-[#E2E8F0]'  : 'text-[#131722]',
+    muted:  darkMode ? 'text-[#64748B]'  : 'text-[#5d606b]',
+    dim:    darkMode ? 'text-[#475569]'  : 'text-[#8a919e]',
+    border: darkMode ? 'border-[rgba(255,255,255,0.07)]' : 'border-[#d1d4dc]',
+    hover:  darkMode ? 'hover:bg-[rgba(255,255,255,0.05)] hover:text-white' : 'hover:bg-[#e0e3eb] hover:text-[#000000]',
+    glass:  darkMode ? 'bg-[rgba(15,17,23,0.8)] backdrop-blur-md border border-[rgba(255,255,255,0.07)]' : 'bg-[#ffffff]/80 backdrop-blur-md',
+    card:   darkMode ? 'bg-[#0F1117] border border-[rgba(255,255,255,0.07)] rounded-xl shadow-[0_4px_16px_rgba(0,0,0,0.5)]' : 'bg-white border border-gray-200 rounded-xl shadow-sm',
   }), [darkMode]);
+
 
   // ─── States ───
   const [editorMode, setEditorMode] = useState('pine');
@@ -5169,7 +5173,7 @@ export default function App({ onLogout, onBackToCoins }) {
     <>
       {stealthMode && (
         <div className="fixed inset-0 flex flex-col pointer-events-none z-[9999] bg-transparent">
-          <div className="mt-4 ml-4 bg-[#131722]/95 backdrop-blur-md border border-[#2a2e39] rounded-2xl p-4 flex flex-col pointer-events-auto shadow-2xl w-52 animate-fade-in group hover:border-blue-500/50 transition-colors">
+        <div className="mt-4 ml-4 bg-[#0F1117]/95 backdrop-blur-xl border border-[rgba(255,255,255,0.08)] rounded-2xl p-4 flex flex-col pointer-events-auto shadow-[0_8px_32px_rgba(0,0,0,0.7)] w-52 animate-fade-in group hover:border-[rgba(41,98,255,0.4)] transition-all duration-300">
             <div className="flex justify-between items-center mb-2">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
@@ -5195,9 +5199,10 @@ export default function App({ onLogout, onBackToCoins }) {
           display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; width: 0 !important; height: 0 !important; 
         }
         
-        .dark-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .dark-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
         .dark-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .dark-scrollbar::-webkit-scrollbar-thumb { background: ${darkMode ? '#2a2e39' : '#e0e3eb'}; border-radius: 10px; }
+        .dark-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
+        .dark-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
       `}</style>
 
       {activeModal && (
@@ -5643,7 +5648,7 @@ export default function App({ onLogout, onBackToCoins }) {
         }
         return (
         <div 
-          className="fixed z-50 flex items-center gap-2 bg-[#1e222d] border border-[#2a2e39] rounded-lg shadow-2xl p-1.5 transition-all"
+          className={`fixed z-50 flex items-center gap-2 border rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] p-1.5 transition-all ${darkMode ? 'bg-[#0F1117]/98 backdrop-blur-xl border-[rgba(255,255,255,0.09)]' : 'bg-white/98 backdrop-blur-md border-[#e0e3eb] shadow-xl'}`}
           style={{ 
             left: `${px}px`, 
             top: `${py}px`,
@@ -5787,7 +5792,7 @@ export default function App({ onLogout, onBackToCoins }) {
 
       {/* MOBILE NEW TOP HEADER */}
       {isMobile && !focusMode && (
-        <div className={`flex min-h-14 border-b ${t.border} ${t.bg} items-center justify-between px-3 shrink-0 z-30 transition-colors w-full relative`}>
+        <div className={`flex min-h-14 border-b items-center justify-between px-3 shrink-0 z-30 transition-all w-full relative ${darkMode ? 'border-[rgba(255,255,255,0.07)] bg-[#0B0E14]/95 backdrop-blur-md' : 'border-[#e0e3eb] bg-white/95 backdrop-blur-md shadow-sm'}`}>
           <div className="flex items-center gap-3 min-w-0">
             <button onClick={() => setMobileMenuOpen(true)} className={`p-1.5 -ml-1.5 ${t.muted} ${t.hover} rounded-lg`}><Menu size={22} /></button>
             <div className="flex flex-col cursor-pointer" onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
@@ -5824,7 +5829,7 @@ export default function App({ onLogout, onBackToCoins }) {
       )}
 
       {/* DESKTOP HEADER (Hidden on mobile) */}
-      <div className={`${focusMode ? 'hidden' : 'hidden md:flex'} min-h-11 border-b ${t.border} ${t.bg} items-center justify-between px-2 md:px-3 shrink-0 z-30 transition-colors duration-200 gap-2 w-full`}>
+      <div className={`${focusMode ? 'hidden' : 'hidden md:flex'} min-h-11 border-b items-center justify-between px-2 md:px-3 shrink-0 z-30 gap-2 w-full transition-all duration-200 ${darkMode ? 'border-[rgba(255,255,255,0.07)] bg-[#0B0E14]/95 backdrop-blur-md' : 'border-[#e0e3eb] bg-white/95 backdrop-blur-md shadow-sm'}`}>
           <div className="flex items-center gap-1.5 min-w-0 flex-1">
             {onBackToCoins && (
               <button 
@@ -5835,7 +5840,7 @@ export default function App({ onLogout, onBackToCoins }) {
                 <ArrowLeft size={16} className="shrink-0 text-[#ff5722]" />
               </button>
             )}
-            {onBackToCoins && <div className={`h-4 w-[1px] ${darkMode ? 'bg-[#2a2e39]' : 'bg-[#e0e3eb]'} shrink-0`} />}
+            {onBackToCoins && <div className={`h-4 w-[1px] bg-[rgba(255,255,255,0.06)] shrink-0`} />}
             
             {/* Exchange Dropdown */}
             <select
@@ -5853,7 +5858,7 @@ export default function App({ onLogout, onBackToCoins }) {
             <div className="relative flex items-center shrink-0 z-[100]">
               <form 
                 onSubmit={(e) => { e.preventDefault(); executeSearch(coinInput || selectedCoin); }} 
-                className={`flex items-center gap-1 md:gap-1.5 ${darkMode ? 'bg-[#1e222d] hover:bg-[#2a2e39]' : 'bg-gray-100 hover:bg-gray-200'} border ${darkMode ? 'border-[#2a2e39]' : 'border-gray-300'} px-1.5 py-1 rounded-md shadow-sm transition-colors group cursor-text`}
+              className={`flex items-center gap-1 md:gap-1.5 border px-1.5 py-1 rounded-md shadow-sm transition-all duration-150 group cursor-text ${darkMode ? 'bg-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.07)] border-[rgba(255,255,255,0.08)] focus-within:border-[rgba(41,98,255,0.5)] focus-within:shadow-[0_0_0_1px_rgba(41,98,255,0.2)]' : 'bg-gray-100 hover:bg-gray-200 border-gray-300 focus-within:border-blue-400'}`}
                 onClick={() => document.getElementById('smart-search')?.focus()}
               >
                 <Search size={13} className="text-gray-400 group-hover:text-[#7C5CFF] transition-colors shrink-0" />
@@ -5876,7 +5881,7 @@ export default function App({ onLogout, onBackToCoins }) {
                   className={`w-[45px] md:w-[65px] bg-transparent font-black text-[12px] md:text-[13px] ${t.text} placeholder-gray-500 tracking-wide outline-none focus:text-[#7C5CFF] uppercase`} 
                 />
                 <div className={`hidden lg:flex items-center gap-1 border-l ${darkMode ? 'border-[#2a2e39]' : 'border-gray-300'} pl-1.5 ml-0.5`}>
-                  <kbd className={`text-[8.5px] font-mono font-bold ${darkMode ? 'bg-[#131722] text-gray-500 border-[#2a2e39]' : 'bg-white text-gray-400 border-gray-200'} border px-1 py-0.5 rounded`}>Ctrl K</kbd>
+                  <kbd className={`text-[8.5px] font-mono font-bold ${darkMode ? 'bg-[#0B0E14] text-[#475569] border-[rgba(255,255,255,0.08)]' : 'bg-white text-gray-400 border-gray-200'} border px-1 py-0.5 rounded`}>Ctrl K</kbd>
                 </div>
               </form>
               
@@ -5888,7 +5893,7 @@ export default function App({ onLogout, onBackToCoins }) {
                 <Scale size={16} />
               </button>
               {isDropdownOpen && (
-                <div className={`absolute top-[calc(100%+4px)] left-0 w-[min(18rem,85vw)] ${t.bg} border ${t.border} rounded-lg shadow-2xl z-[200] max-h-72 md:max-h-96 overflow-y-auto dark-scrollbar py-1`}>
+                <div className={`absolute top-[calc(100%+6px)] left-0 w-[min(18rem,85vw)] border rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.7)] z-[200] max-h-72 md:max-h-96 overflow-y-auto dark-scrollbar py-1.5 ${darkMode ? 'bg-[#0F1117]/98 backdrop-blur-xl border-[rgba(255,255,255,0.08)]' : 'bg-white border-[#e0e3eb] shadow-lg'}`}>
                   {coinsLoading && (
                     <div className={`flex items-center gap-2 px-4 py-3 text-[11px] ${t.muted}`}><RefreshCw size={12} className="animate-spin" /> Loading pairs...</div>
                   )}
@@ -5920,7 +5925,7 @@ export default function App({ onLogout, onBackToCoins }) {
             {/* Sentiment info badge */}
             {fearGreedIndex && (
               <span 
-                className="hidden lg:inline-flex items-center gap-1 text-[11px] font-extrabold px-1.5 py-0.5 rounded border border-[#2a2e39]/30 bg-[#2a2e39]/10 cursor-pointer shrink-0"
+                className="hidden lg:inline-flex items-center gap-1 text-[11px] font-extrabold px-2 py-1 rounded-md border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] cursor-pointer shrink-0 transition-all hover:border-[rgba(255,255,255,0.1)]"
                 style={{ color: getFngColor(fearGreedIndex.value) }}
                 title={`Fear & Greed Index: ${fearGreedIndex.value} (${fearGreedIndex.classification}). Click to open Details.`}
                 onClick={() => setRightSidebar('details')}
@@ -5954,8 +5959,8 @@ export default function App({ onLogout, onBackToCoins }) {
                 </button>
                 
                 {isTimeframeDropdownOpen && (
-                  <div className={`absolute top-[calc(100%+4px)] left-0 w-44 ${t.bg} border ${t.border} rounded-lg shadow-2xl z-[350] py-1`}>
-                    <div className="text-[9px] text-gray-500 uppercase font-black tracking-wider px-3 py-1.5 border-b border-[#2a2e39]/30 mb-1">Timeframes</div>
+                  <div className={`absolute top-[calc(100%+6px)] left-0 w-44 border rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.7)] z-[350] py-1.5 ${darkMode ? 'bg-[#0F1117]/98 backdrop-blur-xl border-[rgba(255,255,255,0.08)]' : 'bg-white border-[#e0e3eb] shadow-lg'}`}>
+                    <div className="text-[9px] uppercase font-black tracking-wider px-3 py-1.5 border-b mb-1" style={{color: darkMode ? '#475569' : '#9ca3af', borderColor: darkMode ? 'rgba(255,255,255,0.05)' : '#f0f0f0'}}>Timeframes</div>
                     <div className="grid grid-cols-3 gap-1 px-2 pb-2">
                       {timeframeButtons.map(tf => (
                         <button 
@@ -6024,7 +6029,7 @@ export default function App({ onLogout, onBackToCoins }) {
                   <ChevronDown size={11} className="opacity-60" />
                 </button>
                 {isStyleDropdownOpen && (
-                  <div className={`absolute top-[calc(100%+4px)] left-0 w-52 max-h-[70vh] overflow-y-auto custom-scrollbar ${t.bg} border ${t.border} rounded-lg shadow-2xl z-[300] py-1`}>
+                  <div className={`absolute top-[calc(100%+6px)] left-0 w-52 max-h-[70vh] overflow-y-auto custom-scrollbar border rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.7)] z-[300] py-1.5 ${darkMode ? 'bg-[#0F1117]/98 backdrop-blur-xl border-[rgba(255,255,255,0.08)]' : 'bg-white border-[#e0e3eb] shadow-lg'}`}>
                     {[
                       { name: 'Candles', desc: 'Standard Candlesticks', icon: '📊', color: 'text-green-500' },
                       { name: 'Bars', desc: 'Traditional OHLC Bars', icon: '📶', color: 'text-blue-500' },
