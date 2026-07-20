@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
-import { WebGLErrorBoundary } from '../WebGLErrorBoundary';
+
 import { INDICATOR_REGISTRY } from '../indicatorsRegistry';
 import { calculateHorizontalTimeAxisLabels, calculateVerticalPriceAxisLabels } from '../utils/axisCollisionEngine';
 import { Application, Graphics, Container, Text, TextStyle } from 'pixi.js';
@@ -507,20 +507,31 @@ const WebGLChartEngine = forwardRef(({
     // ── Indicator lines ───────────────────────────────────────────────────
     if (!isPanOnly && visualIndicators && indicatorDataMap) {
       visualIndicators.forEach(ind => {
-        const data = indicatorDataMap[ind.id];
-        if (!data || data.length === 0) return;
-        const indColor = parseInt(ind.color.replace('#', ''), 16) || 0xffaa00;
-        let first = true;
-        for (const d of data) {
-          const idx = timeToIndex(d.time);
-          if (idx >= v.timeRange.from - 50 && idx <= v.timeRange.to + 50) {
-            const sx = (idx - v.lastDrawnFrom) * scaleX;
-            const sy = py(d.value);
-            if (first) { indicatorLayerRef.current.moveTo(sx, sy); first = false; }
-            else         indicatorLayerRef.current.lineTo(sx, sy);
+        const dataObj = indicatorDataMap[ind.id];
+        const reg = INDICATOR_REGISTRY[ind.type];
+        if (!dataObj || !reg || reg.kind !== 'overlay') return;
+        
+        reg.seriesConfig.forEach(series => {
+          const lineData = dataObj[series.key];
+          if (!lineData || lineData.length < 2) return;
+          
+          const opts = series.options(ind.params, ind.color);
+          const indColor = parseInt((opts.color || ind.color || '#ffaa00').replace('#', ''), 16) || 0xffaa00;
+          const thickness = opts.lineWidth || 2;
+          
+          let first = true;
+          for (let i = 0; i < lineData.length; i++) {
+            const d = lineData[i];
+            const idx = timeToIndex(d.time);
+            if (idx >= v.timeRange.from - 50 && idx <= v.timeRange.to + 50) {
+              const sx = (idx - v.lastDrawnFrom) * scaleX;
+              const sy = py(d.value);
+              if (first) { indicatorLayerRef.current.moveTo(sx, sy); first = false; }
+              else         indicatorLayerRef.current.lineTo(sx, sy);
+            }
           }
-        }
-        if (!first) indicatorLayerRef.current.stroke({ width: 2, color: indColor });
+          if (!first) indicatorLayerRef.current.stroke({ width: thickness, color: indColor });
+        });
       });
     }
 

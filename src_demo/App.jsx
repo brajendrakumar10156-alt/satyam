@@ -2,8 +2,8 @@ import html2canvas from 'html2canvas';
 import React, { useEffect, useRef, useState, useCallback, useMemo, Suspense, lazy } from 'react';
 import PixiDrawingLayer from './components/PixiDrawingLayer';
 import DrawingAxisLabels from './components/DrawingAxisLabels';
-const WebGLChartEngine = lazy(() => import('./components/WebGLChartEngine'));
-const WebGPUChartEngine = lazy(() => import('./components/WebGPUChartEngine'));
+const WebGLChartEngine = lazy(() => import('./components/WebGLChartEngine.jsx'));
+const WebGPUChartEngine = lazy(() => import('./components/WebGPUChartEngine.jsx'));
 import { captureViewportSnapshot, generateDrawingId } from './utils/drawingStore';
 import { loadDrawingsFromDB, saveDrawingsToDB } from './utils/drawingPersistence';
 import Editor from '@monaco-editor/react';
@@ -292,7 +292,7 @@ class WebGLErrorBoundary extends React.Component {
   componentDidCatch(error, errorInfo) {
     console.error("WebGL Engine Error:", error, errorInfo);
     if (this.props.onError) {
-      this.props.onError();
+      this.props.onError(error);
     }
   }
   render() {
@@ -2534,21 +2534,25 @@ export default function App({ onLogout, onBackToCoins }) {
     setIndicatorStructureTick(prev => prev + 1);
   }, [visualIndicators, chartStyle, darkMode, chartCreated]);
 
+  const lastVisualIndicatorsRef = useRef(visualIndicators);
+
   // B. Data Effect: Recalculates and updates existing series data dynamically
   useEffect(() => {
-    if (!chartInstance.current || allCandles.length === 0) return;
+    if (allCandles.length === 0) return;
 
     const lastCandle = allCandles[allCandles.length - 1];
-    const isNewCandle = allCandles.length !== lastProcessedCandleRef.current.length || lastCandle.time !== lastProcessedCandleRef.current.time;
-    const isPriceChanged = lastCandle.close !== lastProcessedCandleRef.current.close;
+    const isNewCandle = !lastProcessedCandleRef.current || allCandles.length !== lastProcessedCandleRef.current.length || lastCandle.time !== lastProcessedCandleRef.current.time;
+    const isPriceChanged = !lastProcessedCandleRef.current || lastCandle.close !== lastProcessedCandleRef.current.close;
     const structureChanged = indicatorStructureTick !== lastStructureTickRef.current;
+    const indicatorsChanged = visualIndicators !== lastVisualIndicatorsRef.current;
 
-    if (!isNewCandle && !isPriceChanged && !structureChanged) {
+    if (!isNewCandle && !isPriceChanged && !structureChanged && !indicatorsChanged) {
       return; // Skip calculations
     }
 
     lastProcessedCandleRef.current = { time: lastCandle.time, close: lastCandle.close, length: allCandles.length };
     lastStructureTickRef.current = indicatorStructureTick;
+    lastVisualIndicatorsRef.current = visualIndicators;
 
     // Send calculation task to Web Worker
     if (indicatorWorkerRef.current) {
@@ -6530,6 +6534,12 @@ export default function App({ onLogout, onBackToCoins }) {
                             onVisibleRangeChange={(range) => {
                               if (drawingLayerRef.current) drawingLayerRef.current.draw();
                               if (range?.from && range?.to) {
+                                viewportSnapshotRef.current = { visibleRange: range };
+                                if (saveRangeTimeoutRef.current) clearTimeout(saveRangeTimeoutRef.current);
+                                saveRangeTimeoutRef.current = setTimeout(() => {
+                                  localStorage.setItem(visibleRangeStorageKey, JSON.stringify(range));
+                                }, 300);
+
                                 if (allCandles.length > 0) {
                                   const avgTime = (allCandles[allCandles.length - 1].time - allCandles[0].time) / allCandles.length;
                                   if (range.from < allCandles[0].time + (avgTime * 100)) {
@@ -6539,7 +6549,7 @@ export default function App({ onLogout, onBackToCoins }) {
                               }
                             }}
                             onChartReady={() => {
-                              viewportSnapshotRef.current = null;
+                              // Preserved viewport
                             }}
                           />
                         </Suspense>
@@ -6579,6 +6589,12 @@ export default function App({ onLogout, onBackToCoins }) {
                             onVisibleRangeChange={(range) => {
                               if (drawingLayerRef.current) drawingLayerRef.current.draw();
                               if (range?.from && range?.to) {
+                                viewportSnapshotRef.current = { visibleRange: range };
+                                if (saveRangeTimeoutRef.current) clearTimeout(saveRangeTimeoutRef.current);
+                                saveRangeTimeoutRef.current = setTimeout(() => {
+                                  localStorage.setItem(visibleRangeStorageKey, JSON.stringify(range));
+                                }, 300);
+
                                 if (allCandles.length > 0) {
                                   const avgTime = (allCandles[allCandles.length - 1].time - allCandles[0].time) / allCandles.length;
                                   if (range.from < allCandles[0].time + (avgTime * 100)) {
@@ -6588,7 +6604,7 @@ export default function App({ onLogout, onBackToCoins }) {
                               }
                             }}
                             onChartReady={() => {
-                              viewportSnapshotRef.current = null;
+                              // Preserved viewport
                             }}
                           />
                         </Suspense>

@@ -942,8 +942,11 @@ const WebGPUChartEngine = React.forwardRef(({
       vState.current.logicalRange.from = startLogicalFrom - shift;
       vState.current.logicalRange.to = startLogicalTo - shift;
       
-      if (onVisibleRangeChange) {
-         onVisibleRangeChange(vState.current.logicalRange);
+      if (onVisibleRangeChange && candles && candles.length > 0) {
+         onVisibleRangeChange({
+            from: candles[Math.max(0, Math.floor(vState.current.logicalRange.from))]?.time,
+            to: candles[Math.min(candles.length - 1, Math.ceil(vState.current.logicalRange.to))]?.time
+         });
       }
       requestAnimationFrame(render);
     };
@@ -963,8 +966,11 @@ const WebGPUChartEngine = React.forwardRef(({
        vState.current.logicalRange.from = center - (newLen / 2);
        vState.current.logicalRange.to = center + (newLen / 2);
        
-       if (onVisibleRangeChange) {
-         onVisibleRangeChange(vState.current.logicalRange);
+       if (onVisibleRangeChange && candles && candles.length > 0) {
+         onVisibleRangeChange({
+            from: candles[Math.max(0, Math.floor(vState.current.logicalRange.from))]?.time,
+            to: candles[Math.min(candles.length - 1, Math.ceil(vState.current.logicalRange.to))]?.time
+         });
        }
        requestAnimationFrame(render);
     };
