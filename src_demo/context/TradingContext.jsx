@@ -72,6 +72,10 @@ export function TradingProvider({ children, onLogout, onBackToCoins }) {
       }
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, []);
   
 
   const contextValue = {
@@ -123,9 +127,7 @@ export function TradingProvider({ children, onLogout, onBackToCoins }) {
     stealthMode,
     setStealthMode,
     focusMode,
-    setFocusMode,
-    handleGlobalKeyDown,
-    searchInput
+    setFocusMode
   };
 
   return (

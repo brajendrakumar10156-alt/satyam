@@ -348,6 +348,7 @@ export default function App({ onLogout, onBackToCoins }) {
   const [focusMode, setFocusMode] = useState(false);
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
+    document.documentElement.classList.toggle('theme-light', !darkMode);
     localStorage.setItem('theme', darkMode ? 'dark' : 'light');
   }, [darkMode]);
 
@@ -366,16 +367,16 @@ export default function App({ onLogout, onBackToCoins }) {
   }, []);
 
   const t = useMemo(() => ({
-    bg:     darkMode ? 'bg-[#0B0E14]'  : 'bg-[#ffffff]',
-    sec:    darkMode ? 'bg-[#0F1117]'  : 'bg-[#f1f3f6]',
-    ter:    darkMode ? 'bg-[#141820]'  : 'bg-[#e8eaf0]',
-    text:   darkMode ? 'text-[#E2E8F0]'  : 'text-[#131722]',
-    muted:  darkMode ? 'text-[#64748B]'  : 'text-[#5d606b]',
-    dim:    darkMode ? 'text-[#475569]'  : 'text-[#8a919e]',
-    border: darkMode ? 'border-[rgba(255,255,255,0.07)]' : 'border-[#d1d4dc]',
-    hover:  darkMode ? 'hover:bg-[rgba(255,255,255,0.05)] hover:text-white' : 'hover:bg-[#e0e3eb] hover:text-[#000000]',
-    glass:  darkMode ? 'bg-[rgba(15,17,23,0.8)] backdrop-blur-md border border-[rgba(255,255,255,0.07)]' : 'bg-[#ffffff]/80 backdrop-blur-md',
-    card:   darkMode ? 'bg-[#0F1117] border border-[rgba(255,255,255,0.07)] rounded-xl shadow-[0_4px_16px_rgba(0,0,0,0.5)]' : 'bg-white border border-gray-200 rounded-xl shadow-sm',
+    bg:     darkMode ? 'bg-[#0B0E14]' : 'bg-[#F6F8FC]',
+    sec:    darkMode ? 'bg-[#0F1117]' : 'bg-[#FFFFFF]',
+    ter:    darkMode ? 'bg-[#141820]' : 'bg-[#EEF2F8]',
+    text:   darkMode ? 'text-[#E2E8F0]' : 'text-[#172033]',
+    muted:  darkMode ? 'text-[#64748B]' : 'text-[#64748B]',
+    dim:    darkMode ? 'text-[#475569]' : 'text-[#94A3B8]',
+    border: darkMode ? 'border-[rgba(255,255,255,0.07)]' : 'border-[#DCE3EF]',
+    hover:  darkMode ? 'hover:bg-[rgba(255,255,255,0.05)] hover:text-white' : 'hover:bg-[#EEF4FF] hover:text-[#172033]',
+    glass:  darkMode ? 'bg-[rgba(15,17,23,0.8)] backdrop-blur-md border border-[rgba(255,255,255,0.07)]' : 'bg-white/85 backdrop-blur-md border border-[#DCE3EF] shadow-[0_8px_24px_rgba(30,41,59,0.06)]',
+    card:   darkMode ? 'bg-[#0F1117] border border-[rgba(255,255,255,0.07)] rounded-xl shadow-[0_4px_16px_rgba(0,0,0,0.5)]' : 'bg-white border border-[#DCE3EF] rounded-xl shadow-[0_6px_20px_rgba(30,41,59,0.06)]',
   }), [darkMode]);
 
 

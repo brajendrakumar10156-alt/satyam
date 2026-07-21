@@ -49,11 +49,15 @@ function Root() {
   React.useEffect(() => {
     const token = localStorage.getItem('accessToken');
     if (!token) {
-      setAuthState('guest');
+      Promise.resolve().then(() => {
+        setAuthState('guest');
+      });
       return undefined;
     }
 
-    setAuthState('authed');
+    Promise.resolve().then(() => {
+      setAuthState('authed');
+    });
     const controller = new AbortController();
     fetch(`${API_BASE}/me`, {
       headers: { Authorization: `Bearer ${token}` },

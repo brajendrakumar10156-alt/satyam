@@ -66,6 +66,28 @@
   --radius-2xl: 20px;
 }
 
+/* Light mode has its own surface system rather than being a reversed dark UI. */
+html.theme-light {
+  --bg-base: #F6F8FC;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #EEF2F8;
+  --bg-glass: rgba(255, 255, 255, 0.84);
+  --bg-glass-light: rgba(255, 255, 255, 0.96);
+  --bg-hover: rgba(37, 99, 235, 0.07);
+  --bg-active: rgba(37, 99, 235, 0.12);
+  --border-subtle: #E6EBF3;
+  --border-dim: #D9E1ED;
+  --border-glow: rgba(37, 99, 235, 0.32);
+  --text-primary: #172033;
+  --text-secondary: #526178;
+  --text-muted: #8290A6;
+  --text-accent: #111827;
+  --shadow-sm: 0 1px 3px rgba(30, 41, 59, 0.06);
+  --shadow-md: 0 6px 20px rgba(30, 41, 59, 0.08);
+  --shadow-lg: 0 14px 38px rgba(30, 41, 59, 0.11);
+  --shadow-blue: 0 8px 24px rgba(37, 99, 235, 0.16);
+}
+
 /* === 3. BASE RESET === */
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -87,6 +109,50 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+html.theme-light body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+}
+
+html.theme-light ::selection { background: rgba(37, 99, 235, 0.18); color: #172033; }
+
+/* Legacy panels in App.jsx were originally dark-only.  These aliases keep
+   every popup, toolbar and modal readable when light mode is selected. */
+html.theme-light .bg-\[\#131722\],
+html.theme-light .bg-\[\#0B0E14\],
+html.theme-light .bg-\[\#0F1117\],
+html.theme-light .bg-\[\#1e222d\],
+html.theme-light .bg-\[\#1c2030\],
+html.theme-light .bg-\[\#121626\],
+html.theme-light .bg-gray-800,
+html.theme-light .bg-gray-900 {
+  background-color: #FFFFFF !important;
+}
+
+html.theme-light .text-white,
+html.theme-light .text-gray-200,
+html.theme-light .text-gray-300 {
+  color: #172033 !important;
+}
+
+html.theme-light .text-gray-400 { color: #64748B !important; }
+html.theme-light .text-gray-450,
+html.theme-light .text-gray-500 { color: #8290A6 !important; }
+
+html.theme-light .border-\[\#2a2e39\],
+html.theme-light .border-gray-800,
+html.theme-light .border-gray-700 {
+  border-color: #DCE3EF !important;
+}
+
+html.theme-light .hover\:bg-gray-800:hover,
+html.theme-light .hover\:bg-gray-700:hover,
+html.theme-light .hover\:bg-white\/5:hover {
+  background-color: #EEF4FF !important;
+}
+
+html.theme-light .hover\:text-white:hover { color: #172033 !important; }
 
 /* === 4. SAFE AREA === */
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
