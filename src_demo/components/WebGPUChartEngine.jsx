@@ -21,12 +21,14 @@ function timeToIndex(time, candles) {
 const wgslComputeSMA = `
 struct Candle {
   prices: vec4<f32>, // open, high, low, close
-  meta: vec4<f32>,   // x = timeIndex
+  metaData: vec4<f32>,   // x = timeIndex
 };
 
 struct Uniforms {
   period: f32,
   candleCount: f32,
+  _pad1: f32,
+  _pad2: f32,
 };
 
 @group(0) @binding(0) var<storage, read> candles: array<Candle>;
@@ -81,14 +83,14 @@ fn vs_main(@builtin(vertex_index) vIdx: u32, @builtin(instance_index) iIdx: u32)
   }
   
   // A simple thick line using 6 vertices for a quad connecting P1 and P2
-  let p1x = (f32(iIdx) * 10.0 * u.scale.x) + u.offset.x;
-  let p2x = (f32(iIdx + 1u) * 10.0 * u.scale.x) + u.offset.x;
+  let spacing = 10.0 * u.scale.x;
+  let candleWidth = max(1.0, spacing * 0.8);
   
-  let priceRange = u.priceRange.y - u.priceRange.x;
-  let priceScale = select(u.resolution.y / priceRange, 0.0, priceRange == 0.0);
+  let p1x = (f32(iIdx) * 10.0 * u.scale.x) + u.offset.x + (candleWidth * 0.5);
+  let p2x = (f32(iIdx + 1u) * 10.0 * u.scale.x) + u.offset.x + (candleWidth * 0.5);
   
-  let p1y = (u.priceRange.y - val1) * priceScale * u.scale.y + u.offset.y;
-  let p2y = (u.priceRange.y - val2) * priceScale * u.scale.y + u.offset.y;
+  let p1y = (u.priceRange.y - val1) * u.scale.y + u.offset.y;
+  let p2y = (u.priceRange.y - val2) * u.scale.y + u.offset.y;
   
   // Calculate perpendicular vector for line thickness
   let dir = normalize(vec2<f32>(p2x - p1x, p2y - p1y));
@@ -129,7 +131,7 @@ struct Uniforms {
 
 struct Candle {
   prices: vec4<f32>, // open, high, low, close
-  meta: vec4<f32>,   // x = timeIndex
+  metaData: vec4<f32>,   // x = timeIndex
 };
 @group(0) @binding(1) var<storage, read> candles: array<Candle>;
 
@@ -146,10 +148,10 @@ fn vs_main(@builtin(vertex_index) vIdx: u32, @builtin(instance_index) iIdx: u32)
   let high = c.prices.y;
   let low = c.prices.z;
   let close = c.prices.w;
-  let index = c.meta.x;
+  let index = c.metaData.x;
 
   let isUp = close >= open;
-  let color = select(vec4<f32>(0.96, 0.24, 0.38, 1.0), vec4<f32>(0.08, 0.80, 0.55, 1.0), isUp);
+  let color = select(vec4<f32>(0.941, 0.329, 0.314, 1.0), vec4<f32>(0.153, 0.651, 0.604, 1.0), isUp);
 
   let isWick = vIdx > 5u;
   let localVIdx = vIdx % 6u;
@@ -159,19 +161,21 @@ fn vs_main(@builtin(vertex_index) vIdx: u32, @builtin(instance_index) iIdx: u32)
   );
   let q = quad[localVIdx];
 
-  let candleWidth = 6.0 * u.scale.x;
-  let wickWidth = max(1.0, 1.0 * u.scale.x);
-  let priceRange = u.priceRange.y - u.priceRange.x;
-  let priceScale = select(u.resolution.y / priceRange, 0.0, priceRange == 0.0);
+  let spacing = 10.0 * u.scale.x;
+  let candleWidth = max(1.0, spacing * 0.8);
+  let wickWidth = max(1.0, spacing * 0.1);
 
   var topP = max(open, close);
   var botP = min(open, close);
-  if (topP == botP) { botP = botP - 0.1; }
   if (isWick) { topP = high; botP = low; }
 
-  let pixelYTop = (u.priceRange.y - topP) * priceScale * u.scale.y;
-  let pixelYBot = (u.priceRange.y - botP) * priceScale * u.scale.y;
-  let heightPx = max(1.0, pixelYBot - pixelYTop);
+  let pixelYTop = (u.priceRange.y - topP) * u.scale.y;
+  var pixelYBot = (u.priceRange.y - botP) * u.scale.y;
+  if (!isWick && pixelYBot - pixelYTop < 1.0) {
+      pixelYBot = pixelYTop + 1.0;
+  }
+  
+  let heightPx = pixelYBot - pixelYTop;
   let widthPx = select(candleWidth, wickWidth, isWick);
   let xOffset = select(0.0, (candleWidth - wickWidth) * 0.5, isWick);
 
@@ -197,6 +201,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 const wgslTextShader = `
 struct TextUniforms {
   resolution: vec2<f32>,
+  _pad: vec2<f32>,
 };
 @group(0) @binding(0) var<uniform> uniforms: TextUniforms;
 @group(0) @binding(1) var fontSampler: sampler;
@@ -245,18 +250,23 @@ fn vs_main(@builtin(vertex_index) vIdx: u32, @builtin(instance_index) iIdx: u32)
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   let texColor = textureSample(fontTexture, fontSampler, in.uv);
   if (texColor.r < 0.5) { discard; }
-  return vec4<f32>(0.8, 0.8, 0.85, 1.0); // White text
+  // Canvas 2D Text Color (#c9d1d9)
+  return vec4<f32>(0.788, 0.820, 0.851, 1.0); 
 }
 `;
 
 const wgslGridShader = `
-struct GridUniforms {
+struct Uniforms {
   resolution: vec2<f32>,
   hoverPixel: vec2<f32>,
   gridSpacing: vec2<f32>,
-  padding: vec2<f32>,
+  offset: vec2<f32>,
+  axisSize: vec2<f32>,
+  livePixelY: f32,
+  lastPixelX: f32,
+  liveColor: vec4<f32>,
 };
-@group(0) @binding(0) var<uniform> uniforms: GridUniforms;
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
 struct VertexOutput {
   @builtin(position) position: vec4<f32>,
@@ -281,36 +291,31 @@ fn vs_main(@builtin(vertex_index) VertexIndex: u32) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   let coord = in.fragPos;
-  let gridColor = vec4<f32>(0.18, 0.21, 0.28, 0.35);
-  let thickness = 1.0;
   
-  let dx = coord.x % uniforms.gridSpacing.x;
-  let dy = coord.y % uniforms.gridSpacing.y;
-  
-  var finalColor = vec4<f32>(0.043, 0.055, 0.078, 1.0); // #0B0E14 — Premium Dark
-  
-  if (dx < thickness || dy < thickness) {
-    finalColor = mix(finalColor, gridColor, 0.6);
+  // ── L-SHAPED AXIS BACKGROUND ──
+  if (coord.x > (uniforms.resolution.x - uniforms.axisSize.x) || 
+      coord.y > (uniforms.resolution.y - uniforms.axisSize.y)) {
+    return vec4<f32>(0.051, 0.067, 0.090, 1.0); // Solid #0d1117 background
   }
+
+  var finalColor = vec4<f32>(0.0, 0.0, 0.0, 0.0); // Transparent chart background
   
-  let crosshairColor = vec4<f32>(1.0, 1.0, 1.0, 0.4);
-  if (uniforms.hoverPixel.x > 0.0) {
-    let distX = abs(coord.x - uniforms.hoverPixel.x);
-    let distY = abs(coord.y - uniforms.hoverPixel.y);
-    if (distX < 1.0 || distY < 1.0) {
-       if ((coord.x + coord.y) % 8.0 < 4.0) {
-         finalColor = crosshairColor;
-       }
+  // ── LIVE PRICE SOLID LINE ──
+  if (uniforms.livePixelY > 0.0 && coord.x >= uniforms.lastPixelX && coord.x < (uniforms.resolution.x - uniforms.axisSize.x)) {
+    let distY = abs(coord.y - uniforms.livePixelY);
+    if (distY < 1.0) {
+       finalColor = uniforms.liveColor;
     }
   }
+
   return finalColor;
 }
 `;
 
 const WebGPUChartEngine = React.forwardRef(({
   candles = [],
-  darkMode = false,
-  chartStyle = 'Candles',
+  darkMode = true,
+  chartStyle = 'candles',
   priceScaleMode = 0,
   autoScale = true,
   invertScale = false,
@@ -335,6 +340,9 @@ const WebGPUChartEngine = React.forwardRef(({
   onRequestDraw
 }, ref) => {
   const containerRef = useRef(null);
+  const hoverPriceLabelRef = useRef(null);
+  const hoverTimeLabelRef = useRef(null);
+  const livePriceLabelRef = useRef(null);
   const gpuCanvasRef = useRef(null);
   const textCanvasRef = useRef(null);
   
@@ -382,11 +390,13 @@ const WebGPUChartEngine = React.forwardRef(({
   }, [drawings, activeTool, visualIndicators, indicatorDataMap]);
 
   useEffect(() => {
-    if (initialVisibleRange) {
-      vState.current.logicalRange = { ...initialVisibleRange };
+    if (initialVisibleRange?.visibleRange && candles && candles.length > 0) {
+      const fromIdx = timeToIndex(initialVisibleRange.visibleRange.from, candles);
+      const toIdx = timeToIndex(initialVisibleRange.visibleRange.to, candles);
+      vState.current.logicalRange = { from: fromIdx, to: toIdx };
       requestAnimationFrame(render);
     }
-  }, [initialVisibleRange]);
+  }, [initialVisibleRange, candles]);
   
 
   // ── INIT WEBGPU ─────────────────────────────────────────────────────────────
@@ -500,7 +510,7 @@ const WebGPUChartEngine = React.forwardRef(({
 
         // ── NATIVE SDF GRID PIPELINE ──
         const gridUniformBuffer = device.createBuffer({
-          size: 32, // 8 floats
+          size: 64, // 16 floats (resolution, hoverPixel, gridSpacing, offset, axisSize, liveY, pad, liveColor)
           usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
         gpu.current.gridUniformBuffer = gridUniformBuffer;
@@ -512,7 +522,13 @@ const WebGPUChartEngine = React.forwardRef(({
           fragment: {
             module: gridShaderModule,
             entryPoint: 'fs_main',
-            targets: [{ format }]
+            targets: [{ 
+              format,
+              blend: {
+                color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+                alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
+              }
+            }]
           },
           primitive: { topology: 'triangle-list' }
         });
@@ -531,22 +547,25 @@ const WebGPUChartEngine = React.forwardRef(({
         oCtx.fillStyle = '#000000';
         oCtx.fillRect(0, 0, atlasSize, atlasSize);
         oCtx.fillStyle = '#ffffff';
-        oCtx.font = '32px sans-serif';
+        const ff = "'Inter', -apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, sans-serif";
+        const fontSize = Math.floor(11 * dpr);
+        oCtx.font = `bold ${fontSize}px ${ff}`; // Bold Canvas2D equivalent, scaled by DPR
         oCtx.textAlign = 'left';
         oCtx.textBaseline = 'top';
         
         const chars = "0123456789.:- ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
         const charMap = {};
         let cx = 0, cy = 0;
-        const cell = 32;
+        const cell = Math.max(24, fontSize + 8);
         
         for (let i=0; i<chars.length; i++) {
            const char = chars[i];
            const m = oCtx.measureText(char);
            const w = Math.ceil(m.width);
+           const ch_h = fontSize + 4; // Use scaled font size for cell height
            if (cx + cell > atlasSize) { cx = 0; cy += cell; }
            oCtx.fillText(char, cx, cy);
-           charMap[char] = { x: cx, y: cy, w: (w===0 ? 10 : w), h: cell };
+           charMap[char] = { x: cx, y: cy, w: (w===0 ? fontSize : w), h: ch_h };
            cx += cell;
         }
         gpu.current.charMap = charMap;
@@ -698,8 +717,43 @@ const WebGPUChartEngine = React.forwardRef(({
     const ch = vState.current.height * dpr;
     
     // Calculate layout metrics
-    const pAxisW = 64 * dpr;
-    const timeAxisY = ch - (26 * dpr);
+    const pAxisW = 50 * dpr;
+    const timeAxisY = ch - (24 * dpr);
+    
+    let timeAxisWinners = [];
+    let priceAxisWinners = [];
+    
+    // Auto-Scale Y-Axis (Smooth Easing)
+    if (autoScale && candles && candles.length > 0) {
+       let minP = Infinity, maxP = -Infinity;
+       const fromIdx = Math.max(0, Math.floor(vState.current.logicalRange.from));
+       const toIdx = Math.min(candles.length - 1, Math.ceil(vState.current.logicalRange.to));
+       
+       for (let i = fromIdx; i <= toIdx; i++) {
+          if (candles[i].low < minP) minP = candles[i].low;
+          if (candles[i].high > maxP) maxP = candles[i].high;
+       }
+       
+       if (minP !== Infinity && maxP !== -Infinity) {
+          let pad = (maxP - minP) * 0.1;
+          if (pad === 0) pad = maxP * 0.01 || 1;
+          
+          const targetMin = minP - pad;
+          const targetMax = maxP + pad;
+          
+          // Smoothly interpolate current priceRange towards target
+          const diffMin = targetMin - vState.current.priceRange.min;
+          const diffMax = targetMax - vState.current.priceRange.max;
+          
+          // Only apply and request next frame if difference is meaningful
+          if (Math.abs(diffMin) > 0.000001 || Math.abs(diffMax) > 0.000001) {
+             vState.current.priceRange.min += diffMin * 0.4;
+             vState.current.priceRange.max += diffMax * 0.4;
+             // Queue next frame for continuous smooth easing
+             requestAnimationFrame(render);
+          }
+       }
+    }
     
     // Generate Buffer Data for Candlesticks (Phase 2 Native Packing)
     if (candles && candles.length > 0) {
@@ -718,13 +772,13 @@ const WebGPUChartEngine = React.forwardRef(({
     }
 
     const logicalRange = vState.current.logicalRange;
-    const rangeLen = logicalRange.to - logicalRange.from;
+    const rangeLen = (logicalRange.to - logicalRange.from) || 1;
     const { min, max } = vState.current.priceRange;
-    const priceRange = max - min;
+    const priceRange = (max - min) || 1;
     const scaleX = (cw - pAxisW) / (rangeLen * 10);
     const scaleY = timeAxisY / priceRange;
     const offsetX = -(logicalRange.from * 10 * scaleX);
-    const offsetY = timeAxisY - (max * scaleY);
+    const offsetY = 0;
 
     const uniformsData = new Float32Array([
       scaleX, scaleY, offsetX, offsetY, cw, ch, min, max
@@ -749,14 +803,116 @@ const WebGPUChartEngine = React.forwardRef(({
         }
       };
       
+      // Raw labels generator
+      const rawTimeLabels = [];
+      const logicalRange = vState.current.logicalRange;
+      const startIdx = Math.max(0, Math.floor(logicalRange.from));
+      const endIdx = Math.min(candles.length - 1, Math.ceil(logicalRange.to));
+      const timeAxisY = ch - (26 * dpr);
+      const pAxisW = 54 * dpr;
+
+      let lastMonth = -1, lastDay = -1;
+      for (let i = startIdx; i <= endIdx; i++) {
+        if (!candles[i]) continue;
+        const d = new Date(candles[i].time);
+        const mon = d.getUTCMonth();
+        const day = d.getUTCDate();
+        const H = d.getUTCHours();
+        const M = d.getUTCMinutes();
+
+        const isNewMonth = (mon !== lastMonth && lastMonth !== -1);
+        const isNewDay = (day !== lastDay && lastDay !== -1) && !isNewMonth;
+        lastMonth = mon; lastDay = day;
+
+        const isNewYear = isNewMonth && d.getUTCMonth() === 0;
+
+        let isMajor = false;
+        let label = '';
+        if (isNewYear) { label = d.getUTCFullYear().toString(); isMajor = true; }
+        else if (isNewMonth) { label = d.toLocaleString('default', { month: 'short', timeZone: 'UTC' }); isMajor = true; }
+        else if (isNewDay) { label = `${d.getUTCDate()} ${d.toLocaleString('default', { month: 'short', timeZone: 'UTC' })}`; isMajor = true; }
+        else {
+           // Fallback robust spacing: place a label every ~12 candles based on zoom
+           const tickSpacing = Math.max(1, Math.floor(((logicalRange.to - logicalRange.from) || 1) / 12));
+           if (i % tickSpacing !== 0) continue;
+           label = `${H.toString().padStart(2, '0')}:${M.toString().padStart(2, '0')}`;
+        }
+        
+        // Calculate X position
+        const rangeLen = (logicalRange.to - logicalRange.from) || 1;
+        const scaleX = (cw - pAxisW) / (rangeLen * 10);
+        const offsetX = -(logicalRange.from * 10 * scaleX);
+        const candleWidth = Math.max(1.0, 10.0 * scaleX * 0.8);
+        const x = (i * 10.0 * scaleX) + offsetX + (candleWidth * 0.5);
+
+        rawTimeLabels.push({ x, label, isMajor });
+      }
+
+      timeAxisWinners = calculateHorizontalTimeAxisLabels({
+        timeLabels: rawTimeLabels,
+        cW: cw,
+        pAxisW: pAxisW
+      });
+
+      const rawPriceLabels = [];
+      const { min, max } = vState.current.priceRange;
+      const priceRange = (max - min) || 1;
+      
+      // Dynamic price step calculation (target ~8-10 labels based on height)
+      const targetSteps = Math.max(4, Math.floor(ch / (60 * dpr))); 
+      const rawStep = priceRange / targetSteps;
+      
+      const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+      const normalized = rawStep / magnitude;
+      
+      let stepMult = 1;
+      if (normalized > 7.5) stepMult = 10;
+      else if (normalized > 3.5) stepMult = 5;
+      else if (normalized > 1.5) stepMult = 2;
+      
+      const pStep = Math.max(0.000001, stepMult * magnitude);
+      
+      // Determine decimal places for formatting
+      const decPlaces = pStep >= 1 ? 0 : pStep >= 0.1 ? 2 : pStep >= 0.01 ? 2 : pStep >= 0.001 ? 3 : 4;
+      
+      const startP = Math.floor(min / pStep) * pStep;
+      for (let p = startP; p <= max; p += pStep) {
+        if (p < min || p > max) continue;
+        const py = timeAxisY - ((p - min) * (timeAxisY / priceRange));
+        rawPriceLabels.push({ y: py, p: p, label: p.toFixed(decPlaces) });
+      }
+
+      priceAxisWinners = calculateVerticalPriceAxisLabels({
+        priceLabels: rawPriceLabels,
+        cH: ch,
+        timeAxisH: 24 * dpr
+      });
+
       // Draw Axis Labels
-      pushText(max.toFixed(2), cw - pAxisW + 10, 20);
-      pushText(min.toFixed(2), cw - pAxisW + 10, timeAxisY - 20);
-      pushText("12:00", cw / 2, timeAxisY + 10); // Example horizontal time
+      const getTextWidth = (str) => {
+        let w = 0;
+        for (let i = 0; i < str.length; i++) {
+          const map = gpu.current.charMap[str[i]];
+          if (map) w += map.w;
+        }
+        return w;
+      };
+
+      timeAxisWinners.forEach(({ x, label }) => {
+         const w = getTextWidth(label);
+         // Move the time labels down so they are perfectly centered in the 24px box
+         pushText(label, Math.floor(x - w / 2), Math.floor(timeAxisY + (8 * dpr)));
+      });
+      priceAxisWinners.forEach(({ y, label }) => {
+         const w = getTextWidth(label);
+         const fontSize = Math.floor(11 * dpr);
+         const centerX = Math.floor(cw - pAxisW + (pAxisW - w) / 2);
+         pushText(label, centerX, Math.floor(y - (fontSize / 2)));
+      });
       
       if(charCount > 0) {
          gpu.current.device.queue.writeBuffer(gpu.current.textStorageBuffer, 0, textData);
-         gpu.current.device.queue.writeBuffer(gpu.current.textUniformBuffer, 0, new Float32Array([cw, ch]));
+         gpu.current.device.queue.writeBuffer(gpu.current.textUniformBuffer, 0, new Float32Array([cw, ch, 0, 0]));
       }
     }
 
@@ -764,20 +920,20 @@ const WebGPUChartEngine = React.forwardRef(({
     
     // ── 0. EXECUTE COMPUTE SHADER (Phase 3) ──
     if (gpu.current.computePipeline && gpu.current.candleCount > 0) {
-       const period = 14.0; // Default SMA 14 for testing native logic
-       gpu.current.device.queue.writeBuffer(gpu.current.computeUniformBuffer, 0, new Float32Array([period, gpu.current.candleCount, 0, 0]));
-       const computePass = commandEncoder.beginComputePass();
-       computePass.setPipeline(gpu.current.computePipeline);
-       computePass.setBindGroup(0, gpu.current.computeBindGroup);
-       computePass.dispatchWorkgroups(Math.ceil(gpu.current.candleCount / 64));
-       computePass.end();
+       // const period = 14.0; // Default SMA 14 for testing native logic
+       // gpu.current.device.queue.writeBuffer(gpu.current.computeUniformBuffer, 0, new Float32Array([period, gpu.current.candleCount, 0, 0]));
+       // const computePass = commandEncoder.beginComputePass();
+       // computePass.setPipeline(gpu.current.computePipeline);
+       // computePass.setBindGroup(0, gpu.current.computeBindGroup);
+       // computePass.dispatchWorkgroups(Math.ceil(gpu.current.candleCount / 64));
+       // computePass.end();
     }
 
     const textureView = gpu.current.context.getCurrentTexture().createView();
     const renderPass = commandEncoder.beginRenderPass({
       colorAttachments: [{
         view: textureView,
-        clearValue: { r: 0.043, g: 0.055, b: 0.078, a: 1.0 }, // bg-[#0B0E14] — Premium Dark
+        clearValue: { r: 0.051, g: 0.067, b: 0.090, a: 1.0 }, // #0d1117 to match Canvas2D
         loadOp: 'clear',
         storeOp: 'store',
       }]
@@ -788,13 +944,50 @@ const WebGPUChartEngine = React.forwardRef(({
       const hoverX = vState.current.hoverPixel ? vState.current.hoverPixel.x * dpr : -1.0;
       const hoverY = vState.current.hoverPixel ? vState.current.hoverPixel.y * dpr : -1.0;
       // Make grid spacing deterministic + visible (match WebGL tick-ish density)
-      // uniforms = resolution(cw,ch), hoverPixel, gridSpacing, padding
-      const gridSpacingX = Math.max(24 * dpr, (cw - 64 * dpr) / 10);
+      const gridSpacingX = Math.max(24 * dpr, (cw - 54 * dpr) / 10);
       const gridSpacingY = Math.max(18 * dpr, (ch - 26 * dpr) / 8);
+      
+      let livePixelY = -1.0;
+      let lastPixelX = -1.0;
+      let lcR = 0.0, lcG = 0.0, lcB = 0.0;
+      if (candles && candles.length > 0) {
+        const lastIdx = candles.length - 1;
+        const lastC = candles[lastIdx];
+        const isUp = lastC.close >= lastC.open;
+        lcR = isUp ? 0.031 : 0.949; // 0x08 / 0xf2
+        lcG = isUp ? 0.600 : 0.211; // 0x99 / 0x36
+        lcB = isUp ? 0.505 : 0.270; // 0x81 / 0x45
+        const minP = vState.current.priceRange.min;
+        const maxP = vState.current.priceRange.max;
+        const priceScale = (maxP - minP) > 0 ? (ch - 24 * dpr) / (maxP - minP) : 1;
+        livePixelY = (ch - 24 * dpr) - ((lastC.close - minP) * priceScale);
+        
+        // Calculate last candle X position in screen pixels (multiplied by dpr to match WebGPU viewport)
+        // Offset it to the RIGHT EDGE of the candle so it doesn't overlap the body
+        const logicalRange = vState.current.logicalRange;
+        const rangeLen = logicalRange.to - logicalRange.from;
+        const px = ((lastIdx - logicalRange.from) / rangeLen) * (cw - 54 * dpr);
+        const cwScaleX = (cw - 54 * dpr) / rangeLen;
+        const candleWidthPx = Math.max(1.0, (10.0 * cwScaleX) * 0.8);
+        lastPixelX = px + (candleWidthPx / 2.0) + 0.5;
+
+        // Update Live Price DOM Label
+        if (livePriceLabelRef.current) {
+          livePriceLabelRef.current.textContent = lastC.close.toFixed(2);
+          livePriceLabelRef.current.style.top = `${Math.floor(livePixelY / dpr) - 10}px`;
+          livePriceLabelRef.current.style.backgroundColor = isUp ? '#089981' : '#f23645';
+          livePriceLabelRef.current.style.display = 'flex';
+        }
+      } else if (livePriceLabelRef.current) {
+         livePriceLabelRef.current.style.display = 'none';
+      }
+
       const gridUniforms = new Float32Array([
         cw, ch, hoverX, hoverY,
         gridSpacingX, gridSpacingY,
-        0, 0
+        offsetX, offsetY,
+        54 * dpr, 24 * dpr, livePixelY, lastPixelX,
+        lcR, lcG, lcB, 1.0
       ]);
       gpu.current.device.queue.writeBuffer(gpu.current.gridUniformBuffer, 0, gridUniforms);
       
@@ -803,11 +996,50 @@ const WebGPUChartEngine = React.forwardRef(({
       renderPass.draw(6); // Fullscreen Quad
     }
 
+    // ── 1.5 DRAW GRID LINES (UNDER CANDLES) ──
+    const gridSegmentsCount = timeAxisWinners.length + priceAxisWinners.length + 2; // +2 for axes borders
+    if (gridSegmentsCount > 0) {
+        const gridFloats = gridSegmentsCount * 36;
+        const gridData = new Float32Array(gridFloats);
+        let ptr = 0;
+        const pushThickLine = (v1, v2, thickness, color) => {
+            const quadVertices = lineToQuad(v1, v2, thickness);
+            for (const v of quadVertices) {
+                gridData[ptr++] = v.x; gridData[ptr++] = v.y;
+                gridData[ptr++] = color[0]; gridData[ptr++] = color[1]; gridData[ptr++] = color[2]; gridData[ptr++] = color[3];
+            }
+        };
+
+        const gridLineColor = darkMode ? [0.168, 0.184, 0.223, 1.0] : [0.878, 0.890, 0.921, 1.0]; // #2B2F36 or #e0e3eb
+        timeAxisWinners.forEach(({ x }) => pushThickLine({x, y: 0}, {x, y: timeAxisY}, 1, gridLineColor));
+        priceAxisWinners.forEach(({ y }) => pushThickLine({x: 0, y}, {x: cw - pAxisW, y}, 1, gridLineColor));
+        
+        // Axis Borders (drawn slightly darker/thicker depending on theme)
+        pushThickLine({x: cw - pAxisW, y: 0}, {x: cw - pAxisW, y: timeAxisY}, 1, gridLineColor);
+        pushThickLine({x: 0, y: timeAxisY}, {x: cw - pAxisW, y: timeAxisY}, 1, gridLineColor);
+        
+        gpu.current.device.queue.writeBuffer(gpu.current.drawingUniformBuffer, 0, new Float32Array([cw, ch, 0, 0]));
+        gpu.current.device.queue.writeBuffer(gpu.current.drawingBuffer, 0, gridData);
+        
+        renderPass.setPipeline(gpu.current.drawingPipeline);
+        renderPass.setBindGroup(0, gpu.current.drawingBindGroup);
+        renderPass.setVertexBuffer(0, gpu.current.drawingBuffer);
+        renderPass.draw(ptr / 6);
+    }
+
     // ── 2. DRAW CANDLESTICKS (NATIVE) ──
     renderPass.setPipeline(gpu.current.pipeline);
     renderPass.setBindGroup(0, gpu.current.bindGroup);
     if (gpu.current.candleCount > 0) {
+       // Clip candles so they don't overlap into the axes area
+       const safeW = Math.max(1, Math.floor(cw - pAxisW));
+       const safeH = Math.max(1, Math.floor(timeAxisY));
+       renderPass.setScissorRect(0, 0, safeW, safeH);
+       
        renderPass.draw(12, gpu.current.candleCount, 0, 0);
+       
+       // Reset scissor for UI elements
+       renderPass.setScissorRect(0, 0, Math.floor(cw), Math.floor(ch));
     }
     
     // ── 3. DRAW TEXT (NATIVE) ──
@@ -819,15 +1051,12 @@ const WebGPUChartEngine = React.forwardRef(({
     
     // ── 4. DRAW INDICATORS NATIVELY (Phase 3) ──
     if (gpu.current.linePipeline && gpu.current.candleCount > 1) {
-       renderPass.setPipeline(gpu.current.linePipeline);
-       renderPass.setBindGroup(0, gpu.current.lineBindGroup);
-       renderPass.draw(6, gpu.current.candleCount - 1, 0, 0);
     }
     
     // ── 5. DRAW USER TRENDLINES (RESTORED LOGIC) ──
     if (gpu.current.drawingPipeline) {
-        const pAxisW = 64 * dpr;
-        const timeAxisY = ch - (26 * dpr);
+        const pAxisW = 50 * dpr;
+        const timeAxisY = ch - (24 * dpr);
         const { min, max } = vState.current.priceRange;
         const priceScale = (max - min) > 0 ? timeAxisY / (max - min) : 1;
         const logicalRange = vState.current.logicalRange;
@@ -840,6 +1069,8 @@ const WebGPUChartEngine = React.forwardRef(({
         const py = (price) => timeAxisY - ((price - min) * priceScale);
         
         let totalSegments = 0;
+        
+        // Count user drawings
         if (drawings && drawings.length > 0) {
             for (let i = 0; i < drawings.length; i++) {
                 if (drawings[i].tool === 'trendline' && drawings[i].points.length >= 2) totalSegments++;
@@ -860,8 +1091,9 @@ const WebGPUChartEngine = React.forwardRef(({
                     drawingData[ptr++] = color[0]; drawingData[ptr++] = color[1]; drawingData[ptr++] = color[2]; drawingData[ptr++] = color[3];
                 }
             };
-            const drawingColor = [0.2, 0.6, 1.0, 1.0];
             
+            // 3. Draw User Trendlines
+            const drawingColor = [0.2, 0.6, 1.0, 1.0];
             if (drawings && drawings.length > 0) {
                 for (let i=0; i<drawings.length; i++) {
                     const d = drawings[i];
@@ -904,8 +1136,8 @@ const WebGPUChartEngine = React.forwardRef(({
         vState.current.height = height;
         
         if (gpuCanvasRef.current) {
-          gpuCanvasRef.current.width = width * dpr;
-          gpuCanvasRef.current.height = height * dpr;
+          gpuCanvasRef.current.width = Math.floor(width * dpr);
+          gpuCanvasRef.current.height = Math.floor(height * dpr);
         }
         
         // Auto-scale price initially if needed
@@ -918,7 +1150,8 @@ const WebGPUChartEngine = React.forwardRef(({
               if (candles[i].high > maxP) maxP = candles[i].high;
            }
            if (minP !== Infinity && maxP !== -Infinity) {
-              const pad = (maxP - minP) * 0.1;
+              let pad = (maxP - minP) * 0.1;
+              if (pad === 0) pad = maxP * 0.01 || 1;
               vState.current.priceRange = { min: minP - pad, max: maxP + pad };
            }
         }
@@ -949,7 +1182,7 @@ const WebGPUChartEngine = React.forwardRef(({
       const cw = vState.current.width;
       const ch = vState.current.height;
       
-      const isAxisClick = (px > cw - 64) || (py > ch - 26);
+      const isAxisClick = (px > cw - 54) || (py > ch - 26);
       
       // INTERNAL DRAWING LOGIC (Autonomous WebGPU)
       if (!isAxisClick && activeTool === 'eraser') {
@@ -968,7 +1201,7 @@ const WebGPUChartEngine = React.forwardRef(({
          const rangeLen = logicalRange.to - logicalRange.from;
          const px = (time) => {
             const idx = timeToIndex(time, candles);
-            return ((idx - logicalRange.from) / rangeLen) * (cw - 64);
+            return ((idx - logicalRange.from) / rangeLen) * (cw - 54);
          };
          
          const hit = raycastDrawings(drawings, mouseX, mouseY, px, py, 8); // 8px tolerance
@@ -993,7 +1226,7 @@ const WebGPUChartEngine = React.forwardRef(({
          const cw = vState.current.width;
          const logicalRange = vState.current.logicalRange;
          const rangeLen = logicalRange.to - logicalRange.from;
-         const idx = logicalRange.from + ((px / (cw - 64)) * rangeLen);
+         const idx = logicalRange.from + ((px / (cw - 54)) * rangeLen);
          
          const time = candles[Math.min(candles.length - 1, Math.max(0, Math.floor(idx)))]?.time || 0;
          const coordinate = { time, price };
@@ -1043,7 +1276,7 @@ const WebGPUChartEngine = React.forwardRef(({
          const cw = vState.current.width;
          const logicalRange = vState.current.logicalRange;
          const rangeLen = logicalRange.to - logicalRange.from;
-         const idx = logicalRange.from + ((px / (cw - 64)) * rangeLen);
+         const idx = logicalRange.from + ((px / (cw - 54)) * rangeLen);
          
          const cIdx = Math.min(candles.length - 1, Math.max(0, Math.floor(idx)));
          const c = candles[cIdx];
@@ -1063,12 +1296,92 @@ const WebGPUChartEngine = React.forwardRef(({
             else if (minDist === distL) snapPrice = c.low;
             else snapPrice = c.close;
          }
+
+         // Update DOM Crosshair Labels
+         if (hoverTimeLabelRef.current && hoverPriceLabelRef.current) {
+            const d = new Date(time * 1000);
+            const dd = d.getDate().toString().padStart(2, '0');
+            const mo = d.toLocaleString('en-US', { month: 'short' });
+            const yy = d.getFullYear().toString().slice(-2);
+            const H = d.getHours().toString().padStart(2, '0');
+            const M = d.getMinutes().toString().padStart(2, '0');
+            hoverTimeLabelRef.current.textContent = `${dd} ${mo} '${yy} ${H}:${M}`;
+            hoverTimeLabelRef.current.style.display = 'flex';
+            hoverTimeLabelRef.current.style.left = `${px - 60}px`; // center it (width 120 / 2)
+            
+            const decPlaces = priceScale > 100 ? 4 : priceScale > 10 ? 3 : 2;
+            hoverPriceLabelRef.current.textContent = price.toFixed(decPlaces);
+            hoverPriceLabelRef.current.style.display = 'flex';
+            hoverPriceLabelRef.current.style.top = `${py - 11}px`; // center vertically (height 22 / 2)
+            
+            const lineX = document.getElementById('webgpu-crosshair-x');
+            const lineY = document.getElementById('webgpu-crosshair-y');
+            if (lineX) { lineX.style.display = 'block'; lineX.style.left = `${px}px`; }
+            if (lineY) { lineY.style.display = 'block'; lineY.style.top = `${py}px`; }
+         }
+         
+         vState.current.hoverPixel = { x: px / dpr, y: py / dpr };
          
          gpu.current.activeTempShape = { time, price: snapPrice };
          requestAnimationFrame(render);
          return;
       }
       
+      // GENERAL HOVER CROSSHAIR LOGIC
+      if (!isDragging && (!activeTool || activeTool === 'cursor')) {
+         const { left, top } = canvas.getBoundingClientRect();
+         const px = e.clientX - left;
+         const py = e.clientY - top;
+         
+         const { min, max } = vState.current.priceRange;
+         const priceRange = max - min;
+         const ch = vState.current.height;
+         const priceScale = priceRange > 0 ? (ch - 26) / priceRange : 1;
+         
+         const price = max - (py / priceScale);
+         
+         const cw = vState.current.width;
+         const logicalRange = vState.current.logicalRange;
+         const rangeLen = logicalRange.to - logicalRange.from;
+         const idx = logicalRange.from + ((px / (cw - 54)) * rangeLen);
+         
+         const cIdx = Math.min(candles.length - 1, Math.max(0, Math.floor(idx)));
+         const c = candles[cIdx];
+         const time = c?.time || 0;
+         
+         vState.current.hoverPixel = { x: px / dpr, y: py / dpr };
+
+         // Center text in the axis region (pAxisW = 50 * dpr = ~100. Font is roughly 36px wide).
+         const textWidthApprox = 36 * dpr;
+         const centerX = cw - 50 + (50 - textWidthApprox) / 2.0;
+         // axisTextData.push({ text: p.toFixed(4), x: centerX, y: py - 6 });
+
+         if (hoverTimeLabelRef.current && hoverPriceLabelRef.current) {
+            const d = new Date(time * 1000);
+            const dd = d.getDate().toString().padStart(2, '0');
+            const mo = d.toLocaleString('en-US', { month: 'short' });
+            const yy = d.getFullYear().toString().slice(-2);
+            const H = d.getHours().toString().padStart(2, '0');
+            const M = d.getMinutes().toString().padStart(2, '0');
+            hoverTimeLabelRef.current.textContent = `${dd} ${mo} '${yy} ${H}:${M}`;
+            hoverTimeLabelRef.current.style.display = 'flex';
+            hoverTimeLabelRef.current.style.left = `${px - 60}px`; 
+            
+            const decPlaces = priceScale > 100 ? 4 : priceScale > 10 ? 3 : 2;
+            hoverPriceLabelRef.current.textContent = price.toFixed(decPlaces);
+            hoverPriceLabelRef.current.style.display = 'flex';
+            hoverPriceLabelRef.current.style.top = `${py - 11}px`;
+            
+            const lineX = document.getElementById('webgpu-crosshair-x');
+            const lineY = document.getElementById('webgpu-crosshair-y');
+            if (lineX) { lineX.style.display = 'block'; lineX.style.left = `${px}px`; }
+            if (lineY) { lineY.style.display = 'block'; lineY.style.top = `${py}px`; }
+         }
+         
+         requestAnimationFrame(render);
+         return;
+      }
+
       if (!isDragging) return;
       const dx = e.clientX - dragStartX;
       
@@ -1096,13 +1409,24 @@ const WebGPUChartEngine = React.forwardRef(({
     
     const onWheel = (e) => {
        e.preventDefault();
-       const zoomFactor = e.deltaY > 0 ? 1.05 : 0.95;
+       const cw = vState.current.width;
        const rangeLen = vState.current.logicalRange.to - vState.current.logicalRange.from;
-       const center = vState.current.logicalRange.from + (rangeLen / 2);
        
-       const newLen = Math.max(10, Math.min(candles.length, rangeLen * zoomFactor));
-       vState.current.logicalRange.from = center - (newLen / 2);
-       vState.current.logicalRange.to = center + (newLen / 2);
+       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+          // Horizontal panning (e.g. trackpad)
+          const candlesPerPixel = rangeLen / cw;
+          const shift = (e.deltaX * 0.5) * candlesPerPixel;
+          vState.current.logicalRange.from += shift;
+          vState.current.logicalRange.to += shift;
+       } else {
+          // Vertical scroll -> zoom
+          const zoomFactor = e.deltaY > 0 ? 1.05 : 0.95;
+          const center = vState.current.logicalRange.from + (rangeLen / 2);
+          
+          const newLen = Math.max(10, Math.min(candles.length, rangeLen * zoomFactor));
+          vState.current.logicalRange.from = center - (newLen / 2);
+          vState.current.logicalRange.to = center + (newLen / 2);
+       }
        
        if (onVisibleRangeChange && candles && candles.length > 0) {
          onVisibleRangeChange({
@@ -1113,10 +1437,25 @@ const WebGPUChartEngine = React.forwardRef(({
        requestAnimationFrame(render);
     };
     
+    const onPointerLeave = (e) => {
+      isDragging = false;
+      vState.current.hoverPixel = null;
+      if (hoverTimeLabelRef.current && hoverPriceLabelRef.current) {
+        hoverTimeLabelRef.current.style.display = 'none';
+        hoverPriceLabelRef.current.style.display = 'none';
+        const lineX = document.getElementById('webgpu-crosshair-x');
+        const lineY = document.getElementById('webgpu-crosshair-y');
+        if (lineX) lineX.style.display = 'none';
+        if (lineY) lineY.style.display = 'none';
+      }
+      requestAnimationFrame(render);
+    };
+    
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
     canvas.addEventListener('pointercancel', onPointerUp);
+    canvas.addEventListener('pointerleave', onPointerLeave);
     canvas.addEventListener('wheel', onWheel, { passive: false });
     
     return () => {
@@ -1124,6 +1463,7 @@ const WebGPUChartEngine = React.forwardRef(({
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerUp);
+      canvas.removeEventListener('pointerleave', onPointerLeave);
       canvas.removeEventListener('wheel', onWheel);
     };
   }, [candles, activeTool, onVisibleRangeChange]);
@@ -1140,8 +1480,8 @@ const WebGPUChartEngine = React.forwardRef(({
     getPixel: (time, price) => {
        const cw = vState.current.width * dpr;
        const ch = vState.current.height * dpr;
-       const pAxisW = 64 * dpr;
-       const timeAxisY = ch - (26 * dpr);
+       const pAxisW = 50 * dpr;
+       const timeAxisY = ch - (24 * dpr);
        
        const { min, max } = vState.current.priceRange;
        const priceRange = max - min;
@@ -1164,7 +1504,13 @@ const WebGPUChartEngine = React.forwardRef(({
   return (
     <div ref={containerRef} className="w-full h-full relative bg-[#131722] overflow-hidden cursor-crosshair">
       <canvas ref={gpuCanvasRef} className="absolute top-0 left-0 w-full h-full touch-none" />
-       {/* Text canvas removed, 100% native GPU! */} 
+      
+      {/* Native WebGPU DOM Hover Crosshair Labels & Lines */}
+      <div id="webgpu-crosshair-x" className="absolute top-0 bottom-[24px] w-[1px] bg-white/30 pointer-events-none hidden z-[80]" />
+      <div id="webgpu-crosshair-y" className="absolute left-0 right-[50px] h-[1px] bg-white/30 pointer-events-none hidden z-[80]" />
+      <div ref={hoverPriceLabelRef} className={`absolute right-0 w-[54px] h-[22px] rounded ${darkMode ? 'bg-[#2a2e39] text-[#ffffff]' : 'bg-[#e0e3eb] text-[#131722]'} text-[11px] font-bold font-sans flex items-center justify-center pointer-events-none hidden z-[100]`} />
+      <div ref={hoverTimeLabelRef} className={`absolute bottom-[1px] w-[120px] h-[22px] rounded ${darkMode ? 'bg-[#2a2e39] text-[#ffffff]' : 'bg-[#e0e3eb] text-[#131722]'} text-[11px] font-bold font-sans flex items-center justify-center pointer-events-none hidden z-[100]`} />
+      <div ref={livePriceLabelRef} className={`absolute right-0 w-[54px] h-[20px] rounded text-white text-[11px] font-bold font-sans flex items-center justify-center pointer-events-none z-[90]`} />
     </div>
   );
 });
