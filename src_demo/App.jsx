@@ -56,6 +56,8 @@ import { INDICATOR_REGISTRY } from './indicatorsRegistry';
 import ArbitrageBot from './components/ArbitrageBot';
 import StrategyTester from './components/StrategyTester';
 import Level3DepthTape from './components/Level3DepthTape';
+import { predictNextCandle } from './utils/predictionEngine';
+import PredictionReportModal from './components/PredictionReportModal';
 
 /** Pure helper: convert OHLCV candles to Heikin-Ashi candles */
 function toHeikinAshi(candles) {
@@ -80,7 +82,7 @@ function toHeikinAshi(candles) {
 /** Backtest / AI server — must run: npm run backend (port 8000) */
 const API_BASE = import.meta.env.VITE_BACKEND_URL ?? `http://${window.location.hostname}:8000`;
 const CANDLE_BATCH_SIZE = 1000;
-const INITIAL_HISTORY_BATCHES = 10;  // load 10k candles on startup
+const INITIAL_HISTORY_BATCHES = 3;  // load 3k candles on startup for speed
 const MAX_CANDLES_IN_MEMORY = 100000; // allow more in memory
 const SIX_YEARS_SECONDS = 6 * 365 * 24 * 60 * 60;
 
@@ -316,6 +318,7 @@ export default function App({ onLogout, onBackToCoins }) {
   const chartInstance = useRef(null);
   const candleSeries = useRef(null);
   const volumeSeries = useRef(null);
+  const predictionSeriesRef = useRef(null);
   const drawingLayerRef = useRef(null);
   const latestCandleRef = useRef(null);
   const isFirstLoad = useRef(true);
@@ -397,9 +400,20 @@ export default function App({ onLogout, onBackToCoins }) {
     return saved ? String(saved).toUpperCase() : 'SOLUSDT';
   });
 
+  useEffect(() => {
+    localStorage.setItem('selectedCoin', selectedCoin);
+  }, [selectedCoin]);
+
   const [activeTab, setActiveTab] = useState('Performance Summary');
   const [loading, setLoading] = useState(false);
-  const [chartInterval, setChartInterval] = useState('1m');
+  const [chartInterval, setChartInterval] = useState(() => {
+    const saved = localStorage.getItem('chartInterval');
+    return saved || '1m';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('chartInterval', chartInterval);
+  }, [chartInterval]);
   const [customTimeframeInput, setCustomTimeframeInput] = useState('');
   const [allCandles, setAllCandles] = useState([]);
   const [livePrice, setLivePrice] = useState(0);
@@ -434,6 +448,12 @@ export default function App({ onLogout, onBackToCoins }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileActiveTab, setMobileActiveTab] = useState('chart');
   const [mobileDrawingMenuOpen, setMobileDrawingMenuOpen] = useState(false);
+
+  // Prediction Engine State
+  const [predictedCandle, setPredictedCandle] = useState(null);
+  const [predictionHistory, setPredictionHistory] = useState([]);
+  const [showPredictionReport, setShowPredictionReport] = useState(false);
+  const [isAutoPredictEnabled, setIsAutoPredictEnabled] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
@@ -645,6 +665,11 @@ export default function App({ onLogout, onBackToCoins }) {
 
     setRenderEngine(nextMode);
     localStorage.setItem('renderEngine', nextMode);
+
+    // Trigger instant drawing layer redraw across all engines (Canvas2D ↔ WebGL ↔ WebGPU)
+    setTimeout(() => {
+      if (drawingLayerRef.current) drawingLayerRef.current.draw();
+    }, 150);
     
     if (nextMode === 'webgpu') setToastMsg('🚀 WebGPU Engine — Extreme Performance');
     else if (nextMode === 'webgl') setToastMsg('⚡ WebGL Engine — GPU Accelerated');
@@ -746,6 +771,11 @@ export default function App({ onLogout, onBackToCoins }) {
             }
           }
         });
+
+        // Force WebGPU/WebGL engine to re-render with new indicator data
+        if (webGLEngineRef.current && typeof webGLEngineRef.current.render === 'function') {
+          webGLEngineRef.current.render();
+        }
       }
     };
     
@@ -1546,6 +1576,113 @@ export default function App({ onLogout, onBackToCoins }) {
     showToast('Alert removed');
   };
 
+  const handlePredictClick = () => {
+    if (!allCandles || allCandles.length < 50) {
+      showToast('Not enough data to predict. Need at least 50 candles.');
+      return;
+    }
+    
+    setIsAutoPredictEnabled(prev => {
+      const nextState = !prev;
+      if (nextState) {
+        showToast('Auto-Prediction Enabled');
+        // Generate immediate first prediction
+        const intSeconds = intervalToSeconds(chartInterval);
+        const newPrediction = predictNextCandle(allCandles, intSeconds);
+        if (newPrediction) {
+          setPredictedCandle(newPrediction);
+          const histItem = {
+            time: newPrediction.time,
+            predictedUp: newPrediction.predictedUp,
+            predictedClose: newPrediction.close,
+            realClose: null,
+            isHit: null,
+          };
+          setPredictionHistory(history => [...history, histItem]);
+        }
+      } else {
+        showToast('Auto-Prediction Disabled');
+        setPredictedCandle(null);
+      }
+      return nextState;
+    });
+  };
+
+  // Check prediction results whenever candles update
+  useEffect(() => {
+    if (!allCandles || allCandles.length === 0 || predictionHistory.length === 0) return;
+    
+    const lastCandle = allCandles[allCandles.length - 1];
+    let justValidated = false;
+    
+    setPredictionHistory(prev => {
+      let updated = false;
+      const nextHist = prev.map(item => {
+        if (item.realClose === null && lastCandle.time >= item.time) {
+          const actualCandle = allCandles.find(c => c.time === item.time) || lastCandle;
+          const realUp = actualCandle.close >= actualCandle.open;
+          const isHit = realUp === item.predictedUp;
+          updated = true;
+          justValidated = true;
+          return { ...item, realClose: actualCandle.close, realUp, isHit };
+        }
+        return item;
+      });
+      return updated ? nextHist : prev;
+    });
+
+    if (predictedCandle && lastCandle.time >= predictedCandle.time) {
+       // Clear old prediction
+       setPredictedCandle(null);
+       
+       // Loop auto-predict
+       if (isAutoPredictEnabled) {
+         setTimeout(() => {
+           const intSeconds = intervalToSeconds(chartInterval);
+           const newPrediction = predictNextCandle(allCandles, intSeconds);
+           if (newPrediction) {
+             setPredictedCandle(newPrediction);
+             const histItem = {
+               time: newPrediction.time,
+               predictedUp: newPrediction.predictedUp,
+               predictedClose: newPrediction.close,
+               realClose: null,
+               isHit: null,
+             };
+             setPredictionHistory(prev => [...prev, histItem]);
+           }
+         }, 500); // slight delay to allow chart refresh
+       }
+    }
+  }, [allCandles, predictedCandle, predictionHistory, isAutoPredictEnabled, chartInterval]);
+
+  // Handle Canvas2D prediction rendering
+  useEffect(() => {
+    if (renderEngine !== 'canvas2d' || !chartInstance.current) return;
+    
+    if (predictedCandle) {
+      if (!predictionSeriesRef.current) {
+        predictionSeriesRef.current = chartInstance.current.addCandlestickSeries({
+          upColor: 'rgba(76, 175, 80, 0.4)',
+          downColor: 'rgba(244, 67, 54, 0.4)',
+          borderUpColor: 'rgba(76, 175, 80, 0.6)',
+          borderDownColor: 'rgba(244, 67, 54, 0.6)',
+          wickUpColor: 'rgba(76, 175, 80, 0.6)',
+          wickDownColor: 'rgba(244, 67, 54, 0.6)',
+          priceLineVisible: false,
+          lastValueVisible: false,
+        });
+      }
+      predictionSeriesRef.current.setData([predictedCandle]);
+    } else {
+      if (predictionSeriesRef.current) {
+        chartInstance.current.removeSeries(predictionSeriesRef.current);
+        predictionSeriesRef.current = null;
+      }
+    }
+  }, [predictedCandle, renderEngine]);
+
+
   const injectIndicator = (ind, targetMode = editorMode) => {
     setEditorMode(targetMode);
     const snippet = targetMode === 'pine' ? ind.pine : ind.python;
@@ -1686,8 +1823,33 @@ export default function App({ onLogout, onBackToCoins }) {
     }
   };
   const takeRealScreenshot = async () => {
-    if (chartContainerRef.current) {
-      try {
+    try {
+      // Method 1: WebGPU / WebGL — grab GPU canvas directly
+      if (renderEngine === 'webgpu' || renderEngine === 'webgl') {
+        const container = chartContainerRef.current || chartRef.current;
+        const gpuCanvas = container?.querySelector('canvas');
+        if (gpuCanvas) {
+          const link = document.createElement('a');
+          link.download = `${selectedCoin}_Chart_${renderEngine.toUpperCase()}.png`;
+          link.href = gpuCanvas.toDataURL('image/png');
+          link.click();
+          showToast("📸 Screenshot Downloaded!");
+          return;
+        }
+      }
+
+      // Method 2: Canvas2D — use Lightweight Charts built-in takeScreenshot
+      if (chartInstance.current && typeof chartInstance.current.takeScreenshot === 'function') {
+        const link = document.createElement('a');
+        link.download = `${selectedCoin}_Chart.png`;
+        link.href = chartInstance.current.takeScreenshot().toDataURL('image/png');
+        link.click();
+        showToast("📸 Screenshot Downloaded!");
+        return;
+      }
+
+      // Method 3: Fallback — html2canvas DOM capture
+      if (chartContainerRef.current) {
         const canvas = await html2canvas(chartContainerRef.current, {
           backgroundColor: darkMode ? '#131722' : '#ffffff',
           useCORS: true,
@@ -1699,15 +1861,13 @@ export default function App({ onLogout, onBackToCoins }) {
         link.href = canvas.toDataURL('image/png');
         link.click();
         showToast("📸 Screenshot Downloaded!");
-      } catch (err) {
-        console.error("Screenshot failed:", err);
-        showToast("❌ Screenshot Failed!");
+        return;
       }
-    } else if (chartInstance.current) {
-      // Fallback
-      const link = document.createElement('a'); link.download = `${selectedCoin}_Chart.png`;
-      link.href = chartInstance.current.takeScreenshot().toDataURL('image/png'); link.click();
-      showToast("📸 Screenshot Downloaded!");
+
+      showToast("❌ No chart available for screenshot");
+    } catch (err) {
+      console.error("Screenshot failed:", err);
+      showToast("❌ Screenshot Failed: " + (err.message || ''));
     }
   };
   const downloadReportScreenshot = () => downloadReportData();
@@ -2179,7 +2339,7 @@ export default function App({ onLogout, onBackToCoins }) {
       },
       timeScale: {
         borderColor: darkMode ? 'rgba(42,46,57,0.8)' : '#e0e3eb',
-        rightOffset: 12,
+        rightOffset: 20,
         barSpacing: isMobile ? 5 : 10,
         minBarSpacing: 2,
         timeVisible: true,
@@ -2365,7 +2525,7 @@ export default function App({ onLogout, onBackToCoins }) {
         },
         timeScale: {
           borderColor: darkMode ? 'rgba(42,46,57,0.8)' : '#e0e3eb',
-          rightOffset: 12,
+          rightOffset: 20,
           barSpacing: isMobile ? 5 : 10,
           timeVisible: true,
           secondsVisible: chartInterval === '1m',
@@ -3055,16 +3215,20 @@ export default function App({ onLogout, onBackToCoins }) {
         )}
 
         {/* Jump to Realtime Button */}
-        {!isAtLiveEdge && chartInstance.current && (
+        {!isAtLiveEdge && (
           <button
             onClick={() => {
-              chartInstance.current.timeScale().scrollToRealTime();
+              if (renderEngine === 'canvas2d' && chartInstance.current) {
+                chartInstance.current.timeScale().scrollToRealTime();
+              } else if ((renderEngine === 'webgl' || renderEngine === 'webgpu') && webGLEngineRef.current) {
+                webGLEngineRef.current.scrollToRealTime();
+              }
               setIsAtLiveEdge(true);
             }}
-            className={`absolute bottom-16 right-4 z-20 flex items-center justify-center w-8 h-8 rounded-full ${t.sec} border ${t.border} text-[#787b86] hover:text-black dark:hover:text-white shadow-lg cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors pointer-events-auto`}
+            className={`absolute top-1/2 left-6 -translate-y-1/2 z-[60] flex items-center justify-center w-8 h-8 rounded-full ${t.sec} border ${t.border} text-[#787b86] hover:text-black dark:hover:text-white shadow-lg cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors pointer-events-auto group`}
             title="Jump to Realtime"
           >
-            <ChevronRight className="text-blue-400 rotate-90" size={16} />
+            <ChevronRight className="text-blue-400 group-hover:scale-110 transition-transform" size={18} />
           </button>
         )}
 
@@ -3306,7 +3470,6 @@ export default function App({ onLogout, onBackToCoins }) {
 
   
   const handlePointerDown = (e) => {
-    if (renderEngine === 'webgpu') return; // WebGPU is autonomous
     if (renderEngine === 'canvas2d' && (!chartInstance.current || !candleSeries.current)) return;
 
     if (!activeTool) {
@@ -6558,9 +6721,11 @@ export default function App({ onLogout, onBackToCoins }) {
                           </div>
                         }>
                           <WebGLChartEngine
+                            key={`${renderEngine}-${selectedCoin}-${chartInterval}`}
                             ref={webGLEngineRef}
                             isHoveringDrawing={isHoveringDrawing}
                             candles={allCandles}
+                            predictedCandle={predictedCandle}
                             drawings={drawings}
                             brushPath={brushPath}
                             tempShape={tempShape}
@@ -6593,6 +6758,9 @@ export default function App({ onLogout, onBackToCoins }) {
                                 }, 300);
 
                                 if (allCandles.length > 0) {
+                                  const lastTime = allCandles[allCandles.length - 1].time;
+                                  setIsAtLiveEdge(range.to >= lastTime - 100);
+
                                   const avgTime = (allCandles[allCandles.length - 1].time - allCandles[0].time) / allCandles.length;
                                   if (range.from < allCandles[0].time + (avgTime * 100)) {
                                     loadOlderData();
@@ -6617,6 +6785,7 @@ export default function App({ onLogout, onBackToCoins }) {
                           </div>
                         }>
                           <WebGPUChartEngine
+                            key={`${renderEngine}-${selectedCoin}-${chartInterval}`}
                             ref={webGLEngineRef}
                             candles={allCandles}
                             darkMode={darkMode}
@@ -6651,6 +6820,9 @@ export default function App({ onLogout, onBackToCoins }) {
                                 }, 300);
 
                                 if (allCandles.length > 0) {
+                                  const lastTime = allCandles[allCandles.length - 1].time;
+                                  setIsAtLiveEdge(range.to >= lastTime - 100);
+
                                   const avgTime = (allCandles[allCandles.length - 1].time - allCandles[0].time) / allCandles.length;
                                   if (range.from < allCandles[0].time + (avgTime * 100)) {
                                     loadOlderData();
@@ -6677,7 +6849,7 @@ export default function App({ onLogout, onBackToCoins }) {
             getPixel={getPixel}
             coordinateToTimePrice={coordinateToTimePrice}
             allCandles={allCandles}
-            visibleRange={chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null}
+            visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)}
             selectedDrawingId={selectedDrawingId}
             hideDrawings={hideDrawings}
             volumeProfile={volumeProfile}
@@ -6715,7 +6887,7 @@ export default function App({ onLogout, onBackToCoins }) {
             getPixel={getPixel}
             coordinateToTimePrice={coordinateToTimePrice}
             allCandles={allCandles}
-            visibleRange={chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null}
+            visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)}
             selectedDrawingId={selectedDrawingId}
             hideDrawings={hideDrawings}
             volumeProfile={volumeProfile}
@@ -6755,7 +6927,7 @@ export default function App({ onLogout, onBackToCoins }) {
             getPixel={getPixel}
             coordinateToTimePrice={coordinateToTimePrice}
             allCandles={allCandles}
-            visibleRange={chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null}
+            visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)}
             selectedDrawingId={selectedDrawingId}
             hideDrawings={hideDrawings}
             volumeProfile={volumeProfile}
@@ -6795,7 +6967,7 @@ export default function App({ onLogout, onBackToCoins }) {
             getPixel={getPixel}
             coordinateToTimePrice={coordinateToTimePrice}
             allCandles={allCandles}
-            visibleRange={chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null}
+            visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)}
             selectedDrawingId={selectedDrawingId}
             hideDrawings={hideDrawings}
             volumeProfile={volumeProfile}
@@ -6986,6 +7158,12 @@ export default function App({ onLogout, onBackToCoins }) {
               </div>
             </div>
             <div className={`flex gap-1 ${t.muted} items-center shrink-0`}>
+              <button 
+                onClick={() => setShowPredictionReport(true)} 
+                className={`hidden sm:flex items-center gap-1 px-2 py-1 ${darkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'} rounded text-[11px] font-bold mr-1 transition-colors`}
+              >
+                <BarChartHorizontal size={12} /> Prediction Report
+              </button>
               <button onClick={downloadReportScreenshot} className="hidden sm:flex items-center gap-1 px-2 py-1 bg-[#7C5CFF]/10 text-[#7C5CFF] hover:bg-[#7C5CFF]/20 rounded text-[11px] font-bold mr-1 transition-colors"><Download size={12} /> Download</button>
               <button onClick={() => setIsReportPinned(!isReportPinned)} className={`p-2 md:p-1 ${t.hover} rounded transition-colors ${isReportPinned ? 'text-blue-500' : ''}`} title={isReportPinned ? 'Unpin (Auto-hide)' : 'Pin panel'}>
                 {isReportPinned ? <Pin size={14} className="fill-current" /> : <PinOff size={14} />}
@@ -7812,6 +7990,17 @@ export default function App({ onLogout, onBackToCoins }) {
         >
           <Braces size={16} />
           {isEditorOpen && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-green-400 rounded-l" />}
+        </button>
+
+        <div className="w-6 h-px bg-[#2a2e39]/30 my-1" />
+
+        <button
+          onClick={handlePredictClick}
+          className={`w-8 h-8 rounded flex items-center justify-center relative transition-all ${isAutoPredictEnabled ? (darkMode ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.4)]' : 'bg-purple-100 text-purple-700 border border-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.4)]') : (darkMode ? 'text-purple-400/60 hover:bg-purple-500/10 hover:text-purple-400' : 'text-purple-700/60 hover:bg-purple-100 hover:text-purple-800')}`}
+          title={isAutoPredictEnabled ? "Auto-Predict Active (Click to Disable)" : "Predict Next Candle (Auto-Loop)"}
+        >
+          <Wand2 size={16} />
+          {isAutoPredictEnabled && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-purple-400 rounded-l" />}
         </button>
 
         <div className="w-6 h-px bg-[#2a2e39]/30 my-1" />

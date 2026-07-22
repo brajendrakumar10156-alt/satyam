@@ -57,7 +57,17 @@ export function calculateHorizontalTimeAxisLabels({
 
   // 4. Sort back into sequential chronological order for rendering
   survivors.sort((a, b) => a.x - b.x);
-  return survivors;
+
+  // 5. Deduplicate identical label strings to prevent repeating time text (e.g. 15:44 15:44)
+  const seenLabels = new Set();
+  const uniqueSurvivors = [];
+  for (const surv of survivors) {
+    if (!seenLabels.has(surv.label)) {
+      seenLabels.add(surv.label);
+      uniqueSurvivors.push(surv);
+    }
+  }
+  return uniqueSurvivors;
 }
 
 /**

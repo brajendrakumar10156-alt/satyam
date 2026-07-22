@@ -149,9 +149,13 @@ fn vs_main(@builtin(vertex_index) vIdx: u32, @builtin(instance_index) iIdx: u32)
   let low = c.prices.z;
   let close = c.prices.w;
   let index = c.metaData.x;
+  let isPrediction = c.metaData.y == 1.0;
 
   let isUp = close >= open;
-  let color = select(vec4<f32>(0.941, 0.329, 0.314, 1.0), vec4<f32>(0.153, 0.651, 0.604, 1.0), isUp);
+  var color = select(vec4<f32>(0.941, 0.329, 0.314, 1.0), vec4<f32>(0.153, 0.651, 0.604, 1.0), isUp);
+  if (isPrediction) {
+    color = vec4<f32>(color.r, color.g, color.b, 0.4);
+  }
 
   let isWick = vIdx > 5u;
   let localVIdx = vIdx % 6u;
@@ -300,11 +304,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
   var finalColor = vec4<f32>(0.0, 0.0, 0.0, 0.0); // Transparent chart background
   
-  // ── LIVE PRICE SOLID LINE ──
-  if (uniforms.livePixelY > 0.0 && coord.x >= uniforms.lastPixelX && coord.x < (uniforms.resolution.x - uniforms.axisSize.x)) {
+  // ── LIVE PRICE DASHED LINE ──
+  if (uniforms.livePixelY > 0.0 && coord.x < (uniforms.resolution.x - uniforms.axisSize.x)) {
     let distY = abs(coord.y - uniforms.livePixelY);
     if (distY < 1.0) {
-       finalColor = uniforms.liveColor;
+       // Dashed pattern: 4px dash, 4px gap
+       if (u32(coord.x) % 8u < 4u) {
+         finalColor = vec4<f32>(uniforms.liveColor.rgb, 0.8);
+       }
     }
   }
 
@@ -314,6 +321,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 const WebGPUChartEngine = React.forwardRef(({
   candles = [],
+  predictedCandle = null,
   darkMode = true,
   chartStyle = 'candles',
   priceScaleMode = 0,
@@ -363,6 +371,7 @@ const WebGPUChartEngine = React.forwardRef(({
   const vState = useRef({
     logicalRange: { from: 0, to: 100 },
     priceRange: { min: 0, max: 100 },
+    manualPriceScale: false,
     width: 800,
     height: 600,
     isDragging: false,
@@ -385,17 +394,49 @@ const WebGPUChartEngine = React.forwardRef(({
     return l;
   };
 
-  useEffect(() => {
-    requestAnimationFrame(render);
-  }, [drawings, activeTool, visualIndicators, indicatorDataMap]);
+  const lastCandleTimeRef = useRef(null);
 
   useEffect(() => {
-    if (initialVisibleRange?.visibleRange && candles && candles.length > 0) {
+    if (!candles || candles.length === 0) return;
+    const currentLastTime = candles[candles.length - 1].time;
+    const prevLastTime    = lastCandleTimeRef.current;
+
+    if (prevLastTime && currentLastTime > prevLastTime) {
+      // New candle appeared — auto-scroll only if user was at live edge
+      const prevLastIdx = timeToIndex(prevLastTime, candles);
+      if (vState.current.logicalRange.to >= prevLastIdx - 0.5) {
+        const newLastIdx = candles.length - 1;
+        const shift = newLastIdx - prevLastIdx;
+        vState.current.logicalRange.from += shift;
+        vState.current.logicalRange.to   += shift;
+        
+        if (onVisibleRangeChange) {
+           onVisibleRangeChange({ 
+               from: candles[Math.max(0, Math.floor(vState.current.logicalRange.from))]?.time, 
+               to: candles[Math.min(candles.length - 1, Math.ceil(vState.current.logicalRange.to))]?.time 
+           });
+        }
+      }
+    }
+    lastCandleTimeRef.current = currentLastTime;
+    requestAnimationFrame(render);
+  }, [drawings, activeTool, visualIndicators, indicatorDataMap, candles, onVisibleRangeChange]);
+
+  const isInitializedRef = useRef(false);
+  useEffect(() => {
+    if (isInitializedRef.current || !candles || candles.length === 0) return;
+    isInitializedRef.current = true;
+    if (initialVisibleRange?.visibleRange) {
       const fromIdx = timeToIndex(initialVisibleRange.visibleRange.from, candles);
       const toIdx = timeToIndex(initialVisibleRange.visibleRange.to, candles);
       vState.current.logicalRange = { from: fromIdx, to: toIdx };
-      requestAnimationFrame(render);
+    } else {
+      vState.current.logicalRange = {
+        from: Math.max(0, candles.length - 80),
+        to: candles.length - 1 + 20
+      };
     }
+    requestAnimationFrame(render);
   }, [initialVisibleRange, candles]);
   
 
@@ -679,7 +720,7 @@ const WebGPUChartEngine = React.forwardRef(({
           size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
         const drawingBuffer = device.createBuffer({
-          size: 1000 * 36 * 4, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+          size: 50000 * 36 * 4, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
         });
         
         gpu.current.drawingPipeline = drawingPipeline;
@@ -724,7 +765,7 @@ const WebGPUChartEngine = React.forwardRef(({
     let priceAxisWinners = [];
     
     // Auto-Scale Y-Axis (Smooth Easing)
-    if (autoScale && candles && candles.length > 0) {
+    if (autoScale && !vState.current.manualPriceScale && candles && candles.length > 0) {
        let minP = Infinity, maxP = -Infinity;
        const fromIdx = Math.max(0, Math.floor(vState.current.logicalRange.from));
        const toIdx = Math.min(candles.length - 1, Math.ceil(vState.current.logicalRange.to));
@@ -756,14 +797,16 @@ const WebGPUChartEngine = React.forwardRef(({
     }
     
     // Generate Buffer Data for Candlesticks (Phase 2 Native Packing)
-    if (candles && candles.length > 0) {
-      const count = Math.min(candles.length, gpu.current.maxCandles || 100000);
+    const renderCandles = predictedCandle ? [...candles, predictedCandle] : candles;
+    if (renderCandles && renderCandles.length > 0) {
+      const count = Math.min(renderCandles.length, gpu.current.maxCandles || 100000);
       const data = new Float32Array(count * 8);
       for (let i = 0; i < count; i++) {
-        const c = candles[i];
+        const c = renderCandles[i];
         const offset = i * 8;
         data[offset] = c.open; data[offset+1] = c.high; data[offset+2] = c.low; data[offset+3] = c.close;
         data[offset+4] = i; 
+        data[offset+5] = c.isPrediction ? 1.0 : 0.0;
       }
       if (gpu.current.candleBuffer) {
         gpu.current.device.queue.writeBuffer(gpu.current.candleBuffer, 0, data);
@@ -814,7 +857,9 @@ const WebGPUChartEngine = React.forwardRef(({
       let lastMonth = -1, lastDay = -1;
       for (let i = startIdx; i <= endIdx; i++) {
         if (!candles[i]) continue;
-        const d = new Date(candles[i].time);
+        const rawTime = candles[i].time;
+        const timeMs = rawTime < 10000000000 ? rawTime * 1000 : rawTime;
+        const d = new Date(timeMs);
         const mon = d.getUTCMonth();
         const day = d.getUTCDate();
         const H = d.getUTCHours();
@@ -996,6 +1041,9 @@ const WebGPUChartEngine = React.forwardRef(({
       renderPass.draw(6); // Fullscreen Quad
     }
 
+    let drawingBufferOffset = 0;
+    gpu.current.device.queue.writeBuffer(gpu.current.drawingUniformBuffer, 0, new Float32Array([cw, ch, 0, 0]));
+
     // ── 1.5 DRAW GRID LINES (UNDER CANDLES) ──
     const gridSegmentsCount = timeAxisWinners.length + priceAxisWinners.length + 2; // +2 for axes borders
     if (gridSegmentsCount > 0) {
@@ -1018,13 +1066,90 @@ const WebGPUChartEngine = React.forwardRef(({
         pushThickLine({x: cw - pAxisW, y: 0}, {x: cw - pAxisW, y: timeAxisY}, 1, gridLineColor);
         pushThickLine({x: 0, y: timeAxisY}, {x: cw - pAxisW, y: timeAxisY}, 1, gridLineColor);
         
-        gpu.current.device.queue.writeBuffer(gpu.current.drawingUniformBuffer, 0, new Float32Array([cw, ch, 0, 0]));
-        gpu.current.device.queue.writeBuffer(gpu.current.drawingBuffer, 0, gridData);
+        const byteLen = gridData.byteLength;
+        gpu.current.device.queue.writeBuffer(gpu.current.drawingBuffer, drawingBufferOffset, gridData.buffer, gridData.byteOffset, byteLen);
         
         renderPass.setPipeline(gpu.current.drawingPipeline);
         renderPass.setBindGroup(0, gpu.current.drawingBindGroup);
-        renderPass.setVertexBuffer(0, gpu.current.drawingBuffer);
+        renderPass.setVertexBuffer(0, gpu.current.drawingBuffer, drawingBufferOffset);
         renderPass.draw(ptr / 6);
+        
+        drawingBufferOffset += byteLen;
+        drawingBufferOffset = Math.ceil(drawingBufferOffset / 4) * 4;
+    }
+
+    // ── 1.8 DRAW VOLUME BARS (UNDER CANDLES) ──
+    if (candles && candles.length > 0) {
+        const logicalRange = vState.current.logicalRange;
+        const startIdx = Math.max(0, Math.floor(logicalRange.from));
+        const endIdx = Math.min(candles.length - 1, Math.ceil(logicalRange.to));
+        
+        let maxVol = 0;
+        for (let i = startIdx; i <= endIdx; i++) {
+            if (candles[i] && candles[i].volume > maxVol) maxVol = candles[i].volume;
+        }
+        
+        if (maxVol > 0 && endIdx >= startIdx) {
+            const volCount = endIdx - startIdx + 1;
+            const volFloats = volCount * 36;
+            const volData = new Float32Array(volFloats);
+            let ptr = 0;
+            
+            const rangeLen = (logicalRange.to - logicalRange.from) || 1;
+            const scaleX = (cw - pAxisW) / (rangeLen * 10);
+            const offsetX = -(logicalRange.from * 10 * scaleX);
+            const spacing = 10.0 * scaleX;
+            const candleWidth = Math.max(1.0, spacing * 0.8);
+            
+            const pushThickLineVol = (v1, v2, thickness, color) => {
+                const quadVertices = lineToQuad(v1, v2, thickness);
+                for (const v of quadVertices) {
+                    volData[ptr++] = v.x; volData[ptr++] = v.y;
+                    volData[ptr++] = color[0]; volData[ptr++] = color[1]; volData[ptr++] = color[2]; volData[ptr++] = color[3];
+                }
+            };
+
+            for (let i = startIdx; i <= endIdx; i++) {
+                const c = candles[i];
+                if (!c) continue;
+                
+                const x = (i * 10.0 * scaleX) + offsetX + (candleWidth * 0.5);
+                const volH = (c.volume / maxVol) * (ch * 0.15);
+                const isUp = c.close >= c.open;
+                
+                // WebGL matching colors with 0.35 alpha
+                const r = isUp ? 16 / 255 : 239 / 255;
+                const g = isUp ? 185 / 255 : 68 / 255;
+                const b = isUp ? 129 / 255 : 68 / 255;
+                
+                pushThickLineVol(
+                    { x, y: timeAxisY }, 
+                    { x, y: timeAxisY - volH }, 
+                    candleWidth, 
+                    [r, g, b, 0.35]
+                );
+            }
+            
+            if (ptr > 0) {
+                const safeW = Math.max(1, Math.floor(cw - pAxisW));
+                const safeH = Math.max(1, Math.floor(timeAxisY));
+                renderPass.setScissorRect(0, 0, safeW, safeH);
+                
+                const byteLen = volData.byteLength;
+                gpu.current.device.queue.writeBuffer(gpu.current.drawingBuffer, drawingBufferOffset, volData.buffer, volData.byteOffset, byteLen);
+                
+                renderPass.setPipeline(gpu.current.drawingPipeline);
+                renderPass.setBindGroup(0, gpu.current.drawingBindGroup);
+                renderPass.setVertexBuffer(0, gpu.current.drawingBuffer, drawingBufferOffset);
+                renderPass.draw(ptr / 6);
+                
+                drawingBufferOffset += byteLen;
+                drawingBufferOffset = Math.ceil(drawingBufferOffset / 4) * 4;
+                
+                // Reset scissor
+                renderPass.setScissorRect(0, 0, Math.floor(cw), Math.floor(ch));
+            }
+        }
     }
 
     // ── 2. DRAW CANDLESTICKS (NATIVE) ──
@@ -1050,7 +1175,115 @@ const WebGPUChartEngine = React.forwardRef(({
     }
     
     // ── 4. DRAW INDICATORS NATIVELY (Phase 3) ──
-    if (gpu.current.linePipeline && gpu.current.candleCount > 1) {
+    if (gpu.current.drawingPipeline && candles && candles.length > 1 && visualIndicators && visualIndicators.length > 0) {
+      const pAxisW_ind = 54 * dpr;
+      const timeAxisY_ind = ch - (26 * dpr);
+      const { min: minP_ind, max: maxP_ind } = vState.current.priceRange;
+      const priceRange_ind = (maxP_ind - minP_ind) || 1;
+      const priceScale_ind = timeAxisY_ind / priceRange_ind;
+      const logicalRange_ind = vState.current.logicalRange;
+      const rangeLen_ind = (logicalRange_ind.to - logicalRange_ind.from) || 1;
+
+      const pxInd = (time) => {
+        const idx = timeToIndex(time, candles);
+        return ((idx - logicalRange_ind.from) / rangeLen_ind) * (cw - pAxisW_ind);
+      };
+      const pyInd = (price) => timeAxisY_ind - ((price - minP_ind) * priceScale_ind);
+
+      // Default colors per indicator type
+      const defaultColors = {
+        ema: '#ff9800', sma: '#2962ff', bb: '#26a69a', vwap: '#00e676',
+        wma: '#e040fb', dema: '#ff5722', tema: '#00bcd4', keltner: '#9c27b0',
+        ichimoku_tenkan: '#2962ff', ichimoku_kijun: '#b71c1c',
+        supertrend: '#00e676', hma: '#ff6f00', alma: '#7c4dff',
+        sar: '#ffeb3b', env_upper: '#4caf50', env_lower: '#f44336',
+      };
+      const seriesColors = ['#ff9800', '#2962ff', '#26a69a', '#e040fb', '#00e676', '#ff5722', '#00bcd4', '#9c27b0'];
+
+      // Count total line segments needed
+      let totalIndSegments = 0;
+      const indLinesToDraw = [];
+
+      visualIndicators.forEach((ind, indIdx) => {
+        if (!ind.visible) return;
+        const reg = INDICATOR_REGISTRY[ind.type];
+        if (!reg || reg.kind !== 'overlay') return;
+        const results = indicatorDataMap[ind.id];
+        if (!results) return;
+
+        reg.seriesConfig.forEach((s, sIdx) => {
+          const data = results[s.key];
+          if (!data || data.length < 2) return;
+          const color = ind.color || (s.options ? s.options(ind.params || reg.defaultParams, ind.color)?.color : null) || seriesColors[(indIdx + sIdx) % seriesColors.length];
+          
+          // Parse hex color to RGBA floats
+          let r = 1, g = 0.6, b = 0, a = 1;
+          if (color && color.startsWith('#')) {
+            const hex = color.replace('#', '');
+            r = parseInt(hex.substring(0, 2), 16) / 255;
+            g = parseInt(hex.substring(2, 4), 16) / 255;
+            b = parseInt(hex.substring(4, 6), 16) / 255;
+          }
+
+          // Build line segment pairs
+          for (let i = 1; i < data.length; i++) {
+            const prev = data[i - 1];
+            const curr = data[i];
+            if (prev.value == null || curr.value == null || isNaN(prev.value) || isNaN(curr.value)) continue;
+            
+            const x1 = pxInd(prev.time);
+            const y1 = pyInd(prev.value);
+            const x2 = pxInd(curr.time);
+            const y2 = pyInd(curr.value);
+            
+            // Skip off-screen segments
+            if (x2 < 0 || x1 > (cw - pAxisW_ind)) continue;
+            
+            indLinesToDraw.push({ x1, y1, x2, y2, r, g, b, a });
+            totalIndSegments++;
+          }
+        });
+      });
+
+      if (totalIndSegments > 0) {
+        const indFloats = totalIndSegments * 36;
+        const indData = new Float32Array(indFloats);
+        let indPtr = 0;
+
+        for (const seg of indLinesToDraw) {
+          const quadVertices = lineToQuad(
+            { x: seg.x1, y: seg.y1 },
+            { x: seg.x2, y: seg.y2 },
+            1.5 * dpr
+          );
+          for (const v of quadVertices) {
+            indData[indPtr++] = v.x;
+            indData[indPtr++] = v.y;
+            indData[indPtr++] = seg.r;
+            indData[indPtr++] = seg.g;
+            indData[indPtr++] = seg.b;
+            indData[indPtr++] = seg.a;
+          }
+        }
+
+        // Clip indicator lines within chart area
+        const safeW = Math.max(1, Math.floor(cw - pAxisW_ind));
+        const safeH = Math.max(1, Math.floor(timeAxisY_ind));
+        renderPass.setScissorRect(0, 0, safeW, safeH);
+
+        const byteLen = indData.byteLength;
+        gpu.current.device.queue.writeBuffer(gpu.current.drawingBuffer, drawingBufferOffset, indData.buffer, indData.byteOffset, byteLen);
+        renderPass.setPipeline(gpu.current.drawingPipeline);
+        renderPass.setBindGroup(0, gpu.current.drawingBindGroup);
+        renderPass.setVertexBuffer(0, gpu.current.drawingBuffer, drawingBufferOffset);
+        renderPass.draw(indPtr / 6);
+        
+        drawingBufferOffset += byteLen;
+        drawingBufferOffset = Math.ceil(drawingBufferOffset / 4) * 4;
+
+        // Reset scissor
+        renderPass.setScissorRect(0, 0, Math.floor(cw), Math.floor(ch));
+      }
     }
     
     // ── 5. DRAW USER TRENDLINES (RESTORED LOGIC) ──
@@ -1110,12 +1343,12 @@ const WebGPUChartEngine = React.forwardRef(({
                 pushThickLine(v1, v2, 2 * dpr, drawingColor);
             }
             
-            gpu.current.device.queue.writeBuffer(gpu.current.drawingUniformBuffer, 0, new Float32Array([cw, ch, 0, 0]));
-            gpu.current.device.queue.writeBuffer(gpu.current.drawingBuffer, 0, drawingData);
+            const byteLen = drawingData.byteLength;
+            gpu.current.device.queue.writeBuffer(gpu.current.drawingBuffer, drawingBufferOffset, drawingData.buffer, drawingData.byteOffset, byteLen);
             
             renderPass.setPipeline(gpu.current.drawingPipeline);
             renderPass.setBindGroup(0, gpu.current.drawingBindGroup);
-            renderPass.setVertexBuffer(0, gpu.current.drawingBuffer);
+            renderPass.setVertexBuffer(0, gpu.current.drawingBuffer, drawingBufferOffset);
             renderPass.draw(ptr / 6);
         }
     }
@@ -1162,6 +1395,11 @@ const WebGPUChartEngine = React.forwardRef(({
     observer.observe(containerRef.current);
     return () => observer.disconnect();
   }, [candles, autoScale]);
+  // Auto-scale effect when toggled on manually
+  useEffect(() => {
+    if (autoScale) vState.current.manualPriceScale = false;
+    requestAnimationFrame(render);
+  }, [autoScale]);
 
   // Pointer Events for Panning and Zooming
   useEffect(() => {
@@ -1173,6 +1411,8 @@ const WebGPUChartEngine = React.forwardRef(({
     let dragStartY = 0;
     let startLogicalFrom = 0;
     let startLogicalTo = 0;
+    let startPriceMin = 0;
+    let startPriceMax = 0;
     
     const onPointerDown = (e) => {
       const { left, top } = canvas.getBoundingClientRect();
@@ -1257,6 +1497,8 @@ const WebGPUChartEngine = React.forwardRef(({
       dragStartY = e.clientY;
       startLogicalFrom = vState.current.logicalRange.from;
       startLogicalTo = vState.current.logicalRange.to;
+      startPriceMin = vState.current.priceRange.min;
+      startPriceMax = vState.current.priceRange.max;
       canvas.setPointerCapture(e.pointerId);
     };
     
@@ -1384,6 +1626,7 @@ const WebGPUChartEngine = React.forwardRef(({
 
       if (!isDragging) return;
       const dx = e.clientX - dragStartX;
+      const dy = e.clientY - dragStartY;
       
       const cw = vState.current.width;
       const rangeLen = startLogicalTo - startLogicalFrom;
@@ -1392,6 +1635,17 @@ const WebGPUChartEngine = React.forwardRef(({
       const shift = dx * candlesPerPixel;
       vState.current.logicalRange.from = startLogicalFrom - shift;
       vState.current.logicalRange.to = startLogicalTo - shift;
+
+      if (Math.abs(dy) > 2) vState.current.manualPriceScale = true;
+
+      if (vState.current.manualPriceScale) {
+         const ch = vState.current.height;
+         const pRange = startPriceMax - startPriceMin || 1;
+         const priceScale = (ch - 26) / pRange;
+         const priceShift = dy / priceScale;
+         vState.current.priceRange.min = startPriceMin + priceShift;
+         vState.current.priceRange.max = startPriceMax + priceShift;
+      }
       
       if (onVisibleRangeChange && candles && candles.length > 0) {
          onVisibleRangeChange({
@@ -1469,6 +1723,23 @@ const WebGPUChartEngine = React.forwardRef(({
   }, [candles, activeTool, onVisibleRangeChange]);
 
   useImperativeHandle(ref, () => ({
+    render: () => requestAnimationFrame(render),
+    scrollToRealTime: () => {
+      if (!candles || candles.length === 0) return;
+      const lastIdx = candles.length - 1;
+      const rangeLen = vState.current.logicalRange.to - vState.current.logicalRange.from || 100;
+      const padding = rangeLen * 0.2;
+      vState.current.logicalRange.from = lastIdx - rangeLen + padding;
+      vState.current.logicalRange.to = lastIdx + padding;
+      vState.current.manualPriceScale = false;
+      requestAnimationFrame(render);
+      if (onVisibleRangeChange) {
+         onVisibleRangeChange({ 
+             from: candles[Math.max(0, Math.floor(vState.current.logicalRange.from))]?.time, 
+             to: candles[Math.min(candles.length - 1, Math.ceil(vState.current.logicalRange.to))]?.time 
+         });
+      }
+    },
     timeScale: () => ({
       getVisibleLogicalRange: () => vState.current.logicalRange,
       getVisibleRange: () => null,

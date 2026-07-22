@@ -116,6 +116,20 @@ const PixiDrawingLayer = forwardRef(({
 
     const actualWidth = appRef.current.renderer.width;
     const actualHeight = appRef.current.renderer.height;
+
+    // Apply strict axis clip mask: clip drawings inside chart area (excluding right price axis & bottom time axis)
+    if (graphics) {
+      let maskGraphics = appRef.current.stage.mask;
+      if (!maskGraphics) {
+        maskGraphics = new Graphics();
+        appRef.current.stage.addChild(maskGraphics);
+        appRef.current.stage.mask = maskGraphics;
+      }
+      maskGraphics.clear();
+      maskGraphics.rect(0, 0, Math.max(10, actualWidth - 60), Math.max(10, actualHeight - 30));
+      maskGraphics.fill({ color: 0xffffff });
+    }
+
     const options = { width: actualWidth, height: actualHeight, allCandles, visibleRange, darkMode, cursorSettings, hoverCoords, magicTrail, activeTool, coordinateToTimePrice };
 
     if (volumeProfile) {

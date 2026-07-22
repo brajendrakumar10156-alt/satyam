@@ -31,7 +31,7 @@ const drawDashedLine = (g, x1, y1, x2, y2, dash = 4, gap = 4) => {
 // Time labels are placed at real candle positions → no floating labels.
 // ─────────────────────────────────────────────────────────────────────────────
 const WebGLChartEngine = forwardRef(({
-  width, height, candles, visualIndicators, indicatorDataMap, darkMode, autoScale,
+  width, height, candles, predictedCandle, visualIndicators, indicatorDataMap, darkMode, autoScale,
   initialVisibleRange, onVisibleRangeChange, onChartReady, activeTool, isHoveringDrawing, timezoneOffset = 0,
   onRequestDraw
 }, ref) => {
@@ -167,6 +167,18 @@ const WebGLChartEngine = forwardRef(({
 
   // ── Exposed API (drawing layer bridge) ────────────────────────────────────
   useImperativeHandle(ref, () => ({
+    scrollToRealTime: () => {
+      if (!candles || candles.length === 0) return;
+      const v = viewportRef.current;
+      const lastIdx = candles.length - 1;
+      const rangeLen = v.timeRange.to - v.timeRange.from || 100;
+      const padding = rangeLen * 0.2;
+      v.timeRange.from = lastIdx - rangeLen + padding;
+      v.timeRange.to = lastIdx + padding;
+      v.manualPriceScale = false;
+      fireRangeChange();
+      drawAll();
+    },
     // timestamp + price → pixel {x, y}
     getPixel: (time, price) => {
       if (!appRef.current) return { x: 0, y: 0 };
@@ -500,6 +512,29 @@ const WebGLChartEngine = forwardRef(({
         const bodyY  = Math.round(top);
         candleLayerRef.current.rect(left, bodyY, rectW, bodyH).fill({ color });
       }
+
+      // Draw Ghost Predicted Candle
+      if (predictedCandle) {
+        const idx = candles.length;
+        const sxRaw  = (idx - v.lastDrawnFrom) * scaleX;
+        if (sxRaw > -100 && sxRaw < width + 100) {
+          const sx     = Math.round(sxRaw) + 0.5;
+          const left   = Math.round(sxRaw) - cW2;
+          const yOpen  = py(predictedCandle.open);
+          const yClose = py(predictedCandle.close);
+          const yHigh  = Math.round(py(predictedCandle.high)) + 0.5;
+          const yLow   = Math.round(py(predictedCandle.low)) + 0.5;
+          const isUp   = predictedCandle.close >= predictedCandle.open;
+          const color  = isUp ? 0x10b981 : 0xef4444;
+
+          candleLayerRef.current.moveTo(sx, yHigh).lineTo(sx, yLow).stroke({ width: 1 / dprRef.current, color, alpha: 0.4 });
+          const top    = Math.min(yOpen, yClose);
+          const bottom = Math.max(yOpen, yClose);
+          const bodyH  = Math.max(1, Math.round(bottom - top));
+          const bodyY  = Math.round(top);
+          candleLayerRef.current.rect(left, bodyY, rectW, bodyH).fill({ color, alpha: 0.4 });
+        }
+      }
     }
 
     // ── Indicators (Overlays) ─────────────────────────────────────────────
@@ -560,13 +595,15 @@ const WebGLChartEngine = forwardRef(({
     const liveColor = isUp ? 0x089981 : 0xf23645;
     const lastY  = Math.round(py(lastC.close)) + 0.5;
     
-    // Start from the right edge of the last candle to prevent any overlapping/cutting
-    const candleWidth = Math.max(1, Math.floor(scaleX * 0.8));
-    const lastX  = Math.round(px(lastIdx) + (candleWidth / 2)) + 0.5; 
-
-    livePriceLayerRef.current.moveTo(lastX, lastY).lineTo(pAxisX, lastY);
-    livePriceLayerRef.current.stroke({ width: 1 / dprRef.current, color: liveColor, alpha: 1.0 });
-
+    // Draw dashed line across entire chart area
+    const dashLength = 4;
+    const gapLength = 4;
+    let currX = 0;
+    while (currX < pAxisX) {
+      livePriceLayerRef.current.moveTo(currX, lastY).lineTo(Math.min(currX + dashLength, pAxisX), lastY);
+      currX += dashLength + gapLength;
+    }
+    livePriceLayerRef.current.stroke({ width: 1 / dprRef.current, color: liveColor, alpha: 0.8 });
     const pillY = Math.floor(lastY - 10);
     if (livePriceTopLayerRef.current) {
       livePriceTopLayerRef.current.rect(pAxisX, pillY, pAxisW, 20).fill({ color: liveColor });
@@ -576,36 +613,6 @@ const WebGLChartEngine = forwardRef(({
       liveTxt.y    = pillY + 3;
     }
 
-    // ── Indicator lines ───────────────────────────────────────────────────
-    if (!isPanOnly && visualIndicators && indicatorDataMap) {
-      visualIndicators.forEach(ind => {
-        const dataObj = indicatorDataMap[ind.id];
-        const reg = INDICATOR_REGISTRY[ind.type];
-        if (!dataObj || !reg || reg.kind !== 'overlay') return;
-        
-        reg.seriesConfig.forEach(series => {
-          const lineData = dataObj[series.key];
-          if (!lineData || lineData.length < 2) return;
-          
-          const opts = series.options(ind.params, ind.color);
-          const indColor = parseInt((opts.color || ind.color || '#ffaa00').replace('#', ''), 16) || 0xffaa00;
-          const thickness = opts.lineWidth || 2;
-          
-          let first = true;
-          for (let i = 0; i < lineData.length; i++) {
-            const d = lineData[i];
-            const idx = timeToIndex(d.time);
-            if (idx >= v.timeRange.from - 50 && idx <= v.timeRange.to + 50) {
-              const sx = (idx - v.lastDrawnFrom) * scaleX;
-              const sy = py(d.value);
-              if (first) { indicatorLayerRef.current.moveTo(sx, sy); first = false; }
-              else         indicatorLayerRef.current.lineTo(sx, sy);
-            }
-          }
-          if (!first) indicatorLayerRef.current.stroke({ width: thickness, color: indColor });
-        });
-      });
-    }
 
     // ── Crosshair ────────────────────────────────────────────────────────
     const { isHovering, hoverX, hoverY } = interactionRef.current;
@@ -729,8 +736,8 @@ const WebGLChartEngine = forwardRef(({
           viewportRef.current.timeRange = { from: fromIdx, to: toIdx };
         } else {
           viewportRef.current.timeRange = {
-            from: Math.max(0, candles.length - 100),
-            to:   candles.length - 1,
+            from: Math.max(0, candles.length - 80),
+            to:   candles.length - 1 + 20,
           };
         }
       }
@@ -846,6 +853,9 @@ const WebGLChartEngine = forwardRef(({
             const idxShift   = dx / scaleX;
             v.timeRange.from -= idxShift;
             v.timeRange.to   -= idxShift;
+            
+            if (Math.abs(dy) > 2) v.manualPriceScale = true;
+            
             if (v.manualPriceScale) {
               const priceShift  = dy / scaleY;
               v.priceRange.min += priceShift;
@@ -924,6 +934,11 @@ const WebGLChartEngine = forwardRef(({
   const lastCandleTimeRef = useRef(null);
 
   useEffect(() => {
+    if (autoScale) viewportRef.current.manualPriceScale = false;
+    drawAll();
+  }, [autoScale]);
+
+  useEffect(() => {
     if (!candles || candles.length === 0) return;
     const v = viewportRef.current;
     const currentLastTime = candles[candles.length - 1].time;
@@ -942,7 +957,7 @@ const WebGLChartEngine = forwardRef(({
     }
     lastCandleTimeRef.current = currentLastTime;
     drawAll();
-  }, [candles, visualIndicators, indicatorDataMap, darkMode, autoScale]);
+  }, [candles, visualIndicators, indicatorDataMap, darkMode]);
 
   return (
     <div
