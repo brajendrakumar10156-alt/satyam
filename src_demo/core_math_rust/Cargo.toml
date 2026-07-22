@@ -1,6 +1,6 @@
 [package]
 name = "quantaai-math-engine"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [lib]
@@ -8,10 +8,19 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 wasm-bindgen = "0.2"
+js-sys = "0.3"
+
+[features]
+default = []
+simd = []
 
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
+panic = "abort"
 
-# To build: wasm-pack build --target web --release
+# HOW TO BUILD:
+#   Install wasm-pack: cargo install wasm-pack
+#   Build:             wasm-pack build --target web --release
+#   Output:            pkg/ folder (import in JS)
