@@ -7,6 +7,7 @@ const WebGPUChartEngine = lazy(() => import('./components/WebGPUChartEngine.jsx'
 import { captureViewportSnapshot, generateDrawingId } from './utils/drawingStore';
 import { loadDrawingsFromDB, saveDrawingsToDB } from './utils/drawingPersistence';
 import Editor from '@monaco-editor/react';
+import { orchestrator } from './core_render_webgpu/ComputeOrchestrator';
 import logo from './assets/logo.png';
 import { createChart } from 'lightweight-charts';
 import {
@@ -565,9 +566,15 @@ export default function App({ onLogout, onBackToCoins }) {
     if (timezone === 'IST') return 19800; // 5.5 hours
     return new Date().getTimezoneOffset() * -60; // Auto
   }, [timezone]);
-  const viewportSnapshotRef = useRef(null);
-
-
+  // Auto-Hardware Profiler: Detect best default engine on load
+  useEffect(() => {
+    if (!localStorage.getItem('renderEngine')) {
+      orchestrator.detectOptimalHardware().then((bestEngine) => {
+        console.log(`[QuantaAI Auto-Hardware Profiler] Auto-detected best engine: ${bestEngine}`);
+        setRenderEngine(bestEngine);
+      });
+    }
+  }, []);
 
   // Engine lifecycle: destroy old engine on toggle
   useEffect(() => {

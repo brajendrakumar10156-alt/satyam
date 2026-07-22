@@ -1,14 +1,11 @@
 /**
  * QuantaAI — ComputeOrchestrator.js
- * Phase 4 — Global Intelligent Math Router & Hardware Dispatcher
+ * Hardware-Aware Math Dispatcher & System Hardware Profiler
  *
- * HOW IT WORKS:
- *   1. Evaluates incoming indicator requests
- *   2. Checks hardware capabilities (WebGPU vs WASM vs CPU)
- *   3. Math Profiler:
- *      - Large datasets (>5,000 candles) & Parallel Math -> WebGPU Compute Driver (GPU VRAM)
- *      - Sequential Math (EMA, RSI, ATR) or Fallback -> Rust WASM Math Engine (CPU SIMD)
- *      - Standard JS Fallback if WASM/WebGPU not loaded
+ * SAFETY GUARANTEE:
+ *   - Verifies WebGPU initialization before calling any WGSL compute shaders
+ *   - If WebGPU fails or is unsupported, DOES NOT retry WebGPU
+ *   - Instantly falls back to Rust WASM SIMD or JS Driver
  */
 
 import { wasmMath } from '../core_math_rust/wasm_loader.js';
@@ -23,20 +20,26 @@ export class ComputeOrchestrator {
   }
 
   async init() {
-    console.log('[ComputeOrchestrator] Initializing Hardware Engines...');
+    console.log('[ComputeOrchestrator] Initializing Hardware Profiler...');
 
-    // 1. Try initializing WebGPU
+    // 1. WebGPU Safety Verification
     try {
-      this.useWebGPU = await webgpuComputeDriver.init();
+      if (navigator.gpu) {
+        this.useWebGPU = await webgpuComputeDriver.init();
+      } else {
+        this.useWebGPU = false;
+      }
     } catch (e) {
+      console.warn('[ComputeOrchestrator] WebGPU unavailable, disabling GPU compute:', e);
       this.useWebGPU = false;
     }
 
-    // 2. Try initializing WASM
+    // 2. Rust WASM Initialization
     try {
       await wasmMath.init();
       this.useWasm = wasmMath.ready;
     } catch (e) {
+      console.warn('[ComputeOrchestrator] WASM unavailable, disabling WASM compute:', e);
       this.useWasm = false;
     }
 
@@ -45,13 +48,41 @@ export class ComputeOrchestrator {
   }
 
   /**
-   * Intelligently calculate indicator with best hardware engine
+   * Auto-detect the best default rendering engine for the user's browser/hardware
+   * @returns {Promise<'webgpu' | 'webgl' | 'canvas2d'>}
+   */
+  async detectOptimalHardware() {
+    if (!this.initialized) await this.init();
+
+    if (this.useWebGPU) {
+      return 'webgpu';
+    }
+
+    // Test WebGL support
+    try {
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      if (gl) return 'webgl';
+    } catch (e) {
+      // Fallback
+    }
+
+    return 'canvas2d';
+  }
+
+  isWebGPUActiveAndReady() {
+    return this.useWebGPU && webgpuComputeDriver.supported;
+  }
+
+  /**
+   * Intelligently calculate SMA with failsafe fallback
    */
   async calculateSMA(prices, period) {
+    if (!this.initialized) await this.init();
     const dataLength = prices.length;
 
-    // Route to WebGPU if dataset is large and WebGPU is available
-    if (this.useWebGPU && dataLength >= 5000) {
+    // Route to WebGPU ONLY if active and ready
+    if (this.isWebGPUActiveAndReady() && dataLength >= 5000) {
       try {
         const floatArray = new Float32Array(prices);
         const result = await webgpuComputeDriver.computeSMA(floatArray, period);
@@ -75,22 +106,31 @@ export class ComputeOrchestrator {
   }
 
   async calculateRSI(prices, period = 14) {
+    if (!this.initialized) await this.init();
     if (this.useWasm) {
-      return wasmMath.rsi(prices, period);
+      try {
+        return wasmMath.rsi(prices, period);
+      } catch (e) {}
     }
     return this._jsRSI(prices, period);
   }
 
   async calculateEMA(prices, period) {
+    if (!this.initialized) await this.init();
     if (this.useWasm) {
-      return wasmMath.ema(prices, period);
+      try {
+        return wasmMath.ema(prices, period);
+      } catch (e) {}
     }
     return this._jsEMA(prices, period);
   }
 
   async calculateBollingerBands(prices, period = 20, multiplier = 2.0) {
+    if (!this.initialized) await this.init();
     if (this.useWasm) {
-      return wasmMath.bollingerBands(prices, period, multiplier);
+      try {
+        return wasmMath.bollingerBands(prices, period, multiplier);
+      } catch (e) {}
     }
     return this._jsBollinger(prices, period, multiplier);
   }
