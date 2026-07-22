@@ -113,6 +113,72 @@ export class WebGPUComputeDriver {
     return copy;
   }
 
+  /**
+   * Run a dynamically transpiled PineScript shader (WGSL)
+   */
+  async executeDynamicWGSL(shaderCode, bufferCount, inputArray) {
+    if (!this.supported) throw new Error('WebGPU Compute not initialized');
+
+    const length = inputArray.length;
+    const inputBuffer = this._createBuffer(inputArray, GPUBufferUsage.STORAGE);
+    const outputSignalsBuffer = this._createOutputBuffer(length * 4, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC);
+    
+    // Create auxiliary buffers for the indicators
+    const auxiliaryBuffers = [];
+    for (let i = 0; i < bufferCount; i++) {
+        auxiliaryBuffers.push(this._createOutputBuffer(length * 4, GPUBufferUsage.STORAGE));
+    }
+
+    const module = this.device.createShaderModule({ code: shaderCode });
+    const pipeline = this.device.createComputePipeline({
+      layout: 'auto',
+      compute: { module, entryPoint: 'main' },
+    });
+
+    const bindGroupEntries = [
+      { binding: 0, resource: { buffer: inputBuffer } },
+      { binding: 1, resource: { buffer: outputSignalsBuffer } }
+    ];
+
+    for (let i = 0; i < bufferCount; i++) {
+        bindGroupEntries.push({ binding: 2 + i, resource: { buffer: auxiliaryBuffers[i] } });
+    }
+
+    const bindGroup = this.device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: bindGroupEntries,
+    });
+
+    const commandEncoder = this.device.createCommandEncoder();
+    const passEncoder = commandEncoder.beginComputePass();
+    passEncoder.setPipeline(pipeline);
+    passEncoder.setBindGroup(0, bindGroup);
+    
+    const workgroupCount = Math.ceil(length / 64);
+    passEncoder.dispatchWorkgroups(workgroupCount);
+    passEncoder.end();
+
+    // Read back signals
+    const readBuffer = this.device.createBuffer({
+      size: length * 4,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    commandEncoder.copyBufferToBuffer(outputSignalsBuffer, 0, readBuffer, 0, length * 4);
+    this.device.queue.submit([commandEncoder.finish()]);
+
+    await readBuffer.mapAsync(GPUMapMode.READ);
+    const copy = new Float32Array(readBuffer.getMappedRange().slice(0));
+    readBuffer.unmap();
+
+    // Cleanup
+    inputBuffer.destroy();
+    outputSignalsBuffer.destroy();
+    auxiliaryBuffers.forEach(b => b.destroy());
+    readBuffer.destroy();
+
+    return copy;
+  }
+
   _createBuffer(arrayData, usage) {
     const buffer = this.device.createBuffer({
       size: arrayData.byteLength,

@@ -20,6 +20,10 @@ export class WasmMathEngine {
     this.ready = false;
   }
 
+  get rawWasm() {
+    return this._wasm;
+  }
+
   /**
    * Initialize — loads compiled WASM from pkg/ directory
    * Run: wasm-pack build --target web --release
@@ -351,3 +355,24 @@ export class WasmMathEngine {
 
 // Singleton export
 export const wasmMath = new WasmMathEngine();
+
+// Export the raw class wrappers so they can be instantiated after WasmMathEngine is initialized
+export class OmniOrchestrator {
+  constructor() {
+    if (!wasmMath.rawWasm) throw new Error("WASM not initialized");
+    this._instance = new wasmMath.rawWasm.OmniOrchestrator();
+  }
+  initialize() { this._instance.initialize(); }
+  route_task(task_type, dataset_size) { return this._instance.route_task(task_type, dataset_size); }
+  report_load(target, new_load) { this._instance.report_load(target, new_load); }
+}
+
+export class NativeDataSplicer {
+  constructor() {
+    if (!wasmMath.rawWasm) throw new Error("WASM not initialized");
+    this._instance = new wasmMath.rawWasm.NativeDataSplicer();
+  }
+  ingest_raw_data(data) { this._instance.ingest_raw_data(data); }
+  detect_gaps(start, end, interval) { return Array.from(this._instance.detect_gaps(start, end, interval)); }
+  get_flawless_buffer() { return this._instance.get_flawless_buffer(); }
+}

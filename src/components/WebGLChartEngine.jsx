@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { calculateTimeAxisLabels } from '../utils/webglTimeAxisCollision';
 import { Application, Graphics, Container, Text, TextStyle } from 'pixi.js';
+import { createIndicatorMesh } from './IndicatorShader';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Dashed line helper
@@ -38,7 +39,7 @@ const WebGLChartEngine = forwardRef(({
   const activeToolRef  = useRef(activeTool);
   const isHoveringDrawingRef = useRef(isHoveringDrawing);
   useEffect(() => { isHoveringDrawingRef.current = isHoveringDrawing; }, [isHoveringDrawing]);
-  const dprRef         = useRef(Math.max(1, Math.round(window.devicePixelRatio || 1)));
+  const dprRef         = useRef(Math.max(1, (window.devicePixelRatio || 1)));
 
   useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
 
@@ -263,7 +264,7 @@ const WebGLChartEngine = forwardRef(({
     if (!isPanOnly) {
       volumeLayerRef.current.clear();
       candleLayerRef.current.clear();
-      indicatorLayerRef.current.clear();
+      indicatorLayerRef.current.removeChildren();
       candleLayerRef.current.position.x   = 0;
       volumeLayerRef.current.position.x   = 0;
       indicatorLayerRef.current.position.x = 0;
@@ -427,17 +428,21 @@ const WebGLChartEngine = forwardRef(({
         const data = indicatorDataMap[ind.id];
         if (!data || data.length === 0) return;
         const indColor = parseInt(ind.color.replace('#', ''), 16) || 0xffaa00;
-        let first = true;
+        
+        const points = [];
         for (const d of data) {
           const idx = timeToIndex(d.time);
           if (idx >= v.timeRange.from - 50 && idx <= v.timeRange.to + 50) {
             const sx = (idx - v.lastDrawnFrom) * scaleX;
             const sy = py(d.value);
-            if (first) { indicatorLayerRef.current.moveTo(sx, sy); first = false; }
-            else         indicatorLayerRef.current.lineTo(sx, sy);
+            points.push(sx, sy);
           }
         }
-        if (!first) indicatorLayerRef.current.stroke({ width: 2, color: indColor });
+        
+        if (points.length >= 4) { // At least 2 points (x, y) needed to draw a line
+          const mesh = createIndicatorMesh(new Float32Array(points), indColor);
+          indicatorLayerRef.current.addChild(mesh);
+        }
       });
     }
 
@@ -497,7 +502,7 @@ const WebGLChartEngine = forwardRef(({
 
     const initPixi = async () => {
       const app = new Application();
-      dprRef.current = Math.max(1, Math.round(window.devicePixelRatio || 1));
+      dprRef.current = Math.max(1, (window.devicePixelRatio || 1));
       await app.init({
         resizeTo:        containerRef.current,
         backgroundColor: darkMode ? 0x0d1117 : 0xffffff,
@@ -518,7 +523,7 @@ const WebGLChartEngine = forwardRef(({
       gridLayerRef.current      = new Graphics();
       volumeLayerRef.current    = new Graphics();
       candleLayerRef.current    = new Graphics();
-      indicatorLayerRef.current = new Graphics();
+      indicatorLayerRef.current = new Container();
       crosshairLayerRef.current = new Graphics();
       livePriceLayerRef.current = new Graphics();
       axesBgLayerRef.current    = new Graphics();

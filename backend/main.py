@@ -1,12 +1,16 @@
 import os
+import sys
 import time
 import re
 import ccxt
 import pandas as pd
 import numpy as np
 import requests
+import asyncio
+import winloop
 from datetime import datetime
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import ORJSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from ai_service import run_ai_assist, ai_status
@@ -50,7 +54,12 @@ async def lifespan(app: FastAPI):
     # Shutdown scheduler
     scheduler.shutdown()
 
-app = FastAPI(lifespan=lifespan)
+# Extreme Speed: Use winloop instead of standard asyncio loop (Cython based)
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(winloop.EventLoopPolicy())
+
+# Extreme Speed: Use ORJSON (Rust based) for all JSON serialization
+app = FastAPI(lifespan=lifespan, default_response_class=ORJSONResponse)
 
 # =========================================
 # DEMO AUTH ENDPOINTS (OTP + access token)

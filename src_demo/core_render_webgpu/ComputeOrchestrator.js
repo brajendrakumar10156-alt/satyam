@@ -10,13 +10,18 @@
 
 import { wasmMath } from '../core_math_rust/wasm_loader.js';
 import { webgpuComputeDriver } from './webgpu_compute_driver.js';
+import { webnnEngine } from './WebNNEngine.js';
 import { smartDataSplicer } from '../utils/smartDataSplicer.js';
 
 export class ComputeOrchestrator {
   constructor() {
     this.useWebGPU = false;
     this.useWasm = false;
+    this.useNPU = false;
     this.initialized = false;
+    
+    // Performance heuristics
+    this.workStealingTimeoutMs = 15; // If hardware takes >15ms, steal work and give to next hardware
   }
 
   async init() {
@@ -34,7 +39,14 @@ export class ComputeOrchestrator {
       this.useWebGPU = false;
     }
 
-    // 2. Rust WASM Initialization
+    // 2. NPU (WebNN) Initialization
+    try {
+      this.useNPU = await webnnEngine.init();
+    } catch (e) {
+      this.useNPU = false;
+    }
+
+    // 3. Rust WASM Initialization
     try {
       await wasmMath.init();
       this.useWasm = wasmMath.ready;
@@ -44,7 +56,7 @@ export class ComputeOrchestrator {
     }
 
     this.initialized = true;
-    console.log(`[ComputeOrchestrator] Hardware Dispatch Matrix Active: WebGPU=${this.useWebGPU}, RustWASM=${this.useWasm}`);
+    console.log(`[ComputeOrchestrator] Hardware Dispatch Matrix Active: WebGPU=${this.useWebGPU}, NPU=${this.useNPU}, RustWASM=${this.useWasm}`);
   }
 
   /**
@@ -75,64 +87,143 @@ export class ComputeOrchestrator {
   }
 
   /**
-   * Intelligently calculate SMA with failsafe fallback
+   * DYNAMIC WORK-STEALING SCHEDULER
+   * Triggers primary hardware. If it hangs or takes too long, it triggers fallback hardware simultaneously.
+   * Whichever Promise resolves first wins.
    */
-  async calculateSMA(prices, period) {
+  async _raceHardware(taskName, prices, period, gpuFunc, wasmFunc, jsFunc, multiplier = null) {
     if (!this.initialized) await this.init();
-    const dataLength = prices.length;
+    
+    const length = prices.length;
+    let floatArray = null;
 
-    // Route to WebGPU ONLY if active and ready
-    if (this.isWebGPUActiveAndReady() && dataLength >= 5000) {
+    // We keep track of promises
+    const promises = [];
+
+    // 1. WebGPU Task
+    if (this.isWebGPUActiveAndReady() && gpuFunc && length >= 5000) {
+      floatArray = new Float32Array(prices);
+      const gpuPromise = (async () => {
+        try {
+          const res = await gpuFunc.call(webgpuComputeDriver, floatArray, period);
+          return { source: 'GPU', data: Array.from(res) };
+        } catch(e) { throw e; }
+      })();
+      promises.push(gpuPromise);
+    }
+
+    // 2. WebNN (NPU) Task
+    if (this.useNPU) {
+      if (!floatArray) floatArray = new Float32Array(prices);
+      const npuPromise = (async () => {
+        try {
+          const res = await webnnEngine.compute(floatArray, period);
+          return { source: 'NPU', data: Array.from(res) };
+        } catch(e) { throw e; }
+      })();
+      promises.push(npuPromise);
+    }
+
+    // 3. Work-Stealing Fallback Mechanism (WASM CPU)
+    // If GPU/NPU don't finish within X ms, we unleash CPU WASM to race them!
+    const wasmFallbackPromise = new Promise((resolve) => {
+      setTimeout(() => {
+        if (this.useWasm) {
+           console.log(`[Scheduler] ${taskName} is taking >${this.workStealingTimeoutMs}ms. Work-stealing to CPU WASM!`);
+           try {
+             let res;
+             if (multiplier !== null) {
+               res = wasmFunc.call(wasmMath, prices, period, multiplier);
+             } else {
+               res = wasmFunc.call(wasmMath, prices, period);
+             }
+             resolve({ source: 'CPU_WASM', data: res });
+           } catch(e) {}
+        }
+      }, this.workStealingTimeoutMs);
+    });
+    
+    if (promises.length > 0) {
+      promises.push(wasmFallbackPromise);
       try {
-        const floatArray = new Float32Array(prices);
-        const result = await webgpuComputeDriver.computeSMA(floatArray, period);
-        return Array.from(result);
-      } catch (err) {
-        console.warn('[Orchestrator] WebGPU SMA failed, falling back to Rust WASM:', err);
+        const winner = await Promise.race(promises);
+        console.log(`[Scheduler] ${taskName} executed by ${winner.source}`);
+        return winner.data;
+      } catch (e) {
+        console.warn(`[Scheduler] Hardware race failed for ${taskName}, using synchronous JS fallback`);
+      }
+    } else {
+      // Direct WASM route if no GPU/NPU
+      if (this.useWasm) {
+         try {
+           let res;
+           if (multiplier !== null) res = wasmFunc.call(wasmMath, prices, period, multiplier);
+           else res = wasmFunc.call(wasmMath, prices, period);
+           return res;
+         } catch(e) {}
       }
     }
 
-    // Route to Rust WASM Engine
-    if (this.useWasm) {
-      try {
-        return wasmMath.sma(prices, period);
-      } catch (err) {
-        console.warn('[Orchestrator] Rust WASM SMA failed, falling back to JS:', err);
-      }
-    }
+    // Final Fallback
+    console.log(`[Scheduler] ${taskName} falling back to Vanilla JS`);
+    if (multiplier !== null) return jsFunc.call(this, prices, period, multiplier);
+    return jsFunc.call(this, prices, period);
+  }
 
-    // Default JS Fallback
-    return this._jsSMA(prices, period);
+  async calculateSMA(prices, period) {
+    return this._raceHardware('SMA', prices, period, 
+      webgpuComputeDriver.computeSMA, 
+      wasmMath.sma, 
+      this._jsSMA
+    );
   }
 
   async calculateRSI(prices, period = 14) {
-    if (!this.initialized) await this.init();
-    if (this.useWasm) {
-      try {
-        return wasmMath.rsi(prices, period);
-      } catch (e) {}
-    }
-    return this._jsRSI(prices, period);
+    // GPU RSI not fully mapped in driver yet, passing null
+    return this._raceHardware('RSI', prices, period, 
+      null, 
+      wasmMath.rsi, 
+      this._jsRSI
+    );
   }
 
   async calculateEMA(prices, period) {
-    if (!this.initialized) await this.init();
-    if (this.useWasm) {
-      try {
-        return wasmMath.ema(prices, period);
-      } catch (e) {}
-    }
-    return this._jsEMA(prices, period);
+    return this._raceHardware('EMA', prices, period, 
+      null, 
+      wasmMath.ema, 
+      this._jsEMA
+    );
   }
 
   async calculateBollingerBands(prices, period = 20, multiplier = 2.0) {
+    return this._raceHardware('Bollinger', prices, period, 
+      null, 
+      wasmMath.bollingerBands, 
+      this._jsBollinger,
+      multiplier
+    );
+  }
+
+  /**
+   * Run dynamic WGSL code directly on WebGPU
+   */
+  async executeDynamicWGSL(wgslCode, bufferCount, prices) {
     if (!this.initialized) await this.init();
-    if (this.useWasm) {
+    
+    // Route to WebGPU ONLY if active and ready
+    if (this.isWebGPUActiveAndReady()) {
       try {
-        return wasmMath.bollingerBands(prices, period, multiplier);
-      } catch (e) {}
+        const floatArray = prices instanceof Float32Array ? prices : new Float32Array(prices);
+        const result = await webgpuComputeDriver.executeDynamicWGSL(wgslCode, bufferCount, floatArray);
+        return result; // Float32Array of signals
+      } catch (err) {
+        console.warn('[Orchestrator] WebGPU Dynamic WGSL execution failed:', err);
+      }
     }
-    return this._jsBollinger(prices, period, multiplier);
+    
+    // Fallback: If WebGPU fails, we would fall back to JS simulation
+    // (JS fallback will be handled by the caller pineJitCompiler by using AST)
+    return null;
   }
 
   // ─── JS Fallbacks ───

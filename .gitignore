@@ -9,3 +9,8 @@ __pycache__/
 *.log
 backend/.backend*.log
 .DS_Store
+
+target/
+*.exe
+*.lib
+*.dll

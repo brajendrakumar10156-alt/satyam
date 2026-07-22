@@ -80,3 +80,24 @@ export async function saveLocalCandles(exchange, symbol, timeframe, newCandles) 
     };
   });
 }
+export async function getLocalCoinList(key) {
+  const db = await initIndexedDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.get(key);
+    request.onsuccess = (event) => resolve(event.target.result);
+    request.onerror = (event) => reject(event.target.errorCode);
+  });
+}
+
+export async function saveLocalCoinList(key, data) {
+  const db = await initIndexedDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.put(data, key);
+    request.onsuccess = () => resolve(data);
+    request.onerror = (event) => reject(event.target.errorCode);
+  });
+}

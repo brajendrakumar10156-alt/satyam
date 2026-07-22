@@ -6,3 +6,22 @@
 - **MANDATORY BACKUP RULE**: After EVERY significant code change or milestone (whether in `src_demo` or `src`), you MUST ask the user: "Should I take a Git backup now?". If they approve, you must run `git add . && git commit -m "<change description>" && git push`. Do NOT push without asking first. This rule applies to YOU and ANY subagent or agent working on this repository.
 - **WEBGPU NATIVE ABSTRACTION RULE**: The WebGPU Engine (`WebGPUChartEngine.jsx`) MUST be built completely from scratch using the native `navigator.gpu` API and WGSL shaders. Do NOT use Pixi.js, Three.js, or any other Canvas/WebGL wrapper libraries for the WebGPU implementation. Any agent modifying the WebGPU mode must respect this native zero-dependency architecture.
 - **MANDATORY CHANGELOG RULE**: After EVERY code change (modify, create, delete), you MUST append an entry to `CHANGELOG.md` in the project root. Each entry MUST include: (1) Date and Time with HH:MM:SS IST, (2) File path that was changed, (3) Action type (MODIFY/CREATE/DELETE/OVERWRITE), (4) What the OLD value was, (5) What the NEW value is, (6) WHY the change was made. Format: `### HH:MM:SS IST — \`file/path\``. This rule applies to YOU and ANY subagent. Do NOT skip this for any change, no matter how small. The user should NEVER have to ask for this — it must happen automatically.
+
+
+## The Core Philosophy (No Jugaad)
+- **Pure Native Only:** Kisi bhi saste wrapper (jaise PixiJS, Three.js) ya transpiler ka use nahi hoga. Har hardware component apni Native Language me likha jayega.
+- **Math First:** Math calculation hamesha priority par rahegi. Agar hardware struggle karega, toh rendering quality giregi par calculation speed nahi.
+
+## The Multi-Engine Breakdown
+**3 Math Engines:**
+- **Rust (WASM):** For precise CPU math without JS GC lag.
+- **WGSL (WebGPU):** Local client Graphics Card par millions of candles process karne ke liye.
+- **C++ & CUDA:** Main server par HFT (High-Frequency Trading) aur ML ke liye.
+
+**3 Render Engines:**
+- **Canvas 2D:** Standard fallback (via WASM Memory).
+- **GLSL (WebGL):** 144+ FPS fallback.
+- **WGSL (WebGPU Render Pipeline):** The Ultimate Engine. Math aur Rendering dono same GPU VRAM me rahenge, jisse data transfer latency practically ZERO ho jayegi.
+
+## Execution Rules
+- **Strict Phase-by-Phase:** Ek phase tab tak leave nahi hoga jab tak wo 100% complete na ho.

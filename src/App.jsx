@@ -1,11 +1,11 @@
-import html2canvas from 'html2canvas';
+// html2canvas is lazy loaded
 import React, { useEffect, useRef, useState, useCallback, useMemo, Suspense, lazy } from 'react';
 import PixiDrawingLayer from './components/PixiDrawingLayer';
 import DrawingAxisLabels from './components/DrawingAxisLabels';
 const WebGLChartEngine = lazy(() => import('./components/WebGLChartEngine'));
 import { captureViewportSnapshot, generateDrawingId } from './utils/drawingStore';
 import { loadDrawingsFromDB, saveDrawingsToDB } from './utils/drawingPersistence';
-import Editor from '@monaco-editor/react';
+const Editor = lazy(() => import('@monaco-editor/react'));
 import logo from './assets/logo.png';
 import { createChart } from 'lightweight-charts';
 import {
@@ -1652,6 +1652,7 @@ export default function App({ onLogout, onBackToCoins }) {
   const takeRealScreenshot = async () => {
     if (chartContainerRef.current) {
       try {
+        const html2canvas = (await import('html2canvas')).default;
         const canvas = await html2canvas(chartContainerRef.current, {
           backgroundColor: darkMode ? '#131722' : '#ffffff',
           useCORS: true,
@@ -5022,7 +5023,7 @@ export default function App({ onLogout, onBackToCoins }) {
             <div className={`flex-1 min-h-0 ${t.bg} overflow-y-auto p-4 dark-scrollbar`}>{renderDiffViewer()}</div>
           ) : (
             <div className={`flex-1 min-h-0 pt-2 ${t.bg}`}>
-              <Editor
+              <Suspense fallback={<div className="h-full w-full flex items-center justify-center text-gray-500">Loading Editor...</div>}><Editor
                 height="100%"
                 language={editorMode === 'pine' ? 'javascript' : 'python'}
                 theme={darkMode ? 'vs-dark' : 'light'}
@@ -5042,7 +5043,7 @@ export default function App({ onLogout, onBackToCoins }) {
                   suggestOnTriggerCharacters: true,
                   fontFamily: "'Fira Code', 'Consolas', 'Courier New', monospace"
                 }}
-              />
+              /></Suspense>
             </div>
           )}
         </>
@@ -8566,3 +8567,5 @@ function OrderBookPanel({ livePrice, selectedCoin, selectedExchange }) {
     </div>
   );
 }
+
+

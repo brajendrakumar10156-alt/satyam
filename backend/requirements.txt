@@ -9,3 +9,7 @@ finnhub-python>=2.4.19
 pyarrow>=14.0.1
 ccxt>=4.0.0
 python-dotenv>=1.0.0
+orjson>=3.9.15
+winloop>=0.1.2
+numba>=0.59.0
+websockets>=12.0

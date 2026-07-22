@@ -1,13 +1,15 @@
 import html2canvas from 'html2canvas';
 import React, { useEffect, useRef, useState, useCallback, useMemo, Suspense, lazy } from 'react';
-import PixiDrawingLayer from './components/PixiDrawingLayer';
+import NativeDrawingLayer from './components/NativeDrawingLayer';
+import NativeIndicatorLayer from './components/NativeIndicatorLayer';
 import DrawingAxisLabels from './components/DrawingAxisLabels';
 const WebGLChartEngine = lazy(() => import('./components/WebGLChartEngine.jsx'));
 const WebGPUChartEngine = lazy(() => import('./components/WebGPUChartEngine.jsx'));
 import { captureViewportSnapshot, generateDrawingId } from './utils/drawingStore';
 import { loadDrawingsFromDB, saveDrawingsToDB } from './utils/drawingPersistence';
 import Editor from '@monaco-editor/react';
-import { orchestrator } from './core_render_webgpu/ComputeOrchestrator';
+import { nativeManager } from './NativeEngineManager';
+import { perfectData } from './PerfectDataSplicer';
 import { pineJitCompiler } from './utils/pineJitCompiler';
 import { aiStrategyEngine } from './utils/aiStrategyEngine';
 import { heatmapEngine } from './utils/heatmapEngine';
@@ -606,10 +608,10 @@ export default function App({ onLogout, onBackToCoins }) {
 
   // Auto-Hardware Profiler: Detect best default engine on load
   useEffect(() => {
-    orchestrator.detectOptimalHardware().then((bestEngine) => {
+    nativeManager.initializeSystem().then((bestEngine) => {
       const savedEngine = localStorage.getItem('renderEngine');
       if (!savedEngine || savedEngine === 'canvas2d') {
-        console.log(`[QuantaAI Auto-Hardware Profiler] Auto-selecting optimal engine for GPU: ${bestEngine}`);
+        console.log(`[QuantaAI Auto-Hardware Profiler] Auto-selecting optimal engine: ${bestEngine}`);
         setRenderEngine(bestEngine);
         localStorage.setItem('renderEngine', bestEngine);
       }
@@ -6866,7 +6868,8 @@ export default function App({ onLogout, onBackToCoins }) {
                       ) : (
                         <div ref={chartRef} className="w-full h-full absolute top-0 left-0" />
                       )}
-          <PixiDrawingLayer
+          <NativeIndicatorLayer preference="webgl" visualIndicators={visualIndicators} indicatorDataMap={indicatorDataMapRef.current} visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)} />
+          <NativeDrawingLayer
             preference="webgl" 
             ref={drawingLayerRef}
             drawings={drawings}
@@ -6904,7 +6907,8 @@ export default function App({ onLogout, onBackToCoins }) {
                         }}
                       >
                         <div ref={chartRef} className="w-full h-full absolute top-0 left-0" />
-          <PixiDrawingLayer
+          <NativeIndicatorLayer preference="webgl" visualIndicators={visualIndicators} indicatorDataMap={indicatorDataMapRef.current} visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)} />
+          <NativeDrawingLayer
             preference="webgl" 
             ref={drawingLayerRef}
             drawings={drawings}
@@ -6944,7 +6948,8 @@ export default function App({ onLogout, onBackToCoins }) {
                         }}
                       >
                         <div ref={chartRef} className="w-full h-full absolute top-0 left-0" />
-          <PixiDrawingLayer
+          <NativeIndicatorLayer preference="webgl" visualIndicators={visualIndicators} indicatorDataMap={indicatorDataMapRef.current} visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)} />
+          <NativeDrawingLayer
             preference="webgl" 
             ref={drawingLayerRef}
             drawings={drawings}
@@ -6984,7 +6989,8 @@ export default function App({ onLogout, onBackToCoins }) {
                         }}
                       >
                         <div ref={chartRef} className="w-full h-full absolute top-0 left-0" />
-          <PixiDrawingLayer
+          <NativeIndicatorLayer preference="webgl" visualIndicators={visualIndicators} indicatorDataMap={indicatorDataMapRef.current} visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)} />
+          <NativeDrawingLayer
             preference="webgl" 
             ref={drawingLayerRef}
             drawings={drawings}
@@ -8933,3 +8939,6 @@ function OrderBookPanel({ livePrice, selectedCoin, selectedExchange }) {
     </div>
   );
 }
+
+
+

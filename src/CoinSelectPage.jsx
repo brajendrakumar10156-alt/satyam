@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, LogOut, RefreshCw, Search, Star, TrendingUp, HelpCircle, ArrowUpRight, ArrowDownRight, Eye } from 'lucide-react';
 import { EXCHANGE_LIST, fetchExchangeSymbols } from './exchanges';
+import { getLocalCoinList, saveLocalCoinList } from './db/indexedDB';
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL ?? `http://${window.location.hostname}:8000`;
 const PAGE_SIZE = 60;
@@ -54,7 +55,7 @@ function CoinSelectPage({ onOpenChart, onLogout }) {
   });
 
   // Live tickers state
-  const [tickers, setTickers] = useState({});
+  const [tickerData, setTickerData] = useState({ buffer: new Float32Array(0), indexMap: new Map() });
 
   // Fetch live prices from Binance 24h ticker API
   useEffect(() => {
@@ -64,21 +65,22 @@ function CoinSelectPage({ onOpenChart, onLogout }) {
         const res = await fetch('https://api.binance.com/api/v3/ticker/24hr');
         const data = await res.json();
         if (!active) return;
-        const map = {};
         if (Array.isArray(data)) {
-          for (const t of data) {
-            map[t.symbol] = {
-              price: parseFloat(t.lastPrice) || 0,
-              change: parseFloat(t.priceChangePercent) || 0,
-              high: parseFloat(t.highPrice) || 0,
-              low: parseFloat(t.lowPrice) || 0,
-              open: parseFloat(t.openPrice) || 0,
-              volume: parseFloat(t.volume) || 0,
-              quoteVolume: parseFloat(t.quoteVolume) || 0
-            };
+          const buffer = new Float32Array(data.length * 7);
+          const indexMap = new Map();
+          for (let i = 0; i < data.length; i++) {
+            const t = data[i];
+            indexMap.set(t.symbol, i);
+            buffer[i * 7 + 0] = parseFloat(t.lastPrice) || 0;
+            buffer[i * 7 + 1] = parseFloat(t.priceChangePercent) || 0;
+            buffer[i * 7 + 2] = parseFloat(t.highPrice) || 0;
+            buffer[i * 7 + 3] = parseFloat(t.lowPrice) || 0;
+            buffer[i * 7 + 4] = parseFloat(t.openPrice) || 0;
+            buffer[i * 7 + 5] = parseFloat(t.volume) || 0;
+            buffer[i * 7 + 6] = parseFloat(t.quoteVolume) || 0;
           }
+          setTickerData({ buffer, indexMap });
         }
-        setTickers(map);
       } catch (e) {
         console.warn("Failed to load live tickers:", e);
       }
@@ -95,8 +97,18 @@ function CoinSelectPage({ onOpenChart, onLogout }) {
   const getTickerInfo = useMemo(() => {
     return (symbol) => {
       const clean = String(symbol).toUpperCase().replace(/[^A-Z0-9]/g, '');
-      if (tickers[clean]) {
-        return tickers[clean];
+      const idx = tickerData.indexMap.get(clean);
+      if (idx !== undefined) {
+        const base = idx * 7;
+        return {
+          price: tickerData.buffer[base + 0],
+          change: tickerData.buffer[base + 1],
+          high: tickerData.buffer[base + 2],
+          low: tickerData.buffer[base + 3],
+          open: tickerData.buffer[base + 4],
+          volume: tickerData.buffer[base + 5],
+          quoteVolume: tickerData.buffer[base + 6]
+        };
       }
       // Deterministic mock prices so all non-binance pairs have realistic data
       const seed = symbol.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
@@ -112,7 +124,7 @@ function CoinSelectPage({ onOpenChart, onLogout }) {
         quoteVolume: seed * 980 * mockPrice
       };
     };
-  }, [tickers]);
+  }, [tickerData]);
 
   useEffect(() => {
     // Clear old symbol cache to ensure new proxied data loads correctly
@@ -133,6 +145,19 @@ function CoinSelectPage({ onOpenChart, onLogout }) {
     async function loadCoins() {
       setCoinsLoading(true);
       try {
+        const cacheKey = `COIN_LIST_${exchangeMode}_${selectedExchange}`;
+        
+        // 1. Try Virtual RAM (IndexedDB)
+        const cachedList = await getLocalCoinList(cacheKey);
+        if (cachedList && cachedList.length > 0) {
+          if (mounted) {
+            setCoins(cachedList);
+            if (!activeCoinId) setActiveCoinId(cachedList[0].id);
+            setCoinsLoading(false); // Instant render!
+          }
+        }
+
+        // 2. Background Sync
         const exchangeIds = exchangeMode === 'all' ? EXCHANGE_LIST.map((e) => e.id) : [selectedExchange];
 
         const exchangeResults = await Promise.allSettled(
@@ -185,9 +210,15 @@ function CoinSelectPage({ onOpenChart, onLogout }) {
 
         // Sort combined list alphabetically by symbol
         combined.sort((a, b) => a.symbol.localeCompare(b.symbol));
-        setCoins(combined);
-        if (combined.length > 0 && !activeCoinId) {
-          setActiveCoinId(combined[0].id);
+        
+        // 3. Save updated list back to Virtual RAM
+        await saveLocalCoinList(cacheKey, combined);
+        
+        if (mounted) {
+          setCoins(combined);
+          if (combined.length > 0 && !activeCoinId) {
+            setActiveCoinId(combined[0].id);
+          }
         }
       } catch (err) {
         console.error('Failed to load coins:', err);

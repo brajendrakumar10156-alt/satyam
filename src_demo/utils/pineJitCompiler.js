@@ -7,6 +7,7 @@
 
 import { wasmMath } from '../core_math_rust/wasm_loader.js';
 import { orchestrator } from '../core_render_webgpu/ComputeOrchestrator.js';
+import { wgslTranspiler } from '../core_render_webgpu/wgsl_transpiler.js';
 
 export class PineJitCompiler {
   constructor() {
@@ -29,33 +30,81 @@ export class PineJitCompiler {
     // Step 2: AST Building (Parse Pine functions: ta.ema, ta.rsi, crossover, strategy.entry)
     const parsedNodes = this._parseTokens(tokens);
 
-    // Step 3: High-Speed Math Execution via WASM SIMD & Orchestrator
+    // Step 3: High-Speed Math Execution via WGSL or WASM SIMD
     const closes = Array.isArray(prices) ? prices : Array.from(prices);
-    const highs = fullCandles.map(c => c.high || c.close);
-    const lows = fullCandles.map(c => c.low || c.close);
-    const volumes = fullCandles.map(c => c.volume || 0);
+    
+    let signals = [];
+    let trades = [];
+    let metrics = { totalTrades: 0, winRatePct: 0, profitFactor: 0, netPnlPct: 0, maxDrawdownPct: 0 };
 
-    const indicatorOutputs = {};
-    for (const node of parsedNodes.indicators) {
-      if (node.type === 'ema') {
-        const val = await orchestrator.calculateEMA(closes, node.period);
-        indicatorOutputs[node.id] = val;
-      } else if (node.type === 'sma') {
-        const val = await orchestrator.calculateSMA(closes, node.period);
-        indicatorOutputs[node.id] = val;
-      } else if (node.type === 'rsi') {
-        const val = await orchestrator.calculateRSI(closes, node.period);
-        indicatorOutputs[node.id] = val;
-      } else if (node.type === 'bollinger') {
-        const val = await orchestrator.calculateBollingerBands(closes, node.period, node.multiplier || 2.0);
-        indicatorOutputs[node.id] = val;
+    // TRY WGSL JIT COMPILATION FIRST (Fastest)
+    const transpiledShader = wgslTranspiler.transpile(parsedNodes);
+    const gpuSignals = await orchestrator.executeDynamicWGSL(transpiledShader.code, transpiledShader.bufferCount, closes);
+
+    if (gpuSignals) {
+      console.log("[PineJitCompiler] Executed completely on GPU via WGSL JIT.");
+      // Parse GPU output signals (1.0 = BUY, -1.0 = SELL)
+      let inPosition = false;
+      let entryPrice = 0;
+      let entryTime = 0;
+
+      for (let i = 0; i < gpuSignals.length; i++) {
+        const sig = gpuSignals[i];
+        if (sig === 0.0) continue;
+
+        const time = fullCandles[i]?.time || i;
+        const price = closes[i];
+
+        if (sig === 1.0 && !inPosition) {
+          inPosition = true;
+          entryPrice = price;
+          entryTime = time;
+          signals.push({ time, type: 'buy', price, text: 'BUY' });
+        } else if (sig === -1.0 && inPosition) {
+          inPosition = false;
+          const pnl = price - entryPrice;
+          const pnlPct = (pnl / entryPrice) * 100;
+          signals.push({ time, type: 'sell', price, text: 'SELL' });
+          trades.push({
+            entryTime,
+            exitTime: time,
+            entryPrice,
+            exitPrice: price,
+            pnl,
+            pnlPct,
+            result: pnl > 0 ? 'WIN' : 'LOSS',
+          });
+        }
       }
-    }
+      metrics = this._calcMetrics(trades);
+    } else {
+      // WASM / JS FALLBACK (Slower)
+      console.log("[PineJitCompiler] WebGPU not available, falling back to WASM/JS.");
+      const highs = fullCandles.map(c => c.high || c.close);
+      const lows = fullCandles.map(c => c.low || c.close);
+      const volumes = fullCandles.map(c => c.volume || 0);
 
-    // Step 4: Crossover & Signal Evaluation Matrix
-    const { signals, trades, metrics } = this._evaluateSignalsAndBacktest(
-      parsedNodes, closes, fullCandles, indicatorOutputs
-    );
+      const indicatorOutputs = {};
+      for (const node of parsedNodes.indicators) {
+        if (node.type === 'ema') {
+          indicatorOutputs[node.id] = await orchestrator.calculateEMA(closes, node.period);
+        } else if (node.type === 'sma') {
+          indicatorOutputs[node.id] = await orchestrator.calculateSMA(closes, node.period);
+        } else if (node.type === 'rsi') {
+          indicatorOutputs[node.id] = await orchestrator.calculateRSI(closes, node.period);
+        } else if (node.type === 'bollinger') {
+          indicatorOutputs[node.id] = await orchestrator.calculateBollingerBands(closes, node.period, node.multiplier || 2.0);
+        }
+      }
+
+      // Step 4: Crossover & Signal Evaluation Matrix (JS Fallback)
+      const fallbackResult = this._evaluateSignalsAndBacktest(
+        parsedNodes, closes, fullCandles, indicatorOutputs
+      );
+      signals = fallbackResult.signals;
+      trades = fallbackResult.trades;
+      metrics = fallbackResult.metrics;
+    }
 
     const endTime = performance.now();
     const executionTimeMs = parseFloat((endTime - startTime).toFixed(3));
