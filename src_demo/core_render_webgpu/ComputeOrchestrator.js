@@ -13,6 +13,7 @@
 
 import { wasmMath } from '../core_math_rust/wasm_loader.js';
 import { webgpuComputeDriver } from './webgpu_compute_driver.js';
+import { smartDataSplicer } from '../utils/smartDataSplicer.js';
 
 export class ComputeOrchestrator {
   constructor() {
