@@ -392,7 +392,11 @@ export default function App({ onLogout, onBackToCoins }) {
   // ─── States ───
   const [editorMode, setEditorMode] = useState('pine');
   const [selectedExchange, setSelectedExchange] = useState(() => {
-    const saved = localStorage.getItem('exchange');
+    let saved = localStorage.getItem('exchange');
+    if (saved === 'kraken') {
+      saved = 'binance';
+      localStorage.setItem('exchange', 'binance');
+    }
     return EXCHANGE_LIST.some((e) => e.id === saved) ? saved : 'binance';
   });
   const [selectedCoin, setSelectedCoin] = useState(() => {
@@ -830,6 +834,9 @@ export default function App({ onLogout, onBackToCoins }) {
     const fetchStats = async () => {
       try {
         const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${selectedCoin}`);
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
         const data = await res.json();
         if (data && !data.code) {
           setSelectedCoinStats({
@@ -843,6 +850,12 @@ export default function App({ onLogout, onBackToCoins }) {
         }
       } catch (e) {
         console.warn("Could not fetch stats for coin:", selectedCoin, e);
+        // Fallback safety to escape broken localStorage coins like '0GEUR'
+        if (selectedCoin !== 'BTCUSDT') {
+          console.log("Resetting selectedCoin to BTCUSDT due to fetch failure.");
+          localStorage.removeItem('selectedCoin');
+          setSelectedCoin('BTCUSDT');
+        }
       }
     };
     fetchStats();
