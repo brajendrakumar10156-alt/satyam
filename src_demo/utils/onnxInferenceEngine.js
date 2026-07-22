@@ -3,9 +3,12 @@
  * In-Browser Neural Network Model Inference for Price Direction Probabilities
  */
 
+import { npuAccelerator } from './npuAccelerator.js';
+
 export class OnnxInferenceEngine {
   constructor() {
     this.modelLoaded = false;
+    npuAccelerator.detectAndInitNpu();
   }
 
   /**
