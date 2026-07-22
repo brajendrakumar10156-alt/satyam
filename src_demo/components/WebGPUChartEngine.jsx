@@ -1493,7 +1493,29 @@ const WebGPUChartEngine = React.forwardRef(({
        const idx = timeToIndex(time, candles);
        const x = ((idx - logicalRange.from) / rangeLen) * (cw - pAxisW);
        const y = timeAxisY - ((price - min) * priceScale);
-       return { x, y };
+       return { x: x / dpr, y: y / dpr };
+    },
+    coordinateToTimePrice: (x, y) => {
+      if (!candles || candles.length === 0) return null;
+      const cw = vState.current.width;
+      const ch = vState.current.height;
+      const pAxisW = 50;
+      const timeAxisY = ch - 24;
+      const chartW = cw - pAxisW;
+
+      const logicalRange = vState.current.logicalRange;
+      const rangeLen = logicalRange.to - logicalRange.from;
+
+      const targetIdx = Math.round(logicalRange.from + (x / chartW) * rangeLen);
+      const clampedIdx = Math.max(0, Math.min(candles.length - 1, targetIdx));
+      const time = candles[clampedIdx]?.time || 0;
+
+      const { min, max } = vState.current.priceRange;
+      const priceRange = max - min;
+      const priceScale = priceRange > 0 ? timeAxisY / priceRange : 1;
+      const price = max - ((y) / (timeAxisY / priceRange));
+
+      return { time, price };
     }
   }));
 

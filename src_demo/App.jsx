@@ -3365,7 +3365,6 @@ export default function App({ onLogout, onBackToCoins }) {
   };
 
   const handlePointerMove = (e) => {
-    if (renderEngine === 'webgpu') return; // WebGPU is autonomous
     if (renderEngine === 'canvas2d' && (!chartInstance.current || !candleSeries.current)) return;
     const { x, y } = getChartCoords(e.clientX, e.clientY);
 
@@ -3436,7 +3435,6 @@ export default function App({ onLogout, onBackToCoins }) {
   }, [renderEngine]);
 
   const handlePointerUp = () => {
-    if (renderEngine === 'webgpu') return; // WebGPU is autonomous
     setHoverCoords(null);
     if (renderEngine === 'canvas2d' && chartInstance.current) {
       chartInstance.current.applyOptions({ handleScroll: true, handleScale: true });
