@@ -1,0 +1,674 @@
+====================================================
+  QuantaAI — 600 Technical Indicators Master List
+  Saved on: 22-July-2026, 04:00 IST
+====================================================
+
+--------------------------------------------------
+📈 A. MOVING AVERAGES (40)
+--------------------------------------------------
+1.  SMA - Simple Moving Average
+2.  EMA - Exponential Moving Average
+3.  WMA - Weighted Moving Average
+4.  DEMA - Double EMA
+5.  TEMA - Triple EMA
+6.  HMA - Hull Moving Average
+7.  KAMA - Kaufman Adaptive Moving Average
+8.  ALMA - Arnaud Legoux Moving Average
+9.  VWMA - Volume Weighted Moving Average
+10. LWMA - Linear Weighted Moving Average
+11. SMMA - Smoothed Moving Average
+12. TMA - Triangular Moving Average
+13. RMA - Rolling Moving Average (Wilder)
+14. ZLEMA - Zero Lag EMA
+15. T3 - T3 Moving Average (Tillson)
+16. VIDYA - Variable Index Dynamic Average
+17. McGinley Dynamic
+18. Fractal Adaptive MA (FRAMA)
+19. Variable MA (VMA)
+20. Adaptive Moving Average
+21. Laguerre MA
+22. Least Squares MA (LSMA)
+23. Sine Weighted MA
+24. Volatility Adjusted MA
+25. Recursive MA
+26. JMA - Jurik Moving Average
+27. EVWMA - Elastic Volume Weighted MA
+28. SuperSmoother MA
+29. Hamming MA
+30. Hann MA
+31. Blackman MA
+32. Nuttall MA
+33. Flat Top MA
+34. Gaussian MA
+35. Ehlers MA
+36. Median MA
+37. Geometric Mean MA
+38. Harmonic Mean MA
+39. Trimmed Mean MA
+40. Winsorized Mean MA
+
+--------------------------------------------------
+📊 B. MOMENTUM INDICATORS (60)
+--------------------------------------------------
+41.  RSI - Relative Strength Index
+42.  MACD - Moving Average Convergence Divergence
+43.  Stochastic Oscillator
+44.  Williams %R
+45.  CCI - Commodity Channel Index
+46.  ROC - Rate of Change
+47.  Momentum Indicator
+48.  TSI - True Strength Index
+49.  Ultimate Oscillator
+50.  PPO - Percentage Price Oscillator
+51.  DPO - Detrended Price Oscillator
+52.  TRIX
+53.  KST - Know Sure Thing
+54.  Coppock Curve
+55.  Stochastic RSI
+56.  ConnorsRSI
+57.  Laguerre RSI
+58.  Relative Vigor Index (RVI)
+59.  Elder Ray Index
+60.  Price Momentum Oscillator (PMO)
+61.  Absolute Price Oscillator (APO)
+62.  DEMA Oscillator
+63.  Chande Momentum Oscillator (CMO)
+64.  Inertia Indicator
+65.  Ergodic MSI
+66.  Stochastic Momentum Index (SMI)
+67.  Recursive RSI
+68.  Divergence Indicator
+69.  Turbo RSI
+70.  Adaptive RSI
+71.  RSI Laguerre
+72.  WaveTrend Oscillator
+73.  Fisher Transform
+74.  Inverse Fisher Transform
+75.  Cyber Cycle
+76.  Instant Trendline
+77.  ReFlex Indicator
+78.  TrendFlex Indicator
+79.  Decycler Oscillator
+80.  MESA Adaptive Oscillator
+81.  Hilbert Oscillator
+82.  Even Better Sinewave
+83.  Hurst Coefficient
+84.  Schaff Trend Cycle
+85.  Stochastic Center of Gravity
+86.  Stoch Divergence
+87.  Hidden RSI Divergence
+88.  MACD Divergence
+89.  RSI Divergence
+90.  Stoch RSI Divergence
+91.  Momentum Divergence
+92.  CCI Divergence
+93.  CMO Divergence
+94.  Williams R Divergence
+95.  ROC Divergence
+96.  PPO Divergence
+97.  PMO Divergence
+98.  TSI Divergence
+99.  KST Divergence
+100. Coppock Divergence
+
+--------------------------------------------------
+📉 C. TREND INDICATORS (60)
+--------------------------------------------------
+101. ADX - Average Directional Index
+102. Parabolic SAR
+103. SuperTrend
+104. Ichimoku Cloud
+105. Aroon Indicator
+106. Aroon Oscillator
+107. Vortex Indicator
+108. Trend Intensity Index
+109. Linear Regression
+110. Linear Regression Slope
+111. Linear Regression Channel
+112. Raff Regression Channel
+113. DEMA Trend
+114. Mass Index
+115. TTM Trend
+116. Elder Impulse System
+117. QStick
+118. Polarized Fractal Efficiency
+119. Random Walk Index (RWI)
+120. Detrending Oscillator
+121. Trend Detection Index (TDI)
+122. Choppiness Index
+123. Kaufman Efficiency Ratio
+124. Goertzel Indicator
+125. Hilbert Trendline
+126. Mesa Sine Wave
+127. Even Better Sinewave
+128. Schaff Trend Cycle (STC)
+129. Trend Magic
+130. Half Trend
+131. SSL Channel
+132. Laguerre Trend
+133. Trend Bars
+134. Adaptive Trend
+135. Non-Repainting SuperTrend
+136. ATR SuperTrend
+137. Chandelier Exit
+138. McGinley Trend
+139. Trend Reversal
+140. Swing High/Low
+141. Higher High Lower Low
+142. Market Structure (MSS)
+143. Break of Structure (BOS)
+144. Change of Character (CHoCH)
+145. Order Block Detection
+146. Fair Value Gap (FVG)
+147. Premium/Discount Zone
+148. Breaker Block
+149. Mitigation Block
+150. Propulsion Block
+151. Rejection Block
+152. Inducement Level
+153. Internal BOS
+154. External BOS
+155. Swing Failure Pattern
+156. Liquidity Sweep
+157. Smart Money Concept
+158. ICT Concepts
+159. Kill Zones
+160. Optimal Trade Entry (OTE)
+
+--------------------------------------------------
+📊 D. VOLATILITY INDICATORS (50)
+--------------------------------------------------
+161. Bollinger Bands
+162. ATR - Average True Range
+163. Keltner Channel
+164. Donchian Channel
+165. Ulcer Index
+166. Historical Volatility
+167. Implied Volatility
+168. Chaikin Volatility
+169. VIX (Market Fear)
+170. Standard Deviation
+171. Variance
+172. Volatility Ratio
+173. Normalized ATR
+174. Relative Volatility Index
+175. Volatility Stop
+176. Volatility Quality Index
+177. Squeeze Momentum (LazyBear)
+178. TTM Squeeze
+179. Squeeze Pro
+180. Band Width
+181. %B Indicator
+182. Bollinger Band Width
+183. Keltner Band Width
+184. Dynamic Volatility
+185. GARCH Volatility
+186. Parkinson Volatility
+187. Rogers-Satchell Volatility
+188. Yang-Zhang Volatility
+189. Garman-Klass Volatility
+190. Intraday Intensity
+191. Vertical Horizontal Filter
+192. Fractal Chaos Bands
+193. Price Volume Oscillator
+194. Gopalakrishnan Range Index
+195. Normalized Volatility
+196. Realized Volatility
+197. Exponential Volatility
+198. Adaptive ATR
+199. ATR Bands
+200. ATR Channel
+201. Volatility Breakout
+202. Volatility Contraction
+203. Low Volatility Flag
+204. Volatility Regime
+205. Statistical Volatility
+206. CBOE Volatility Index
+207. OVX Oil Volatility
+208. GVZ Gold Volatility
+209. EVZ EUR Volatility
+210. VVIX (Volatility of Volatility)
+
+--------------------------------------------------
+📦 E. VOLUME INDICATORS (50)
+--------------------------------------------------
+211. OBV - On Balance Volume
+212. VWAP - Volume Weighted Average Price
+213. MFI - Money Flow Index
+214. CMF - Chaikin Money Flow
+215. Force Index
+216. Accumulation/Distribution
+217. Volume RSI
+218. Volume Oscillator
+219. PVO - Percentage Volume Oscillator
+220. ADOSC - Chaikin A/D Oscillator
+221. Ease of Movement
+222. Negative Volume Index (NVI)
+223. Positive Volume Index (PVI)
+224. Price Volume Trend (PVT)
+225. Klinger Volume Oscillator
+226. Volume Profile
+227. VPVR (Volume Profile Visible Range)
+228. POC - Point of Control
+229. Value Area High (VAH)
+230. Value Area Low (VAL)
+231. Volume Delta
+232. Cumulative Volume Delta
+233. Bid/Ask Volume
+234. Buy/Sell Volume
+235. Volume Spread Analysis
+236. Tick Volume
+237. Relative Volume (RVOL)
+238. Volume MA
+239. Volume Surge
+240. Volume Dry Up
+241. High Volume Node (HVN)
+242. Low Volume Node (LVN)
+243. Volume Imbalance
+244. Footprint Chart
+245. Order Flow Imbalance
+246. Market Depth
+247. DOM (Depth of Market)
+248. TWAP (Time Weighted Average Price)
+249. Anchored VWAP
+250. Rolling VWAP
+251. Daily VWAP
+252. Weekly VWAP
+253. Monthly VWAP
+254. Volume Breakout
+255. Volume Confirmation
+256. Climax Volume
+257. Volume Exhaustion
+258. Absorption Volume
+259. Aggressive Buy/Sell
+260. Passive Buy/Sell
+
+--------------------------------------------------
+🔲 F. SUPPORT & RESISTANCE (40)
+--------------------------------------------------
+261. Pivot Points (Standard)
+262. Fibonacci Pivot Points
+263. Camarilla Pivot Points
+264. Woodie Pivot Points
+265. Demark Pivot Points
+266. CPR - Central Pivot Range
+267. Fibonacci Retracement
+268. Fibonacci Extension
+269. Fibonacci Fan
+270. Fibonacci Time Zones
+271. Fibonacci Circles
+272. Fibonacci Spiral
+273. Gann Fan
+274. Gann Square
+275. Gann Box
+276. Gann Grid
+277. Andrews Pitchfork
+278. Schiff Pitchfork
+279. Modified Schiff Pitchfork
+280. Inside Pitchfork
+281. Historical Highs/Lows
+282. Daily High/Low
+283. Weekly High/Low
+284. Monthly High/Low
+285. All Time High/Low
+286. Round Numbers
+287. Psychological Levels
+288. Supply/Demand Zones
+289. Order Blocks
+290. Breaker Blocks
+291. Dynamic Support/Resistance
+292. Moving Average S/R
+293. VWAP S/R
+294. POC S/R
+295. Previous Close
+296. Previous Open
+297. Gap Levels
+298. OHLC Levels
+299. Session High/Low
+300. Pre-market High/Low
+
+--------------------------------------------------
+📐 G. OSCILLATORS (40)
+--------------------------------------------------
+301. AO - Awesome Oscillator
+302. AC - Accelerator Oscillator
+303. Gator Oscillator
+304. Market Facilitation Index
+305. Alligator Indicator
+306. Fractals (Williams)
+307. Balance of Power
+308. Detrended Price Oscillator
+309. Price Oscillator
+310. DEMA Oscillator
+311. TEMA Oscillator
+312. Price Rate of Change
+313. Volume Rate of Change
+314. Price Channel
+315. Dynamic RSI
+316. Adaptive Oscillator
+317. Center of Gravity
+318. Cyber Cycle Oscillator
+319. Dominant Cycle Oscillator
+320. Sinewave Indicator
+321. Dual Sinewave
+322. Phasor
+323. Instantaneous Trendline
+324. Leading Indicator
+325. Predictive Oscillator
+326. Normalized Oscillator
+327. Stochastic Center of Gravity
+328. Statistical Oscillator
+329. Ergodic Oscillator
+330. Disparity Index
+331. Percent Change Oscillator
+332. Slope Oscillator
+333. Acceleration Oscillator
+334. Jerk Indicator
+335. Mean Reversion Oscillator
+336. Z-Score Oscillator
+337. Percentile Rank
+338. Historical Percentile
+339. Normalized Price
+340. Price Efficiency
+
+--------------------------------------------------
+🕯️ H. CANDLESTICK PATTERNS (60)
+--------------------------------------------------
+341. Doji
+342. Long Legged Doji
+343. Dragonfly Doji
+344. Gravestone Doji
+345. Four Price Doji
+346. Hammer
+347. Inverted Hammer
+348. Hanging Man
+349. Shooting Star
+350. Bullish Engulfing
+351. Bearish Engulfing
+352. Morning Star
+353. Evening Star
+354. Morning Doji Star
+355. Evening Doji Star
+356. Piercing Line
+357. Dark Cloud Cover
+358. Three White Soldiers
+359. Three Black Crows
+360. Bullish Harami
+361. Bearish Harami
+362. Bullish Harami Cross
+363. Bearish Harami Cross
+364. Tweezer Top
+365. Tweezer Bottom
+366. Spinning Top
+367. Marubozu (Bullish)
+368. Marubozu (Bearish)
+369. Belt Hold (Bullish)
+370. Belt Hold (Bearish)
+371. Kicking (Bullish)
+372. Kicking (Bearish)
+373. Rising Three Methods
+374. Falling Three Methods
+375. Upside Tasuki Gap
+376. Downside Tasuki Gap
+377. Three Inside Up
+378. Three Inside Down
+379. Three Outside Up
+380. Three Outside Down
+381. Ladder Bottom
+382. Ladder Top
+383. Advance Block
+384. Deliberation
+385. Breakaway (Bullish)
+386. Breakaway (Bearish)
+387. Mat Hold
+388. Identical Three Crows
+389. Two Crows
+390. Concealing Baby Swallow
+391. Stick Sandwich
+392. Homing Pigeon
+393. Matching Low
+394. Meeting Lines (Bullish)
+395. Meeting Lines (Bearish)
+396. Separating Lines
+397. Unique Three River
+398. Abandoned Baby
+399. Tri-Star Doji
+400. On Neck Pattern
+
+--------------------------------------------------
+📊 I. STATISTICAL INDICATORS (30)
+--------------------------------------------------
+401. Z-Score
+402. Standard Deviation Bands
+403. Regression Channel
+404. R-Squared
+405. Correlation (Price vs Volume)
+406. Beta Coefficient
+407. Alpha
+408. Sharpe Ratio
+409. Sortino Ratio
+410. Calmar Ratio
+411. Maximum Drawdown
+412. Win Rate
+413. Profit Factor
+414. Expectancy
+415. Kelly Criterion
+416. Monte Carlo Simulation
+417. Value at Risk (VaR)
+418. CVaR (Conditional VaR)
+419. Skewness
+420. Kurtosis
+421. Median Absolute Deviation
+422. Entropy
+423. Fractal Dimension
+424. Hurst Exponent
+425. Lyapunov Exponent
+426. Kolmogorov Complexity
+427. Autocorrelation
+428. Partial Autocorrelation
+429. ADF Test (Stationarity)
+430. Cointegration
+
+--------------------------------------------------
+🤖 J. AI / ML BASED INDICATORS (30)
+--------------------------------------------------
+431. Neural Network Trend
+432. LSTM Prediction
+433. Random Forest Signal
+434. SVM Signal
+435. Linear Regression ML
+436. Logistic Regression Signal
+437. K-Means Cluster Levels
+438. DBSCAN Support/Resistance
+439. Reinforcement Learning Signal
+440. Transformer Prediction
+441. Attention Signal
+442. Sentiment Score (NLP)
+443. News Sentiment
+444. Social Media Sentiment
+445. Fear & Greed Index
+446. Anomaly Detection
+447. Outlier Detection
+448. Pattern Recognition (ML)
+449. Self-Organizing Map
+450. Autoencoder Signal
+451. GAN Price Prediction
+452. Bayesian Inference
+453. Hidden Markov Model
+454. Kalman Filter
+455. Wavelet Transform
+456. Fourier Transform
+457. Spectral Analysis
+458. Empirical Mode Decomposition
+459. Hilbert-Huang Transform
+460. Chaos Theory Indicator
+
+--------------------------------------------------
+🌐 K. MULTI-TIMEFRAME (20)
+--------------------------------------------------
+461. MTF RSI
+462. MTF MACD
+463. MTF Stochastic
+464. MTF Trend
+465. MTF Support/Resistance
+466. MTF Moving Average
+467. MTF Bollinger Bands
+468. MTF ATR
+469. MTF ADX
+470. MTF Pivot Points
+471. HTF Candle
+472. HTF High/Low
+473. Daily Bias
+474. Weekly Bias
+475. Monthly Bias
+476. Trend Alignment
+477. Timeframe Confluence
+478. Signal Strength
+479. Multi-TF Divergence
+480. Cross-TF Volume
+
+--------------------------------------------------
+📉 L. MARKET PROFILE (20)
+--------------------------------------------------
+481. TPO (Time Price Opportunity)
+482. POC (Point of Control)
+483. VAH (Value Area High)
+484. VAL (Value Area Low)
+485. Initial Balance
+486. Open Range
+487. Developing POC
+488. Composite POC
+489. Market Profile Bell Curve
+490. Single Print Areas
+491. Volume Profile Fixed Range
+492. Volume Profile Session Range
+493. Volume Profile Visible Range
+494. Naked POC
+495. Gap Fill Level
+496. VWAP Deviation Bands
+497. Anchored Volume Profile
+498. Volume Weighted Median
+499. Market Balance/Imbalance
+500. Excess/Poor Structure
+
+--------------------------------------------------
+💹 M. OPTIONS / DERIVATIVES (20)
+--------------------------------------------------
+501. Put/Call Ratio
+502. Open Interest
+503. Max Pain
+504. Options Flow
+505. Gamma Exposure (GEX)
+506. Delta Exposure
+507. Vega Exposure
+508. Implied Volatility Rank (IVR)
+509. Implied Volatility Percentile
+510. IV Skew
+511. Options Chain Heatmap
+512. Unusual Options Activity
+513. Dark Pool Levels
+514. Short Interest
+515. Borrow Rate
+516. Funding Rate (Crypto)
+517. Basis (Futures Premium)
+518. Contango/Backwardation
+519. Term Structure
+520. Volatility Surface
+
+--------------------------------------------------
+🌍 N. MARKET BREADTH (20)
+--------------------------------------------------
+521. Advance/Decline Line
+522. McClellan Oscillator
+523. McClellan Summation Index
+524. Arms Index (TRIN)
+525. New Highs/New Lows
+526. NYSE Composite
+527. Percentage Above MA
+528. Bullish Percent Index
+529. High-Low Logic Index
+530. Breadth Thrust
+531. Upside/Downside Ratio
+532. Composite Market Index
+533. Advance/Decline Volume
+534. Issues Traded
+535. TICK Indicator
+536. TIKI Indicator
+537. TRINQ
+538. Summation Index
+539. Breadth Divergence
+540. Market Momentum
+
+--------------------------------------------------
+🔢 O. CYCLE INDICATORS (20)
+--------------------------------------------------
+541. MESA (Maximum Entropy Spectral Analysis)
+542. Dominant Cycle Period
+543. Dominant Cycle Phase
+544. Sine Wave
+545. Cosine Wave
+546. Cycle Channel Index
+547. Seasonal Decomposition
+548. Elliott Wave
+549. Gann Cycle
+550. Lunar Cycle
+551. Benner Cycle
+552. Business Cycle
+553. Presidential Cycle
+554. Kitchin Cycle
+555. Juglar Cycle
+556. Kuznets Cycle
+557. Kondratiev Wave
+558. Annual Seasonality
+559. Monthly Seasonality
+560. Day of Week Effect
+
+--------------------------------------------------
+⚙️ P. CUSTOM / ADVANCED (40)
+--------------------------------------------------
+561. Heikin Ashi
+562. Renko Chart
+563. Point & Figure
+564. Kagi Chart
+565. Line Break Chart
+566. Range Bars
+567. Tick Bars
+568. Volume Bars
+569. Dollar Bars
+570. Volatility Bars
+571. Spread Indicator
+572. Correlation Matrix
+573. Pair Trading Signal
+574. Beta Weighted Delta
+575. Market Regime Filter
+576. Trend Regime
+577. Volatility Regime
+578. Liquidity Indicator
+579. Slippage Estimator
+580. Transaction Cost Model
+581. Portfolio Heat
+582. Sector Rotation
+583. Relative Strength (vs Index)
+584. Alpha Generation
+585. Smart Beta
+586. Risk-On/Risk-Off
+587. Cross-Asset Correlation
+588. Currency Strength
+589. DXY Impact
+590. Gold/Silver Ratio
+591. Oil Price Impact
+592. Yield Curve
+593. Interest Rate Differential
+594. CPI Impact
+595. GDP Growth Signal
+596. Employment Signal
+597. PMI Signal
+598. Consumer Confidence
+599. Insider Trading Signal
+600. Institutional Flow
+
+====================================================
+  TOTAL: 600 Indicators
+  Categories: 16
+  File: QuantaAI Indicator Master List
+====================================================

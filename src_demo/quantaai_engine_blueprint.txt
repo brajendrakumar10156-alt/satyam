@@ -1,0 +1,244 @@
+====================================================
+  QuantaAI — Ultimate Heterogeneous Engine Blueprint
+  (Math + Rendering Architecture)
+  Saved on: 22-July-2026, 06:50 IST
+  STATUS: PHASE-BY-PHASE — Next phase TABHI jab
+          current phase 100% complete ho
+====================================================
+
+NOTE: AI Architecture ke liye alag file dekho:
+      src_demo/ai_architecture_blueprint.md
+
+----------------------------------------------------
+OVERVIEW
+----------------------------------------------------
+Is blueprint mein 3 Dedicated Math Engines aur
+3 Dedicated Rendering Engines hain. Har component
+usi native language mein likha jayega jo us hardware
+ke liye design ki gayi hai.
+
+RULE: No Jugaad Architecture.
+      Rust, C++, GLSL, WGSL — pure native only.
+
+====================================================
+PART 1: THE 3 MATH ENGINES (DATA CRUNCHERS)
+====================================================
+
+CENTRAL BRAIN: ComputeOrchestrator.js
+--------------------------------------
+- Math Profiler: Equation scan karta hai
+- CPU-friendly parts → CPU par bhejta hai
+- GPU-friendly parts → GPU par bhejta hai
+- Jo jahan naturally fast hai, wahi execute hoga
+- Zabardasti GPU-like convert NAHI karega
+
+----------------------------------------------------
+MATH ENGINE 1: CPU Precision Engine
+----------------------------------------------------
+Language  : Rust → WebAssembly (WASM)
+Execution : Web Worker + SharedArrayBuffer
+Mode A    : Pure CPU — sequential loops as-is
+Mode B    : Mini-GPU (SIMD) — sirf jab parallel
+            math ho tab, 4-8 data points parallel
+Benefit   : Near-native C++ speed, no GC lag
+
+----------------------------------------------------
+MATH ENGINE 2: Client GPU Parallel Engine
+----------------------------------------------------
+Language  : WGSL (WebGPU Compute Shaders)
+Execution : User ke local Graphics Card par
+Use For   : 10k-100k candles, heavy parallel math
+            (SMA, RSI, MACD on large datasets)
+Benefit   : Zero CPU usage, massively parallel
+
+----------------------------------------------------
+MATH ENGINE 3: Main Server Engine
+----------------------------------------------------
+Language  : C++ + CUDA (+ selective AVX/SIMD)
+Execution : Cloud server — high-core CPU + NVIDIA GPU
+Server CPU: Smart Hybrid (same as Client CPU rule)
+  - Pure CPU Mode: Heavy sequential → C++ threads
+  - Mini-GPU Mode: Parallel parts → AVX/SIMD
+Server GPU: CUDA — ML-sized astronomical datasets
+Trigger   : Jab user ka local hardware saturate ho
+
+====================================================
+PART 2: THE 3 RENDERING ENGINES (PIXEL PUSHERS)
+====================================================
+
+SERVER-ASSISTED RENDERING CONCEPT:
+------------------------------------
+- Server CPU (SIMD) → Geometry Pre-computation
+  (X,Y coordinates, vertices, triangulation)
+- Server sends ready-made vertex arrays to client
+- Client GPU sirf paint karta hai — no heavy math
+
+ZERO-JS DRIVER CONCEPT:
+------------------------
+- WebGL + WebGPU driver → Rust (WASM) mein rewrite
+- Rust talks directly to GPU APIs
+- No JS garbage collection stutter
+- Canvas 2D → WASM buffer management only
+
+----------------------------------------------------
+RENDER ENGINE 1: Canvas 2D (Safe Foundation)
+----------------------------------------------------
+Language  : JS (Lightweight Charts) + WASM Memory
+Role      : Rock-solid fallback — touch nahi karenge
+Upgrade   : Data source → WASM Math Engine se lega
+            Drawing logic wahi rahega — no shaders
+
+----------------------------------------------------
+RENDER ENGINE 2: WebGL (Fast Standard)
+----------------------------------------------------
+Language  : GLSL (OpenGL Shading Language)
+Approach  : Native Vertex + Fragment shaders — PURE
+            PixiJS ko bypass karenge core drawing mein
+Data Feed : Float32Array from Math Engines directly
+Target    : 144+ FPS for millions of candlesticks
+
+----------------------------------------------------
+RENDER ENGINE 3: WebGPU (Next-Gen Standard)
+----------------------------------------------------
+Language  : WGSL (Render Pipelines)
+Superpower: Compute Shader + Render Pipeline →
+            SAME VRAM (shared GPU memory)
+Result    : Math calculate on GPU → NEVER leaves GPU
+            → Render pipeline draws instantly
+Latency   : Practically ZERO
+
+----------------------------------------------------
+DYNAMIC RENDER SCALING (Math-First Priority):
+----------------------------------------------------
+- Math > Rendering (always)
+- Jab hardware struggle kare:
+  * Anti-aliasing thoda reduce
+  * Non-essential glow remove
+  * Off-screen geometry simplify
+- User ko difference NAHI dikhega
+- Math engines ko full resources milenge
+- Load khatam → quality automatically restore
+
+====================================================
+PART 3: HYBRID DATA RECONCILIATION LAYER
+         "The Perfect Data Engine"
+====================================================
+
+SMART DATA SPLICER — Flow:
+----------------------------
+Step 1: Internal Server se data fetch (fast cache)
+Step 2: Gap Detection — missing timestamps dhundho
+Step 3: Binance (ya other exchange) se SIRF
+        missing gaps ke liye data fetch karo
+Step 4: Data Stitching:
+        - Binance mein gap → Server data use karo
+        - Server mein gap → Binance data use karo
+        - Result: 100% gap-free Perfect Data Array
+Step 5: Float32Array banao → Orchestrator ko do
+        → CPU (WASM) / Client GPU / Server (C++)
+
+BENEFIT: User kabhi broken chart nahi dekhega.
+         Math always on flawless merged data.
+
+====================================================
+PART 4: CUSTOM SCRIPTING ENGINE
+         "Pine/Python Hybrid Compiler"
+====================================================
+
+HOW IT WORKS:
+--------------
+1. Perfect Data Feed: User script ko wahi
+   gap-free merged data milega jo built-in
+   indicators ko milta hai
+
+2. JIT Compilation (No slow interpreters):
+   - Python/Pine → Parse → Convert to WASM
+   - Heavy ML → Route to Server (C++/CUDA)
+
+3. Dynamic Routing:
+   - ComputeOrchestrator user script ko
+     built-in indicator jaisa treat karega
+   - Weight evaluate → CPU / Client GPU / Server
+
+BENEFIT: User ka custom script = same beast
+         performance as native indicators.
+         GPU + CUDA power without writing C++.
+
+====================================================
+PART 5: ARBITRAGE CALCULATION ENGINE
+         "High-Frequency Spread Analyzer"
+====================================================
+
+HOW IT WORKS:
+--------------
+1. Multi-Stream Perfect Data Sync:
+   - Multiple pairs across multiple exchanges
+   - Internal Server + Binance + Others
+   - Timestamps aligned to millisecond
+
+2. Massive Parallel Execution:
+   - Client WebGPU: Live real-time triangular
+     arbitrage — hundreds of price streams instant
+   - Server CUDA: Thousands of global pairs,
+     historical scanning — pushes only alerts
+
+3. Rendering:
+   - Spread lines + arbitrage heatmaps
+   - GLSL/WGSL Render Pipelines se instant
+
+BENEFIT: HFT-level cross-exchange analysis
+         directly in the browser. No UI lag.
+
+====================================================
+PART 6: CLIENT-SIDE "VIRTUAL RAM"
+         (Disk-Backed Paging)
+====================================================
+
+HOW IT WORKS:
+--------------
+- Strictly OPT-IN (user permission required)
+- Storage used: IndexedDB / File System Access API
+- WASM Engine → Paging System:
+  * Current viewport chunk → Physical RAM
+  * User scrolls away → Free RAM instantly
+  * Next chunk → Load from storage
+
+HARDWARE PROTECTION:
+- Wear Leveling: SSD/Flash protect karenge
+- Aggressive in-memory cache (write to disk
+  only when absolutely necessary)
+- User adjustable limit (e.g., "Max 2GB")
+
+BENEFIT: 4GB RAM laptop ya purana phone bhi
+         institutional-level historical data
+         visualize aur calculate kar sakta hai.
+
+====================================================
+EXECUTION FLOW EXAMPLE
+====================================================
+
+User → RSI for 50,000 candles on WebGPU:
+
+  1. ComputeOrchestrator → WGSL Compute Shader
+  2. WGSL → 50,000 points in ~1 millisecond
+  3. Data stays in GPU VRAM
+  4. WGSL Render Pipeline → draws RSI instantly
+
+  (Weak mobile device fallback):
+  1. Orchestrator → Rust WASM Engine (CPU)
+  2. Result → GLSL WebGL Render Engine
+
+====================================================
+PHASE EXECUTION RULES
+====================================================
+
+  RULE 1: Phase by Phase ONLY.
+  RULE 2: Next phase tab hi shuru hoga jab
+          current phase 100% complete ho.
+  RULE 3: No jugaad shortcuts.
+  RULE 4: Har engine apni native language mein.
+
+====================================================
+  END OF BLUEPRINT
+  File: quantaai_engine_blueprint.txt
+====================================================

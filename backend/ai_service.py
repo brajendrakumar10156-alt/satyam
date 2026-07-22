@@ -41,7 +41,7 @@ def build_system_prompt(language: str, ticker: str, timeframe: str, exchange: st
             context_lines.append(f"Last price={live_price}")
     context_block = '\n'.join(context_lines)
     return (
-        f"You are an expert trading strategy assistant for CADPRO dashboard.\n"
+        f"You are an expert trading strategy assistant for QuantaAI dashboard.\n"
         f"Exchange: {exchange}. Symbol: {ticker}. Timeframe: {timeframe}.\n"
         f"{context_block}\n"
         f"Write {lang} only. For Pine use //@version=5 and strategy() or indicator().\n"

@@ -671,7 +671,7 @@ def parse_and_run_backtest(df, code_content):
 
 @app.get("/health")
 async def health():
-    return {"ok": True, "service": "cadpro-backend"}
+    return {"ok": True, "service": "quantaai-backend"}
 
 
 @app.get("/coins")

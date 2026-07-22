@@ -172,11 +172,11 @@ def _send_email_otp(email: str, otp: str) -> Dict[str, str]:
         raise AuthError('SMTP is not configured')
 
     msg = EmailMessage()
-    msg['Subject'] = 'CADPRO login OTP'
+    msg['Subject'] = 'QuantaAI login OTP'
     msg['From'] = config['sender']
     msg['To'] = email
     msg.set_content(
-        f'Your CADPRO login OTP is {otp}.\n\n'
+        f'Your QuantaAI login OTP is {otp}.\n\n'
         f'This code expires in {OTP_TTL_SECONDS // 60} minutes.\n'
         'If you did not request this login, ignore this email.'
     )
@@ -203,7 +203,7 @@ def _send_telegram_otp(email: str, otp: str) -> Dict[str, str]:
         raise AuthError('Telegram is not configured')
 
     message = (
-        f'CADPRO login OTP\n'
+        f'QuantaAI login OTP\n'
         f'Email: {email}\n'
         f'OTP: {otp}\n'
         f'Expires in: {OTP_TTL_SECONDS // 60} minutes'
