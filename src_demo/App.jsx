@@ -1653,6 +1653,21 @@ export default function App({ onLogout, onBackToCoins }) {
            }
          }, 500); // slight delay to allow chart refresh
        }
+    } else if (isAutoPredictEnabled && !predictedCandle && allCandles.length > 50) {
+      // Instantly start/restart auto-predict if it's enabled but no candle exists (e.g., after timeframe switch)
+      const intSeconds = intervalToSeconds(chartInterval);
+      const newPrediction = predictNextCandle(allCandles, intSeconds);
+      if (newPrediction) {
+        setPredictedCandle(newPrediction);
+        const histItem = {
+          time: newPrediction.time,
+          predictedUp: newPrediction.predictedUp,
+          predictedClose: newPrediction.close,
+          realClose: null,
+          isHit: null,
+        };
+        setPredictionHistory(prev => [...prev, histItem]);
+      }
     }
   }, [allCandles, predictedCandle, predictionHistory, isAutoPredictEnabled, chartInterval]);
 

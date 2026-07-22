@@ -1,17 +1,19 @@
-# Ultimate Heterogeneous Engine Blueprint (Math + Rendering)
+# Ultimate Heterogeneous Engine Blueprint (Theoretical Maximum Speed)
 
-This blueprint outlines the architecture for a zero-compromise, ultra-optimized system. To achieve the absolute maximum speed and precision, we are completely removing traditional JavaScript from all heavy processes. We will build **3 Dedicated Math Engines** and **3 Dedicated Rendering Engines**. Every component will be written in the specific native language designed for that hardware.
+This blueprint outlines the theoretical architecture for a zero-compromise, ultra-optimized system. **Currently, our codebase is primarily built on JavaScript/React** for rapid development and ease of use. However, to achieve the absolute maximum speed and precision (e.g., for High-Frequency Trading), we would need to remove traditional JavaScript from all heavy processes. 
 
-## User Review Required
+If we were to rewrite the engine for maximum speed, we would build **3 Dedicated Math Engines** and **3 Dedicated Rendering Engines** using the specific native languages designed for that hardware (such as Rust, C++, WGSL, or Java for robust backend processing).
 
-> [!WARNING]
-> **No "Jugaad" Architecture:** This plan requires writing native code (Rust, C++, GLSL, WGSL) for every single indicator and every single rendering pipeline. We will not use generic wrappers or slow transpilers. It is a massive engineering effort but it will result in an institutional-grade trading platform.
+## Architecture Vision (If not using JavaScript)
+
+> [!NOTE]
+> **Current State vs Vision:** While our current code is mostly JavaScript, this document explores what language choices would be made if we wanted the absolute fastest execution possible (bypassing JavaScript's single-threaded and garbage-collected nature).
 
 ## Open Questions
 
 > [!IMPORTANT]
-> 1. For the **CPU Math Engine**, I recommend **Rust** because it compiles to the safest and fastest WebAssembly (WASM), matching C++ speed but with better modern web integration. Do you approve Rust for the WASM CPU math?
-> 2. For the **Backend Server**, **C++ with CUDA** is the industry standard for HFT (High-Frequency Trading) data processing. Are you aligned with this?
+> 1. For the **CPU Math Engine**, we theoretically recommend **Rust** or highly-optimized **Java** (with Project Valhalla/Vector API). Which would you prefer if we ever migrate away from JS?
+> 2. For the **Backend Server**, **C++ with CUDA** is the industry standard for HFT. Are you aligned with this theoretical approach?
 
 ---
 
