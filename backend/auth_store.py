@@ -60,10 +60,39 @@ _sessions: Dict[str, Dict[str, Any]] = {}
 _tokens: Dict[str, Dict[str, Any]] = {}
 _request_log: Dict[str, list[float]] = {}
 
-# In-memory password store (email -> password hash)
-# NOTE: This is intentionally in-memory to keep the app self-contained.
-_users_passwords: Dict[str, Dict[str, Any]] = {}
+# Persistent JSON Password Database File Path
+_USERS_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'users_db.json')
+_OTP_LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'otp_log.txt')
 
+def _load_users_db() -> Dict[str, Dict[str, Any]]:
+    if os.path.exists(_USERS_DB_PATH):
+        try:
+            import json
+            with open(_USERS_DB_PATH, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def _save_users_db(users_dict: Dict[str, Dict[str, Any]]) -> None:
+    try:
+        import json
+        with open(_USERS_DB_PATH, 'w', encoding='utf-8') as f:
+            json.dump(users_dict, f, indent=2)
+    except Exception as e:
+        print(f"[AuthStore] Failed to save users_db.json: {e}")
+
+def _log_otp_event(email: str, otp: str, event_type: str = "REQUEST") -> None:
+    try:
+        from datetime import datetime
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S IST")
+        log_line = f"[{now_str}] Event: {event_type} | Email: {email} | OTP: {otp}\n"
+        with open(_OTP_LOG_PATH, 'a', encoding='utf-8') as f:
+            f.write(log_line)
+    except Exception as e:
+        print(f"[AuthStore] Failed to write to otp_log.txt: {e}")
+
+_users_passwords: Dict[str, Dict[str, Any]] = _load_users_db()
 
 class AuthError(ValueError):
     pass
@@ -221,11 +250,12 @@ def _send_telegram_otp(email: str, otp: str) -> Dict[str, str]:
 
 
 def _write_otp_to_file(email: str, otp: str) -> None:
-    """Write OTP to a file for the watcher terminal to read."""
+    """Write OTP to a file for the watcher terminal to read and log to otp_log.txt."""
     try:
         otp_file = os.path.join(os.path.dirname(__file__), '.otp_current.txt')
         with open(otp_file, 'w') as f:
             f.write(f'{email}|{otp}|{int(time.time())}')
+        _log_otp_event(email, otp, "REQUEST")
     except Exception:
         pass  # Silent fail - not critical
 
@@ -361,7 +391,7 @@ def _get_user_identifier(email: str) -> str:
 
 
 def signup_with_password(email: str, password: str) -> Dict[str, Any]:
-    """Create password for user (in-memory). Returns new access token."""
+    """Create password for user and persist to users_db.json. Returns new access token."""
     identifier = _get_user_identifier(email)
     pw = _normalize_password(password)
     if identifier in _users_passwords:
@@ -370,6 +400,7 @@ def signup_with_password(email: str, password: str) -> Dict[str, Any]:
         'password_hash': _hash_password(pw),
         'created_at': _now(),
     }
+    _save_users_db(_users_passwords)
 
     # issue token
     user = {
