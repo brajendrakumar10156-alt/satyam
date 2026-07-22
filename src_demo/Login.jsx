@@ -220,9 +220,9 @@ export default function Login({ onLoggedIn }) {
         <div className="absolute inset-0 bg-gradient-to-br from-[#080b12] via-[#080b12]/80 to-[#111827]/70" />
         <div className="relative z-10 flex flex-col justify-between p-10 max-w-[620px]">
           <div className="flex items-center gap-3">
-            <img src={logo} alt="SATYAM AI" className="h-11 w-11 rounded-lg object-cover bg-white" />
+            <img src={logo} alt="QuantaAI" className="h-11 w-11 rounded-lg object-cover bg-white" />
             <div>
-              <div className="text-[18px] font-black text-white">SATYAM AI</div>
+              <div className="text-[18px] font-black text-white">QuantaAI</div>
               <div className="text-[12px] text-[#8b94a7]">Trading terminal</div>
             </div>
           </div>
@@ -253,7 +253,7 @@ export default function Login({ onLoggedIn }) {
           <div className="p-5 border-b border-[#243047]">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-[12px] text-[#8b94a7]">SATYAM AI Terminal login</div>
+                <div className="text-[12px] text-[#8b94a7]">QuantaAI Terminal login</div>
                 <div className="text-[22px] font-black text-white mt-1">{modeTitle}</div>
               </div>
               <img src={logo} alt="logo" className="h-10 w-10 rounded-lg object-cover bg-white" />

@@ -466,7 +466,7 @@ function CoinSelectPage({ onOpenChart, onLogout }) {
         <header className="border-b border-[#292929] px-6 py-3.5 bg-[#1a1a1a] flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 bg-[#ff5722] rounded-sm shrink-0" />
-            <span className="font-extrabold text-[12.5px] text-white tracking-widest uppercase">SATYAM AI Terminal</span>
+            <span className="font-extrabold text-[12.5px] text-white tracking-widest uppercase">QuantaAI Terminal</span>
           </div>
 
           <div className="flex items-center gap-3">

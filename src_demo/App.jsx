@@ -1194,7 +1194,7 @@ export default function App({ onLogout, onBackToCoins }) {
 
 
   // ─── Code & Metrics ───
-  const defaultPine = `// @ticker="SOLUSDT"\nstrategy("SATYAM AI Master Hybrid", overlay=true)\n\nema_fast = ema(close, 9)\nema_slow = ema(close, 21)\nlongCondition = crossover(ema_fast, ema_slow)\n\nif (longCondition)\n    strategy.entry("Long", strategy.long)`;
+  const defaultPine = `// @ticker="SOLUSDT"\nstrategy("QuantaAI Master Hybrid", overlay=true)\n\nema_fast = ema(close, 9)\nema_slow = ema(close, 21)\nlongCondition = crossover(ema_fast, ema_slow)\n\nif (longCondition)\n    strategy.entry("Long", strategy.long)`;
 
   const [pineCode, setPineCode] = useState(defaultPine);
   const [pythonCode, setPythonCode] = useState(DEFAULT_PYTHON_STRATEGY);
