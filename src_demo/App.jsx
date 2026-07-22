@@ -566,6 +566,8 @@ export default function App({ onLogout, onBackToCoins }) {
     if (timezone === 'IST') return 19800; // 5.5 hours
     return new Date().getTimezoneOffset() * -60; // Auto
   }, [timezone]);
+  const viewportSnapshotRef = useRef(null);
+
   // Auto-Hardware Profiler: Detect best default engine on load
   useEffect(() => {
     if (!localStorage.getItem('renderEngine')) {
