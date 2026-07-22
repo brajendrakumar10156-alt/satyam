@@ -415,12 +415,10 @@ export async function fetchExchangeCandles(exchangeId, symbol, interval, limit =
     // 1. Try Backend (SQLite Tier 2) first, which is fast and self-healing
     return await fetchBackend();
   } catch (backendErr) {
-    console.warn("Backend failed, trying IndexedDB...", backendErr);
     try {
       // 2. Try IndexedDB (Offline fallback)
       return await fetchIndexedDB();
     } catch (idbErr) {
-      console.warn("IndexedDB empty, trying public Proxy...", idbErr);
       // 3. Fallback to public CORS proxy
       const proxyData = await fetchProxy();
       await saveLocalCandles(exchangeId, sym, interval, proxyData).catch(console.warn);

@@ -27,15 +27,15 @@ export class WasmMathEngine {
    */
   async init() {
     try {
-      // Dynamic import of the wasm-pack generated module
-      const wasmModule = await import('../core_math_rust/pkg/quantaai_math_engine.js');
+      // Dynamic import of the wasm-pack generated module with vite-ignore guard
+      const pkgPath = '../core_math_rust/pkg/quantaai_math_engine.js';
+      const wasmModule = await import(/* @vite-ignore */ pkgPath);
       await wasmModule.default(); // Initialize WASM
       this._wasm = wasmModule;
       this.ready = true;
       console.log(`[QuantaAI] ${this._wasm.engine_version()} — WASM Ready ✓`);
     } catch (err) {
-      console.warn('[QuantaAI] WASM not built yet. Run: wasm-pack build --target web --release');
-      console.warn('[QuantaAI] Falling back to JS indicators until WASM is built.');
+      console.warn('[QuantaAI] WASM binary pkg/ not compiled yet. System using WebGPU / JS fallback mode.');
       this.ready = false;
     }
   }
