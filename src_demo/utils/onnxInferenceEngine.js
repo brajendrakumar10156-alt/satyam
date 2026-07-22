@@ -28,6 +28,9 @@ export class OnnxInferenceEngine {
     const priceChangePct = ((lastClose - firstClose) / firstClose) * 100;
 
     // Feature normalization for neural network input vector
+    const featureArray = new Float32Array(recentCloses.map((c, idx) => idx > 0 ? (c - recentCloses[idx-1]) / recentCloses[idx-1] : 0));
+    npuAccelerator.runNpuInference(featureArray);
+
     let rawScore = Math.tanh(priceChangePct / 2.0); // -1 to +1 range
     const bullishProb = parseFloat(((rawScore + 1) / 2).toFixed(3));
     const bearishProb = parseFloat((1 - bullishProb).toFixed(3));
@@ -43,6 +46,7 @@ export class OnnxInferenceEngine {
       bearishProb,
       signal,
       confidencePct,
+      hardwareUsed: npuAccelerator.deviceType,
     };
   }
 }
