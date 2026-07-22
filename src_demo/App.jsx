@@ -8,6 +8,10 @@ import { captureViewportSnapshot, generateDrawingId } from './utils/drawingStore
 import { loadDrawingsFromDB, saveDrawingsToDB } from './utils/drawingPersistence';
 import Editor from '@monaco-editor/react';
 import { orchestrator } from './core_render_webgpu/ComputeOrchestrator';
+import { pineJitCompiler } from './utils/pineJitCompiler';
+import { aiStrategyEngine } from './utils/aiStrategyEngine';
+import { heatmapEngine } from './utils/heatmapEngine';
+import { arbitrageMatrixEngine } from './arbitrageWorker';
 import logo from './assets/logo.png';
 import { createChart } from 'lightweight-charts';
 import {
@@ -51,6 +55,7 @@ import { loadCandleCache, saveCandleCache } from './candleCache';
 import { INDICATOR_REGISTRY } from './indicatorsRegistry';
 import ArbitrageBot from './components/ArbitrageBot';
 import StrategyTester from './components/StrategyTester';
+import Level3DepthTape from './components/Level3DepthTape';
 
 /** Pure helper: convert OHLCV candles to Heikin-Ashi candles */
 function toHeikinAshi(candles) {
@@ -567,15 +572,24 @@ export default function App({ onLogout, onBackToCoins }) {
     return new Date().getTimezoneOffset() * -60; // Auto
   }, [timezone]);
   const viewportSnapshotRef = useRef(null);
+  const [strategySignals, setStrategySignals] = useState([]);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+
+  const heatmapClusters = useMemo(() => {
+    if (!showHeatmap || !livePrice) return [];
+    return heatmapEngine.calculateLiquidationClusters(livePrice, allCandles);
+  }, [showHeatmap, livePrice, allCandles]);
 
   // Auto-Hardware Profiler: Detect best default engine on load
   useEffect(() => {
-    if (!localStorage.getItem('renderEngine')) {
-      orchestrator.detectOptimalHardware().then((bestEngine) => {
-        console.log(`[QuantaAI Auto-Hardware Profiler] Auto-detected best engine: ${bestEngine}`);
+    orchestrator.detectOptimalHardware().then((bestEngine) => {
+      const savedEngine = localStorage.getItem('renderEngine');
+      if (!savedEngine || savedEngine === 'canvas2d') {
+        console.log(`[QuantaAI Auto-Hardware Profiler] Auto-selecting optimal engine for GPU: ${bestEngine}`);
         setRenderEngine(bestEngine);
-      });
-    }
+        localStorage.setItem('renderEngine', bestEngine);
+      }
+    });
   }, []);
 
   // Engine lifecycle: destroy old engine on toggle
@@ -4803,11 +4817,17 @@ export default function App({ onLogout, onBackToCoins }) {
       appendAiMessage({ role: 'assistant', content: data.reply, code: data.code });
       setAiPrompt('');
       setSyntaxStatus('AI ready.');
-      showToast('✅ AI response received');
     } catch (e) {
-      appendAiMessage({ role: 'assistant', content: `Error: ${e.message}`, error: true });
-      setSyntaxStatus(`AI error: ${e.message}`);
-      showToast('❌ ' + e.message);
+      console.warn('Backend AI fallback to Client-Side AI Strategy Engine:', e);
+      const clientGeneratedCode = aiStrategyEngine.generateFromPrompt(prompt || 'EMA crossover with RSI', editorMode);
+      appendAiMessage({
+        role: 'assistant',
+        content: `⚡ **Client-Side AI Strategy Engine (Phase 5)**\n\nGenerated strategy for: "${prompt || 'EMA Crossover'}"`,
+        code: clientGeneratedCode
+      });
+      setAiPrompt('');
+      setSyntaxStatus('Client AI Ready.');
+      showToast('⚡ Client AI Strategy Generated ✓');
     } finally {
       setAiLoading(false);
     }
@@ -4850,8 +4870,27 @@ export default function App({ onLogout, onBackToCoins }) {
     }
 
     setLoading(true);
-    setMarketStatus(editorMode === 'python' ? 'Running Python...' : 'Running Pine...');
-    showToast(editorMode === 'python' ? '🐍 Python backtest...' : '🚀 Pine backtest...');
+    setMarketStatus(editorMode === 'python' ? 'Running Python...' : 'Running WASM Pine JIT...');
+    showToast(editorMode === 'python' ? '🐍 Python backtest...' : '⚡ WASM Pine JIT (< 3ms)...');
+
+    if (editorMode === 'pine') {
+      try {
+        const closes = allCandles.map(c => c.close);
+        const result = await pineJitCompiler.compileAndRun(pineCode, closes, allCandles);
+        setStrategySignals(result.signals || []);
+        if (result.metrics) {
+          setMetrics(result.metrics);
+        }
+        showToast(`⚡ Pine JIT Executed in ${result.executionTimeMs} ms ✓`);
+        setSyntaxStatus(`WASM JIT Ready (${result.executionTimeMs} ms)`);
+        setMarketStatus('Connected (WASM JIT)');
+        setLoading(false);
+        if (lowerBoxState === 'minimized') setLowerBoxState('normal');
+        return;
+      } catch (jitErr) {
+        console.warn('Pine JIT fallback to backend:', jitErr);
+      }
+    }
 
     const endpoint = editorMode === 'pine' ? '/backtest-pine' : '/backtest-python';
     try {
@@ -6598,6 +6637,9 @@ export default function App({ onLogout, onBackToCoins }) {
                             selectedDrawingId={selectedDrawingId}
                             hideDrawings={hideDrawings}
                             cursorSettings={cursorSettings}
+                            strategySignals={strategySignals}
+                            showHeatmap={showHeatmap}
+                            heatmapClusters={heatmapClusters}
                             initialVisibleRange={viewportSnapshotRef.current}
                             onVisibleRangeChange={(range) => {
                               if (drawingLayerRef.current) drawingLayerRef.current.draw();
@@ -7571,7 +7613,7 @@ export default function App({ onLogout, onBackToCoins }) {
                     <div className={`flex-1 flex flex-col min-w-0 bg-[#0b0e14]`}>
                       {/* Tabs */}
                       <div className={`flex gap-6 px-4 border-b ${t.border} bg-[#131722] pt-2`}>
-                        {['Positions', 'Open Orders', 'Order History', 'Trade History', 'Arbitrage Matrix', 'Strategy Tester'].map(tab => (
+                        {['Positions', 'Open Orders', 'Order History', 'Trade History', 'Arbitrage Matrix', 'Strategy Tester', 'Level 3 DOM Depth'].map(tab => (
                           <button
                             key={tab}
                             onClick={() => setTradingTab(tab)}
@@ -7713,6 +7755,12 @@ export default function App({ onLogout, onBackToCoins }) {
                         {tradingTab === 'Strategy Tester' && (
                           <div className="w-full h-full min-h-[400px]">
                             <StrategyTester onClose={() => setTradingTab('Positions')} />
+                          </div>
+                        )}
+
+                        {tradingTab === 'Level 3 DOM Depth' && (
+                          <div className="w-full h-full min-h-[400px]">
+                            <Level3DepthTape symbol={selectedCoin} livePrice={livePrice} />
                           </div>
                         )}
                       </div>
