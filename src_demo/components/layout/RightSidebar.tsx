@@ -28,11 +28,11 @@ export const RightSidebar = (props) => {
         )}
         
         {rightSidebar === 'watchlist' && (
-          <RightSidebarWatchlist {...props} />
+          <RightSidebarWatchlist {...props} t={t} />
         )}
 
         {rightSidebar === 'details' && props.selectedCoinStats && (
-          <RightSidebarDetails {...props} />
+          <RightSidebarDetails {...props} t={t} />
         )}
 
         {/* Other panels (News, Alerts, Bounties) can be extracted similarly later when activated */}
