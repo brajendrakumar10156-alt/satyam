@@ -1,4 +1,6 @@
 import html2canvas from 'html2canvas';
+import { RightSidebar } from './components/layout/RightSidebar';
+import { LeftToolbar } from './components/layout/LeftToolbar';
 import React, { useEffect, useRef, useState, useCallback, useMemo, Suspense, lazy } from 'react';
 import NativeDrawingLayer from './components/NativeDrawingLayer';
 import NativeIndicatorLayer from './components/NativeIndicatorLayer';
@@ -3715,431 +3717,8 @@ export default function App({ onLogout, onBackToCoins }) {
 
 
 
-  const renderRightSidePanel = () => {
-    if (!rightSidebar) return null;
-    return (
-      <div className="flex flex-col h-full min-h-0 overflow-hidden">
-        <div className={`h-11 border-b ${t.border} flex items-center justify-between px-3 ${t.sec} shrink-0`}>
-          <span className={`font-bold text-[11px] uppercase tracking-wider ${t.text}`}>
-            {rightSidebar === 'watchlist' && 'Watchlist'}
-            {rightSidebar === 'details' && 'Instrument Details'}
-            {rightSidebar === 'news' && 'Market News'}
-            {rightSidebar === 'alerts' && 'Active Alerts'}
-            {rightSidebar === 'bounties' && 'Bounties'}
-            {rightSidebar === 'orderbook' && 'Order Book & Trades'}
-          </span>
-          <button onClick={() => setRightSidebar(null)} className={t.muted}><X size={14} /></button>
-        </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto dark-scrollbar p-3 space-y-4">
-          {rightSidebar === 'orderbook' && (
-            <OrderBookPanel livePrice={livePrice} selectedCoin={selectedCoin} />
-          )}
-          {rightSidebar === 'watchlist' && (
-            <div className="flex flex-col h-full">
-              <div className="relative mb-3">
-                <input
-                  type="text"
-                  placeholder="Add Symbol (e.g. ETHUSDT)"
-                  value={watchlistSearchInput}
-                  onChange={(e) => {
-                    setWatchlistSearchInput(e.target.value.toUpperCase());
-                    setWatchlistDropdownOpen(true);
-                  }}
-                  onFocus={() => setWatchlistDropdownOpen(true)}
-                  className={`w-full px-3 py-1.5 rounded-lg border ${t.border} ${t.bg} ${t.text} text-[11px] outline-none focus:border-blue-500`}
-                />
-                {watchlistDropdownOpen && watchlistSearchInput && (
-                  <div className={`absolute top-full left-0 right-0 ${t.bg} border ${t.border} rounded-lg shadow-2xl z-[300] max-h-48 overflow-y-auto py-1`}>
-                    {binanceCoins
-                      .filter(c => c.includes(watchlistSearchInput))
-                      .slice(0, 15)
-                      .map(coin => (
-                        <div
-                          key={coin}
-                          onMouseDown={() => {
-                            if (!watchlist.includes(coin)) {
-                              setWatchlist(prev => [...prev, coin]);
-                              showToast(`Added ${coin} to watchlist`);
-                            }
-                            setWatchlistSearchInput('');
-                            setWatchlistDropdownOpen(false);
-                          }}
-                          className={`px-3 py-2 text-[11px] font-bold ${t.text} ${t.hover} cursor-pointer`}
-                        >
-                          {coin}
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
-                {watchlist.map(symbol => {
-                  const ticker = watchlistTickers[symbol];
-                  const price = ticker?.price ?? (symbol === selectedCoin ? livePrice : 0);
-                  const change = ticker?.change ?? 0;
-                  const isSelected = symbol === selectedCoin;
-                  return (
-                    <div
-                      key={symbol}
-                      onClick={() => {
-                        setSelectedCoin(symbol);
-                        setMarketStatus('Loading');
-                      }}
-                      className={`flex items-center justify-between p-2 rounded-lg border transition-all cursor-pointer ${
-                        isSelected 
-                          ? 'border-blue-500 bg-blue-500/10' 
-                          : `border-transparent ${t.hover} ${t.sec}`
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <img 
-                          src={coinIconUrl(symbol)}
-                          data-tier="0"
-                          onError={(e) => handleCoinIconError(e, symbol)}
-                          alt=""
-                          className="w-5 h-5 rounded-full object-cover bg-white shrink-0"
-                        />
-                        <span className={`font-black text-[11px] truncate ${isSelected ? 'text-blue-400' : t.text}`}>{symbol}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`font-mono text-[11px] font-bold ${t.text}`}>
-                          {price > 0 ? `$${price.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '...'}
-                        </span>
-                        <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded text-white ${
-                          change >= 0 ? 'bg-[#089981]' : 'bg-[#F23645]'
-                        }`}>
-                          {change >= 0 ? '+' : ''}{change.toFixed(2)}%
-                        </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setWatchlist(prev => prev.filter(w => w !== symbol));
-                            showToast(`Removed ${symbol} from watchlist`);
-                          }}
-                          className="text-gray-500 hover:text-red-400 p-0.5 transition-colors"
-                        >
-                          <X size={10} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              
-              {selectedCoinStats && (
-                <div className={`mt-4 border-t ${t.border} pt-3 space-y-2 shrink-0`}>
-                  <div className="flex items-center gap-2">
-                    <img 
-                      src={coinIconUrl(selectedCoin)}
-                      data-tier="0"
-                      onError={(e) => handleCoinIconError(e, selectedCoin)}
-                      className="w-6 h-6 rounded-full object-cover bg-white"
-                      alt=""
-                    />
-                    <div>
-                      <div className={`text-[12px] font-black ${t.text}`}>{selectedCoin}</div>
-                      <div className={`text-[10px] ${t.muted}`}>{selectedExchange.toUpperCase()} Ticker</div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-[10px]">
-                    <div className={`p-2 rounded ${t.sec} border ${t.border}`}>
-                      <span className={t.muted}>24h High</span>
-                      <div className={`font-bold mt-0.5 ${t.text}`}>${selectedCoinStats.high.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
-                    </div>
-                    <div className={`p-2 rounded ${t.sec} border ${t.border}`}>
-                      <span className={t.muted}>24h Low</span>
-                      <div className={`font-bold mt-0.5 ${t.text}`}>${selectedCoinStats.low.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
-                    </div>
-                    <div className={`p-2 rounded ${t.sec} border ${t.border} col-span-2 flex justify-between items-center`}>
-                      <span className={t.muted}>24h Vol ({getBaseAsset(selectedCoin)})</span>
-                      <div className={`font-mono font-bold ${t.text}`}>
-                        {selectedCoinStats.volume.toLocaleString(undefined, {maximumFractionDigits: 0})}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {rightSidebar === 'details' && selectedCoinStats && (
-            <div className="space-y-4">
-              <div className="flex flex-col items-center py-4 border-b border-[#2a2e39]/20">
-                <img 
-                  src={coinIconUrl(selectedCoin)} 
-                  data-tier="0"
-                  onError={(e) => handleCoinIconError(e, selectedCoin)}
-                  className="w-12 h-12 rounded-full object-cover bg-white mb-2 shadow-lg"
-                  alt=""
-                />
-                <h4 className={`text-[14px] font-black ${t.text}`}>{selectedCoin}</h4>
-                <span className={`text-[11px] ${t.muted}`}>Instrument Details</span>
-              </div>
-
-              {/* Fear & Greed Index Widget */}
-              {fearGreedIndex && (
-                <div className={`p-3 rounded-lg border ${t.border} ${t.sec} space-y-2`}>
-                  <div className="flex justify-between items-center text-[10px] font-bold text-gray-400">
-                    <span>MARKET SENTIMENT</span>
-                    <span className="text-[9px] font-normal uppercase text-gray-500">Updates Daily</span>
-                  </div>
-                  <div className="flex justify-between items-end">
-                    <span className={`text-[12px] font-black`} style={{ color: getFngColor(fearGreedIndex.value) }}>
-                      {fearGreedIndex.classification}
-                    </span>
-                    <span className="text-[15px] font-mono font-black text-white">{fearGreedIndex.value}</span>
-                  </div>
-                  <div className="relative h-1.5 w-full rounded-full bg-gradient-to-r from-[#f23645] via-[#ffb300] to-[#00c853] overflow-hidden">
-                    <div 
-                      className="absolute top-0 bottom-0 w-1 bg-white border border-black shadow"
-                      style={{ left: `${fearGreedIndex.value}%`, transform: 'translateX(-50%)' }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Price Statistics */}
-              <div className="space-y-2">
-                <div className="text-[10px] font-bold text-gray-455 uppercase tracking-wide">24H Price Stats</div>
-                <div className="space-y-1.5">
-                  {[
-                    { label: 'Current Price', value: `$${livePrice.toLocaleString()}`, color: priceColor },
-                    { label: '24h Change', value: `${selectedCoinStats.priceChangePercent >= 0 ? '+' : ''}${selectedCoinStats.priceChangePercent.toFixed(2)}%`, color: selectedCoinStats.priceChangePercent >= 0 ? '#089981' : '#F23645' },
-                    { label: '24h High', value: `$${selectedCoinStats.high.toLocaleString()}` },
-                    { label: '24h Low', value: `$${selectedCoinStats.low.toLocaleString()}` },
-                    { label: '24h Base Volume', value: `${selectedCoinStats.volume.toLocaleString(undefined, {maximumFractionDigits:0})} ${getBaseAsset(selectedCoin)}` },
-                    { label: '24h Quote Volume', value: `$${selectedCoinStats.quoteVolume.toLocaleString(undefined, {maximumFractionDigits:0})}` }
-                  ].map(stat => (
-                    <div key={stat.label} className="flex justify-between items-center py-1 border-b border-[#2a2e39]/5 text-[11px]">
-                      <span className={t.muted}>{stat.label}</span>
-                      <span className="font-bold font-mono" style={{ color: stat.color }}>{stat.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Perpetual Futures Stats */}
-              {isPerpetualSymbol(selectedCoin) && (
-                <div className="space-y-2 pt-1 border-t border-[#2a2e39]/10">
-                  <div className="text-[10px] font-bold text-gray-455 uppercase tracking-wide flex items-center justify-between">
-                    <span>Futures Derivatives</span>
-                    {futuresLoading && <RefreshCw size={10} className="animate-spin text-blue-500" />}
-                  </div>
-                  <div className="space-y-1.5">
-                    {[
-                      { 
-                        label: 'Funding Rate', 
-                        value: fundingRate !== null ? `${(fundingRate * 100).toFixed(4)}%` : 'N/A', 
-                        color: fundingRate > 0 ? '#F23645' : fundingRate < 0 ? '#089981' : undefined 
-                      },
-                      { 
-                        label: 'Open Interest', 
-                        value: openInterest !== null ? `${formatShortNumber(openInterest)} ${getBaseAsset(selectedCoin)}` : 'N/A' 
-                      }
-                    ].map(stat => (
-                      <div key={stat.label} className="flex justify-between items-center py-1 border-b border-[#2a2e39]/5 text-[11px]">
-                        <span className={t.muted}>{stat.label}</span>
-                        <span className="font-bold font-mono" style={{ color: stat.color }}>{stat.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Fundamentals (CoinGecko) */}
-              <div className="space-y-2 pt-1 border-t border-[#2a2e39]/10">
-                <div className="text-[10px] font-bold text-gray-455 uppercase tracking-wide">Coin Fundamentals</div>
-                {fundamentalsLoading ? (
-                  <div className="flex flex-col items-center py-4 text-gray-500 gap-1">
-                    <RefreshCw size={14} className="animate-spin text-blue-500" />
-                    <span className="text-[9px] font-bold">Fetching CoinGecko...</span>
-                  </div>
-                ) : fundamentalsError ? (
-                  <div className={`p-2.5 text-center text-[10px] ${t.muted} border ${t.border} rounded-lg ${t.sec}`}>
-                    Fundamentals unavailable
-                  </div>
-                ) : coinFundamentals ? (
-                  <div className="space-y-1.5">
-                    {[
-                      { label: 'Market Cap', value: formatUSD(coinFundamentals.market_data?.market_cap?.usd) },
-                      { label: 'Circulating Supply', value: `${formatShortNumber(coinFundamentals.market_data?.circulating_supply)} ${getBaseAsset(selectedCoin)}` },
-                      { label: 'Total Supply', value: coinFundamentals.market_data?.total_supply ? `${formatShortNumber(coinFundamentals.market_data?.total_supply)} ${getBaseAsset(selectedCoin)}` : 'N/A' },
-                      { label: 'Max Supply', value: coinFundamentals.market_data?.max_supply ? `${formatShortNumber(coinFundamentals.market_data?.max_supply)} ${getBaseAsset(selectedCoin)}` : 'Infinite' },
-                      { 
-                        label: 'All-Time High', 
-                        value: coinFundamentals.market_data?.ath?.usd 
-                          ? `$${coinFundamentals.market_data.ath.usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}` 
-                          : 'N/A' 
-                      },
-                      { 
-                        label: 'All-Time Low', 
-                        value: coinFundamentals.market_data?.atl?.usd 
-                          ? `$${coinFundamentals.market_data.atl.usd.toLocaleString(undefined, { maximumFractionDigits: 6 })}` 
-                          : 'N/A' 
-                      },
-                    ].map(stat => (
-                      <div key={stat.label} className="flex justify-between items-center py-1 border-b border-[#2a2e39]/5 text-[11px]">
-                        <span className={t.muted}>{stat.label}</span>
-                        <span className="font-bold font-mono text-[#e0e3eb]">{stat.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className={`p-2.5 text-center text-[10px] ${t.muted} border ${t.border} rounded-lg ${t.sec}`}>
-                    No fundamentals found
-                  </div>
-                )}
-              </div>
-
-              {/* Description */}
-              {coinFundamentals && coinFundamentals.description?.en && (
-                <div className={`p-3 rounded-lg border ${t.border} ${t.sec} space-y-1`}>
-                  <div className="text-[10px] font-bold text-gray-455 uppercase">PROJECT SUMMARY</div>
-                  <p className="text-[10px] text-gray-400 leading-normal">
-                    {(() => {
-                      const cleanDesc = coinFundamentals.description.en.replace(/<[^>]*>/g, '');
-                      const sentences = cleanDesc.match(/[^.!?]+[.!?]+(\s|$)/g);
-                      if (sentences && sentences.length > 0) {
-                        return sentences.slice(0, 3).join('').trim();
-                      }
-                      return cleanDesc.slice(0, 180) + (cleanDesc.length > 180 ? '...' : '');
-                    })()}
-                  </p>
-                </div>
-              )}
-
-              {/* Links */}
-              {coinFundamentals && coinFundamentals.links && (
-                <div className="flex flex-wrap gap-1.5 pt-1 border-t border-[#2a2e39]/10">
-                  {coinFundamentals.links.homepage?.[0] && (
-                    <a 
-                      href={coinFundamentals.links.homepage[0]} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="text-[9.5px] font-extrabold px-2 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/15 hover:bg-blue-500/20 transition-all shrink-0"
-                    >
-                      Website
-                    </a>
-                  )}
-                  {coinFundamentals.links.blockchain_site?.[0] && (
-                    <a 
-                      href={coinFundamentals.links.blockchain_site[0]} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="text-[9.5px] font-extrabold px-2 py-1 rounded bg-[#ea39ff]/10 text-[#ea39ff] border border-[#ea39ff]/15 hover:bg-[#ea39ff]/20 transition-all shrink-0"
-                    >
-                      Explorer
-                    </a>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {rightSidebar === 'news' && (
-            <div className="space-y-3 flex flex-col h-full">
-              <div className={`flex items-center p-1 rounded-lg border ${t.border} ${t.sec} text-[10px] font-bold shrink-0`}>
-                <button 
-                  onClick={() => setNewsFilterType('symbol')}
-                  className={`flex-1 py-1.5 text-center rounded transition-colors ${newsFilterType === 'symbol' ? 'bg-[#2962ff] text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                  {getBaseAsset(selectedCoin)} News
-                </button>
-                <button 
-                  onClick={() => setNewsFilterType('all')}
-                  className={`flex-1 py-1.5 text-center rounded transition-colors ${newsFilterType === 'all' ? 'bg-[#2962ff] text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                  All Market News
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto space-y-2 dark-scrollbar pr-1 pb-4">
-              {newsLoading ? (
-                <div className="flex flex-col items-center py-6 text-gray-500 gap-1.5">
-                  <RefreshCw size={14} className="animate-spin text-blue-500" />
-                  <span className="text-[10px] font-bold">Loading news...</span>
-                </div>
-              ) : newsError ? (
-                <div className={`p-4 text-center text-[11px] ${t.muted} border ${t.border} rounded-lg ${t.sec}`}>
-                  Unable to load news — check connection
-                </div>
-              ) : newsList.length === 0 ? (
-                <div className={`p-4 text-center text-[11px] ${t.muted} border ${t.border} rounded-lg ${t.sec}`}>
-                  No news available
-                </div>
-              ) : (
-                (() => {
-                  const filteredNews = newsFilterType === 'all' 
-                    ? newsList 
-                    : newsList.filter(n => 
-                        n.title.toLowerCase().includes(getBaseAsset(selectedCoin).toLowerCase()) || 
-                        (n.desc && n.desc.toLowerCase().includes(getBaseAsset(selectedCoin).toLowerCase())) ||
-                        n.symbol === getBaseAsset(selectedCoin)
-                      );
-                  
-                  if (filteredNews.length === 0) {
-                    return (
-                      <div className={`p-4 text-center text-[11px] ${t.muted} border ${t.border} rounded-lg ${t.sec}`}>
-                        No recent news mentioning {getBaseAsset(selectedCoin)}
-                      </div>
-                    );
-                  }
-                  
-                  return filteredNews.map(item => (
-                    <a
-                      key={item.id}
-                      href={item.url || '#'}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`block p-2.5 rounded-lg border ${t.border} ${t.sec} ${t.hover} transition-all space-y-1.5`}
-                    >
-                      <div className={`text-[11px] font-extrabold ${t.text} line-clamp-2 leading-4`}>{item.title}</div>
-                      <div className="flex justify-between items-center text-[9px] text-gray-500">
-                        <span className="font-bold">{item.source}</span>
-                        <span>{new Date(item.timestamp * 1000).toLocaleDateString()}</span>
-                      </div>
-                    </a>
-                  ));
-                })()
-              )}
-              </div>
-            </div>
-          )}
-
-          {rightSidebar === 'alerts' && (
-            <div className="space-y-3">
-              <div className={`p-3 rounded-lg border ${t.border} ${t.sec} space-y-2`}>
-                <div className="text-[10px] font-bold text-gray-400">CREATE PRICE ALERT</div>
-                <select value={alertCondition} onChange={(e) => setAlertCondition(e.target.value)} className={`w-full rounded border ${t.border} ${t.bg} ${t.text} p-1.5 text-[11px]`}>
-                  <option value="above">Price crosses above</option>
-                  <option value="below">Price crosses below</option>
-                </select>
-                <input type="number" value={alertPrice} onChange={(e) => setAlertPrice(e.target.value)} placeholder="Alert price" className={`w-full rounded border ${t.border} ${t.bg} ${t.text} p-2 text-[11px] font-mono`} />
-                <button onClick={addPriceAlert} className="w-full py-1.5 rounded bg-amber-500 text-white font-bold text-[11px]">Create Alert</button>
-              </div>
-              
-              <div className="space-y-1.5">
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Active Alerts</div>
-                {alerts.map(a => (
-                  <div key={a.id} className={`flex justify-between items-center p-2 rounded-lg border ${t.border} ${t.sec} text-[11px] ${t.text}`}>
-                    <span className="font-bold">{a.symbol} {a.condition} <span className="font-mono text-amber-500">${a.price}</span></span>
-                    <button onClick={() => removeAlert(a.id)} className="text-red-400 hover:text-red-300 p-0.5"><X size={12} /></button>
-                  </div>
-                ))}
-                {alerts.length === 0 && (
-                  <div className="text-[10px] text-gray-500 italic text-center py-4">No active price alerts</div>
-                )}
-              </div>
-            </div>
-          )}
-          {rightSidebar === 'bounties' && renderBountyPanel()}
-        </div>
-      </div>
-    );
-  };
-
+  /* renderRightSidePanel extracted to RightSidebar.tsx */
 
   const LeftToolbar = ({ horizontal = false }) => {
     const categories = [
@@ -6460,7 +6039,19 @@ export default function App({ onLogout, onBackToCoins }) {
           <div className={`flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden md:border-r ${t.border}`}>
             <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
           <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
-            {!isMobile && !focusMode && <LeftToolbar />}
+            {!isMobile && !focusMode && <LeftToolbar 
+  horizontal={false} t={t} darkMode={darkMode} activeTool={activeTool} 
+  setActiveTool={setActiveTool} showToast={showToast} setDrawings={setDrawings}
+  selectedTools={selectedTools} setSelectedTools={setSelectedTools} activeFlyout={activeFlyout}
+  setActiveFlyout={setActiveFlyout} setIsCursorStudioOpen={setIsCursorStudioOpen} 
+  setIsTrendStudioOpen={setIsTrendStudioOpen} chartInstance={chartInstance}
+  isMagnetEnabled={magnetMode !== 'off'} setIsMagnetEnabled={() => setMagnetMode(magnetMode === 'off' ? 'normal' : 'off')}
+  isDrawingLocked={lockDrawings} setIsDrawingLocked={setLockDrawings}
+  isDrawingHidden={hideDrawings} setIsDrawingHidden={setHideDrawings}
+  renderEngine={renderEngine} handleEngineToggle={handleEngineToggle}
+  keepDrawing={keepDrawing} setKeepDrawing={setKeepDrawing}
+  lockDrawings={lockDrawings} setLockDrawings={setLockDrawings}
+/>}
             {!isMobile && !focusMode && <LeftSidePanel />}
             <div className="flex-1 flex flex-col min-h-0 min-w-0 relative">
               {renderOHLCHeader()}
@@ -6990,7 +6581,19 @@ export default function App({ onLogout, onBackToCoins }) {
             </div>
 
           </div>
-          <LeftToolbar horizontal />
+          <LeftToolbar 
+  horizontal={true} t={t} darkMode={darkMode} activeTool={activeTool} 
+  setActiveTool={setActiveTool} showToast={showToast} setDrawings={setDrawings}
+  selectedTools={selectedTools} setSelectedTools={setSelectedTools} activeFlyout={activeFlyout}
+  setActiveFlyout={setActiveFlyout} setIsCursorStudioOpen={setIsCursorStudioOpen} 
+  setIsTrendStudioOpen={setIsTrendStudioOpen} chartInstance={chartInstance}
+  isMagnetEnabled={magnetMode !== 'off'} setIsMagnetEnabled={() => setMagnetMode(magnetMode === 'off' ? 'normal' : 'off')}
+  isDrawingLocked={lockDrawings} setIsDrawingLocked={setLockDrawings}
+  isDrawingHidden={hideDrawings} setIsDrawingHidden={setHideDrawings}
+  renderEngine={renderEngine} handleEngineToggle={handleEngineToggle}
+  keepDrawing={keepDrawing} setKeepDrawing={setKeepDrawing}
+  lockDrawings={lockDrawings} setLockDrawings={setLockDrawings}
+/>
         </div>
 
         {lowerBoxState === 'hidden' && (
@@ -7835,7 +7438,17 @@ export default function App({ onLogout, onBackToCoins }) {
                 {renderEditorPanel()}
               </div>
               <div className="h-1/2 min-h-0 overflow-hidden flex flex-col">
-                {renderRightSidePanel()}
+                <RightSidebar 
+  rightSidebar={rightSidebar} setRightSidebar={setRightSidebar} themeConfig={t} 
+  OrderBookPanel={OrderBookPanel} livePrice={livePrice} selectedCoin={selectedCoin} setSelectedCoin={setSelectedCoin}
+  selectedCoinStats={selectedCoinStats} selectedExchange={selectedExchange} fearGreedIndex={fearGreedIndex}
+  formatNumber={formatNumber} formatCompactNumber={formatCompactNumber}
+  watchlist={watchlist} setWatchlist={setWatchlist} watchlistTickers={watchlistTickers}
+  watchlistSearchInput={watchlistSearchInput} setWatchlistSearchInput={setWatchlistSearchInput}
+  watchlistDropdownOpen={watchlistDropdownOpen} setWatchlistDropdownOpen={setWatchlistDropdownOpen}
+  binanceCoins={binanceCoins} showToast={showToast} setMarketStatus={setMarketStatus}
+  coinIconUrl={coinIconUrl} handleCoinIconError={handleCoinIconError}
+/>
               </div>
             </div>
           ) : isEditorOpen ? (
@@ -7844,7 +7457,23 @@ export default function App({ onLogout, onBackToCoins }) {
             </div>
           ) : (
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-              {renderRightSidePanel()}
+              <RightSidebar 
+  rightSidebar={rightSidebar} setRightSidebar={setRightSidebar} themeConfig={t} 
+  OrderBookPanel={OrderBookPanel} livePrice={livePrice} selectedCoin={selectedCoin} 
+  selectedCoinStats={selectedCoinStats} handleRemoveWatchlist={handleRemoveWatchlist}
+  isWatchlistMode={isWatchlistMode} setIsWatchlistMode={setIsWatchlistMode}
+  showToast={showToast} isFavorite={isFavorite} toggleFavorite={toggleFavorite}
+  isConnected={isConnected} showVolume={showVolume} setShowVolume={setShowVolume}
+  showPerformance={showPerformance} setShowPerformance={setShowPerformance}
+  hideDrawings={hideDrawings} setHideDrawings={setHideDrawings} chartType={chartType}
+  setChartType={setChartType} toggleIndicator={toggleIndicator} activeIndicators={activeIndicators}
+  getBaseAsset={getBaseAsset} removeAlert={removeAlert} alerts={alerts}
+  alertCondition={alertCondition} setAlertCondition={setAlertCondition}
+  alertPrice={alertPrice} setAlertPrice={setAlertPrice} addPriceAlert={addPriceAlert}
+  newsFilterType={newsFilterType} setNewsFilterType={setNewsFilterType}
+  newsLoading={newsLoading} newsError={newsError} newsList={newsList}
+  watchlist={watchlist} renderBountyPanel={renderBountyPanel} darkMode={darkMode}
+/>
             </div>
           )}
         </div>

@@ -6,7 +6,7 @@ import {
   SplitSquareHorizontal, Minus, ArrowRight, MoveVertical, Plus, 
   ListTree, Sliders, Baseline, Columns, Grid3x3, Box, GitPullRequest, GitMerge, 
   PenTool, Disc, Triangle, Type, FileText, Tag, MessageSquareText, Signpost, ArrowUp, ArrowDown, Star, Heart, 
-  Waypoints, Focus, TrendingDown, Maximize, Ruler, ZoomIn, ZoomOut, Magnet, Lock, Eye, EyeOff
+  Waypoints, Focus, TrendingDown, Maximize, Ruler, ZoomIn, ZoomOut, Magnet, Lock, Eye, EyeOff, Rocket, Zap, Unlock, Shapes
 } from 'lucide-react';
 
 export const LeftToolbar = ({
@@ -29,7 +29,13 @@ export const LeftToolbar = ({
   isDrawingLocked,
   setIsDrawingLocked,
   isDrawingHidden,
-  setIsDrawingHidden
+  setIsDrawingHidden,
+  renderEngine,
+  handleEngineToggle,
+  keepDrawing,
+  setKeepDrawing,
+  lockDrawings,
+  setLockDrawings
 }) => {
   const categories = [
     {
@@ -296,6 +302,31 @@ export const LeftToolbar = ({
       {/* Lock */}
       <button onClick={() => { setIsDrawingLocked(!isDrawingLocked); showToast(`Drawing Tools ${!isDrawingLocked ? 'LOCKED' : 'UNLOCKED'}`); }} className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${isDrawingLocked ? 'bg-[#2962ff] text-white shadow-lg shadow-blue-500/20' : `${t.muted} ${t.hover}`}`} title={isDrawingLocked ? "Unlock Drawing Tools" : "Lock Drawing Tools"}>
         <Lock size={18} strokeWidth={2} />
+      </button>
+
+      {/* 🚀 Rendering Engine Toggle */}
+      <button
+        onClick={handleEngineToggle}
+        className={`w-9 h-9 rounded-lg flex items-center justify-center relative transition-all duration-300 ${
+          renderEngine === 'webgpu'
+            ? 'bg-purple-500/20 text-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.25)]'
+            : renderEngine === 'webgl' 
+            ? 'bg-emerald-500/20 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.25)]' 
+            : `${t.muted} ${t.hover}`
+        }`}
+        title={renderEngine === 'webgpu' ? 'Rendering: WebGPU (Extreme Performance)' : renderEngine === 'webgl' ? 'Rendering: WebGL (GPU Accelerated)' : 'Rendering: Canvas 2D'}
+      >
+        {renderEngine === 'webgpu' ? (
+          <Rocket size={18} strokeWidth={2} className="drop-shadow-[0_0_4px_rgba(168,85,247,0.6)]" />
+        ) : (
+          <Zap size={18} strokeWidth={2} className={renderEngine === 'webgl' ? 'drop-shadow-[0_0_4px_rgba(16,185,129,0.6)]' : ''} />
+        )}
+        
+        {renderEngine === 'webgpu' ? (
+          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-purple-400 animate-pulse shadow-[0_0_4px_rgba(168,85,247,0.8)]" />
+        ) : renderEngine === 'webgl' ? (
+          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_4px_rgba(16,185,129,0.8)]" />
+        ) : null}
       </button>
 
       {/* Hide Drawings */}
