@@ -4,9 +4,9 @@
  * Native WebGL implementation of Drawing Tools.
  * Uses UniversalTranslator for Normalized Device Coordinates (NDC) mapping.
  */
-import { UniversalTranslator } from '../core_render_shared/UniversalTranslator.ts';
-import VS_SOURCE from './shaders/drawing_vertex.glsl?raw';
-import FS_SOURCE from './shaders/drawing_fragment.glsl?raw';
+import { UniversalTranslator } from '../../core_render_shared/UniversalTranslator';
+import VS_SOURCE from '../shaders/drawing_vertex.glsl?raw';
+import FS_SOURCE from '../shaders/drawing_fragment.glsl?raw';
 
 export class WebGLDrawings {
     constructor(canvasElement) {

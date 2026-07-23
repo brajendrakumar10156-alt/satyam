@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
-import { Canvas2DDrawings } from '../core_render_canvas2d/Canvas2DDrawings.ts';
-import { WebGLDrawings } from '../core_render_webgl/WebGLDrawings.ts';
-import { WebGPUDrawings } from '../core_render_webgpu/WebGPUDrawings.ts';
+import { Canvas2DDrawings } from '../core_render_canvas2d/drawings/Canvas2DDrawings';
+import { WebGLDrawings } from '../core_render_webgl/drawings/WebGLDrawings';
+import { WebGPUDrawings } from '../core_render_webgpu/drawings/WebGPUDrawings';
 
 const NativeDrawingLayer = forwardRef(({
   width,

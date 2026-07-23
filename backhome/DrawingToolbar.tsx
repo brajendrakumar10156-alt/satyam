@@ -1,5 +1,5 @@
 import React from 'react';
-import CursorMenu from './CursorMenu.jsx';
+import CursorMenu from './CursorMenu.tsx';
 
 export default function DrawingToolbar() {
   return (

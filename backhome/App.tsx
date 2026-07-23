@@ -456,7 +456,7 @@ function App({ onLogout, onBackToCoins }) {
     const fetchWatchlistPrices = async () => {
       try {
         const res = await fetch('https://api.binance.com/api/v3/ticker/24hr');
-        const data = await res.json();
+        const data = await res.tson();
         if (Array.isArray(data)) {
           const tickerMap = {};
           data.forEach(item => {
@@ -480,7 +480,7 @@ function App({ onLogout, onBackToCoins }) {
     const fetchStats = async () => {
       try {
         const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${selectedCoin}`);
-        const data = await res.json();
+        const data = await res.tson();
         if (data && !data.code) {
           setSelectedCoinStats({
             high: parseFloat(data.highPrice),
@@ -504,7 +504,7 @@ function App({ onLogout, onBackToCoins }) {
     const fetchNews = async () => {
       try {
         const res = await fetch('https://min-api.cryptocompare.com/data/v2/news/?lang=EN');
-        const data = await res.json();
+        const data = await res.tson();
         if (data && data.Data) {
           const parsed = data.Data.slice(0, 10).map(item => ({
             id: item.id,
@@ -1151,7 +1151,7 @@ function App({ onLogout, onBackToCoins }) {
           `${API_BASE}/candles/${selectedCoin}/${chartInterval}?limit=${limit}${beforeParam}`,
           { signal: controller.signal }
         );
-        const data = await res.json();
+        const data = await res.tson();
         if (data.error) throw new Error(data.error);
         return data.candles.map(normalizeCandle);
       } finally {
@@ -1222,7 +1222,7 @@ function App({ onLogout, onBackToCoins }) {
 
     Promise.all([
       selectedExchange === 'binance'
-        ? fetch(`${API_BASE}/coins`).then((r) => r.json()).catch(() => ({ coins: [] }))
+        ? fetch(`${API_BASE}/coins`).then((r) => r.tson()).catch(() => ({ coins: [] }))
         : Promise.resolve({ coins: [] }),
       fetchExchangeSymbols(selectedExchange).catch(() => []),
     ]).then(([backendData, exchangeList]) => {
@@ -1264,7 +1264,7 @@ function App({ onLogout, onBackToCoins }) {
       if (!res.ok) throw new Error('health failed');
       setBackendOnline(true);
       const aiRes = await fetch(`${API_BASE}/ai/status`);
-      const data = await aiRes.json();
+      const data = await aiRes.tson();
       setAiKeysReady({ gemini: !!data.gemini, groq: !!data.groq, jarvis: !!data.jarvis });
       return true;
     } catch {
@@ -3873,7 +3873,7 @@ function App({ onLogout, onBackToCoins }) {
           },
         }),
       });
-      const data = await res.json();
+      const data = await res.tson();
       if (data.error) throw new Error(data.error);
 
       appendAiMessage({ role: 'assistant', content: data.reply, code: data.code });
@@ -3921,7 +3921,7 @@ function App({ onLogout, onBackToCoins }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, ticker: selectedCoin, timeframe: chartInterval }),
       });
-      const data = await res.json();
+      const data = await res.tson();
       if (!res.ok || data.error) {
         const err = data.error || data.detail || `HTTP ${res.status}`;
         showToast('❌ ' + err);

@@ -4,8 +4,8 @@
  * Native WebGPU implementation of Drawing Tools.
  * Uses UniversalTranslator for Normalized Device Coordinates (NDC) mapping.
  */
-import { UniversalTranslator } from '../core_render_shared/UniversalTranslator.ts';
-import WGSL_SOURCE from './shaders/drawing.wgsl?raw';
+import { UniversalTranslator } from '../../core_render_shared/UniversalTranslator';
+import WGSL_SOURCE from '../shaders/drawing.wgsl?raw';
 
 export class WebGPUDrawings {
     constructor(canvasElement) {

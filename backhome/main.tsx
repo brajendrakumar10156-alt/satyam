@@ -1,8 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App.jsx';
-import Login from './Login.jsx';
-import CoinSelectPage from './CoinSelectPage.jsx';
+import App from './App.tsx';
+import Login from './Login.tsx';
+import CoinSelectPage from './CoinSelectPage.tsx';
 import './index.css';
 
 import logo from './assets/logo.jpeg';

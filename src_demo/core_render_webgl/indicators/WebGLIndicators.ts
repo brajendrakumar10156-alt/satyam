@@ -1,5 +1,5 @@
-import vertShaderCode from './shaders/indicator_vert.glsl?raw';
-import fragShaderCode from './shaders/indicator_frag.glsl?raw';
+import vertShaderCode from '../shaders/indicator_vert.glsl?raw';
+import fragShaderCode from '../shaders/indicator_frag.glsl?raw';
 
 /**
  * QuantaAI - WebGL Native Indicator Engine

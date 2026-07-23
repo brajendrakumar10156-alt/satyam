@@ -1,4 +1,4 @@
-import shaderCode from './shaders/indicator_wgsl.wgsl?raw';
+import shaderCode from '../shaders/indicator_wgsl.wgsl?raw';
 
 /**
  * QuantaAI - WebGPU Native Indicator Engine

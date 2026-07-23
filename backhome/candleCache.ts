@@ -3,7 +3,7 @@
  * Persists recently-loaded candles per exchange/symbol/interval so switching
  * back to a pair doesn't require refetching its whole history.
  *
- * Extracted out of App.jsx so the caching concern lives in one small,
+ * Extracted out of App.tsx so the caching concern lives in one small,
  * independently readable/testable module.
  */
 

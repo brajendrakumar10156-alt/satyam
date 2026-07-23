@@ -1,12 +1,14 @@
 // src_demo/utils/wasmCompute.ts
 
-import init, { CPUMathEngine } from '../core_math_rust/pkg/quantaai_math_engine.ts';
+import init, { CPUMathEngine, UniversalTranslator } from '../core_math_rust/pkg/quantaai_math_engine.ts';
 
 let isInitialized = false;
+export let wasmUniversalTranslator: UniversalTranslator | null = null;
 
 export async function initWASMCompute() {
   if (isInitialized) return true;
   await init(); // Fetches and instantiates the WASM module
+  wasmUniversalTranslator = new UniversalTranslator();
   isInitialized = true;
   return true;
 }

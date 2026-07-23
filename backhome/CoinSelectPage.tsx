@@ -62,7 +62,7 @@ function CoinSelectPage({ onOpenChart, onLogout }) {
     async function loadTickers() {
       try {
         const res = await fetch('https://api.binance.com/api/v3/ticker/24hr');
-        const data = await res.json();
+        const data = await res.tson();
         if (!active) return;
         const map = {};
         if (Array.isArray(data)) {
@@ -161,7 +161,7 @@ function CoinSelectPage({ onOpenChart, onLogout }) {
             const backendController = new AbortController();
             const backendTimeout = setTimeout(() => backendController.abort(), 1200);
             const res = await fetch(`${API_BASE}/coins`, { signal: backendController.signal });
-            const data = await res.json();
+            const data = await res.tson();
             const backendCoins = data.coins || [];
             clearTimeout(backendTimeout);
             for (const sym of backendCoins) {

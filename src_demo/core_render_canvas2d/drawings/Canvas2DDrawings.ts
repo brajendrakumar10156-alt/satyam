@@ -4,7 +4,7 @@
  * Native Canvas 2D implementation of Drawing Tools.
  * Replaces pixi.js for pure native performance.
  */
-import { UniversalTranslator } from '../core_render_shared/UniversalTranslator.ts';
+import { UniversalTranslator } from '../../core_render_shared/UniversalTranslator';
 
 export class Canvas2DDrawings {
     constructor(canvasElement) {

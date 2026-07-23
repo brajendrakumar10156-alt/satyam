@@ -80,7 +80,7 @@ async function fetchJson(url, signal) {
   try {
     const res = await fetch(url, { signal });
     if (res.ok) {
-      return await res.json();
+      return await res.tson();
     }
   } catch (_) {}
 
@@ -206,7 +206,7 @@ export async function fetchExchangeSymbols(exchangeId) {
   const fetchBackendSymbols = async () => {
     const response = await fetch(`${API_BASE}/symbols/${exchangeId}`);
     if (!response.ok) throw new Error('Backend failed');
-    const result = await response.json();
+    const result = await response.tson();
     if (Array.isArray(result) && result.length > 0) return result;
     throw new Error('Invalid backend symbols data');
   };
@@ -346,7 +346,7 @@ export async function fetchExchangeCandles(exchangeId, symbol, interval, limit =
     }
     const response = await fetch(url);
     if (!response.ok) throw new Error('Backend failed');
-    const data = await response.json();
+    const data = await response.tson();
     if (data && data.candles && Array.isArray(data.candles) && data.candles.length > 0) {
       return data.candles;
     }

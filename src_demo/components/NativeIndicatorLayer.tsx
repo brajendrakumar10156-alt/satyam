@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
-import { Canvas2DIndicators } from '../core_render_canvas2d/Canvas2DIndicators.ts';
-import { WebGLIndicators } from '../core_render_webgl/WebGLIndicators.ts';
-import { WebGPUIndicators } from '../core_render_webgpu/WebGPUIndicators.ts';
+import { Canvas2DIndicators } from '../core_render_canvas2d/indicators/Canvas2DIndicators';
+import { WebGLIndicators } from '../core_render_webgl/indicators/WebGLIndicators';
+import { WebGPUIndicators } from '../core_render_webgpu/indicators/WebGPUIndicators';
 
 const NativeIndicatorLayer = forwardRef(({
   width,
