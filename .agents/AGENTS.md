@@ -25,3 +25,5 @@
 
 ## Execution Rules
 - **Strict Phase-by-Phase:** Ek phase tab tak leave nahi hoga jab tak wo 100% complete na ho.
+
+- **MANDATORY SESSION LOGGING RULE**: At the end of EVERY session or task, YOU MUST automatically update the RESUME_CONTEXT.md file in the project root. You must log what you accomplished, what bugs were fixed, and what the next agent should do (Start Here). Format it as an 'Agent Conversation & Action History' entry, specifying who did what (e.g., 'Agent #2 fixed X and extracted Y'). Do NOT ask for permission to update this file, just do it automatically for every session.
