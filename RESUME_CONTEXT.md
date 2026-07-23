@@ -1,4 +1,4 @@
-﻿# QuantaAI / Titan Multi-Engine Chart - Project Resume State & Agent Log
+# QuantaAI / Titan Multi-Engine Chart - Project Resume State & Agent Log
 **Last Updated**: 2026-07-23 (IST)
 
 ---
@@ -122,6 +122,34 @@ graph TD
 
 ## 📜 Agent Conversation & Action History
 
+### [Session: 2026-07-23] AI Agent #2 (TopNavbar Extraction)
+* **Goal**: Extract the complex TopNavbar (Lines 145 to 712) containing Search, Timeframes, Indicators, and Chart Styles into a dedicated component.
+* **Logic & Flow**:
+  - To respect the constraint "ui draticaal app tas connect mat karna" (Shift UI logic incrementally), we avoided migrating 55+ state variables to Zustand immediately.
+  - Instead, we used a **Props Object Injection Pattern**. All 55+ required variables (state, functions, config) are injected directly into `<TopNavbar {...props} />`.
+* **Languages Used**: TypeScript, TSX, Node.js (for precise regex replacement of 500+ lines in App.tsx without crashing).
+* **Actions Taken**:
+  1. Identified exact boundaries of Mobile & Desktop Headers inside `App.tsx`.
+  2. Created `src_demo/components/layout/TopNavbar.tsx`.
+  3. Replaced 560+ lines of raw UI code in `App.tsx` with a clean `<TopNavbar />` call.
+* **Flowchart**:
+```mermaid
+graph TD
+    subgraph "Phase 3.3.1: TopNavbar Decoupling"
+        APP[App.tsx (Monolith)]
+        STATE[Local useState hooks]
+        
+        APP -->|Renders| TN_OLD[Raw UI code inside return block]
+        
+        TN_OLD -.->|Extracted| TN_NEW[TopNavbar.tsx]
+        
+        STATE -->|55+ Props passed safely| TN_NEW
+        
+        APP -->|Now renders| TN_NEW
+    end
+```
+* **Status**: TopNavbar is physically decoupled. Global state migration (Zustand UIStore) is safely deferred to Phase 3.4.
+
 ### [Session: 2026-07-23] AI Agent #1 
 * **Goal**: Shift UI components slowly from App.tsx without drastically connecting them and breaking the app. Follow the 500-lines limit rule.
 * **Actions Taken**:
@@ -141,13 +169,12 @@ graph TD
 We are in the middle of extracting the 8000+ line monolith App.tsx into modular React components under src_demo/components/layout/. 
 
 ### What is PENDING (Next Agent Start Here!):
-1. **TopNavbar Extraction**:
-   - The Top Navbar is deeply intertwined with chartInterval, handleCandleStyleChange, onBackToCoins and searchQuery. 
-   - Needs to be safely extracted and hot-swapped just like LeftToolbar.
+1. **TopNavbar Extraction**: [COMPLETED]
+   - The Top Navbar was successfully extracted safely via prop injection.
 2. **BottomPanel Extraction**:
    - Time range buttons (1D, 5D, 1M, YTD, etc.) need to go to BottomPanel.tsx.
 3. **Zustand UIStore Migration**:
-   - App.tsx still holds local useState for things like ightSidebar. After physical extraction, replace useState with useUIStore().
+   - App.tsx still holds local useState for things like `rightSidebar` and TopNavbar props. After physical extraction, replace useState with `useUIStore()`.
 
 ---
 

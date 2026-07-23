@@ -1,0 +1,60 @@
+tems-center gap-1.5 mr-1`} title="Stealth / Focus Mode">
+                <Ghost size={14} className={stealthMode ? 'text-blue-400' : ''} />
+              </button>
+              <button onClick={() => setDarkMode(!darkMode)} className={`p-1.5 ${t.muted} ${t.hover} rounded transition-colors`} title="Toggle theme">
+                {darkMode ? <Sun size={14} /> : <Moon size={14} />}
+              </button>
+
+              {/* Timezone Settings Dropdown */}
+              <div className="relative">
+                <button onClick={() => setActiveFlyout(activeFlyout === 'timezone' ? null : 'timezone')} className={`p-1.5 ${activeFlyout === 'timezone' ? 'bg-[#7C5CFF] text-white' : `${t.muted} ${t.hover}`} rounded transition-colors`} title="Timezone Settings">
+                  <Clock size={14} />
+                </button>
+                {activeFlyout === 'timezone' && (
+                  <div className={`absolute top-full right-0 mt-1 w-44 rounded-lg shadow-xl border ${t.border} ${t.bg} overflow-hidden z-50 text-[13px] font-medium`}>
+                    {['UTC', 'IST', 'Auto'].map(tz => (
+                      <button key={tz} onClick={() => { setTimezone(tz); localStorage.setItem('chartTimezone', tz); setActiveFlyout(null); }} className={`w-full text-left px-4 py-2 flex items-center justify-between ${timezone === tz ? 'text-[#7C5CFF] bg-[#7C5CFF]/10' : `${t.text} ${t.hover}`} transition-colors`}>
+                        <span>{tz === 'UTC' ? '🌐 UTC' : tz === 'IST' ? '🇮🇳 IST' : '📍 Auto (Local)'}</span>
+                        {timezone === tz && <Check size={14} />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Candle count badge */}
+              <div className={`hidden lg:flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono border ${t.border} ${t.sec} ${t.muted} shrink-0`} title="Total candles loaded">
+                <Database size={10} />
+                <span>{allCandles.length.toLocaleString()}</span>
+                <span className="opacity-50">bars</span>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        {/* MOBILE HORIZONTAL TIMEFRAME SCROLLER (Hidden in new mobile design) */}
+        {!isMobile && (
+          <div className={`${focusMode ? 'hidden' : 'md:hidden flex'} mobile-scroll-x items-center gap-0.5 px-2 py-1 border-b ${t.border} ${t.bg} overflow-x-auto shrink-0`}>
+          {timeframeButtons.map(tf => (
+            <button key={tf.label} onClick={() => { setChartInterval(tf.val); showToast(`Timeframe: ${tf.label}`); }} className={`px-3 py-1.5 font-semibold rounded-full text-[11px] whitespace-nowrap transition-colors ${chartInterval === tf.val ? 'bg-[#7C5CFF] text-white' : `${t.muted} ${t.sec}`}`}>{tf.label}</button>
+          ))}
+          <input
+            value={customTimeframeInput}
+            onChange={(e) => setCustomTimeframeInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') applyCustomTimeframe(); }}
+            placeholder="e.g 45m"
+            className={`w-[80px] shrink-0 px-2 py-1.5 rounded-full text-[11px] border ${t.border} ${t.bg} ${t.text} outline-none`}
+          />
+          <button onClick={applyCustomTimeframe} className={`shrink-0 px-2.5 py-1.5 rounded-full text-[11px] font-semibold ${t.sec} ${t.text}`}>Set</button>
+          <button onClick={loadDeepHistory} className={`shrink-0 px-2.5 py-1.5 rounded-full text-[11px] font-semibold ${t.muted} ${t.sec}`}>6Y</button>
+        </div>
+        )}
+
+        <div className="flex flex-1 min-h-0 min-w-0 flex-col md:flex-row overflow-hidden">
+          <div className={`flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden md:border-r ${t.border}`}>
+            <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
+          <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
+            {!isMobile && !focusMode && <LeftToolbar 
+  horizontal={false} t={t} darkMode={darkMode} activeTool={activeTool} 
+  setActiveToo

@@ -85,6 +85,8 @@ function toHeikinAshi(candles) {
 }
 
 import { API_BASE, CANDLE_BATCH_SIZE, INITIAL_HISTORY_BATCHES, MAX_CANDLES_IN_MEMORY, SIX_YEARS_SECONDS, INTERVAL_SECONDS_MAP, CUSTOM_TIMEFRAME_REGEX, intervalToSeconds, getHistoryCandleCap, QUOTE_ASSETS, parseSymbolParts, getBaseAsset, getQuoteAsset, getFngColor, formatUSD, formatShortNumber, COINGECKO_ID_MAP, getCoinGeckoId, coinIconUrl, handleCoinIconError } from './app_core/AppConfig';
+import { TopNavbar } from './components/layout/TopNavbar';
+
 function mergeCandles(...groups) {
   const byTime = new Map();
   groups.flat().forEach(c => {
@@ -5449,575 +5451,88 @@ export default function App({ onLogout, onBackToCoins }) {
         </div>
       )}
 
-      {/* MOBILE NEW TOP HEADER */}
-      {isMobile && !focusMode && (
-        <div className={`flex min-h-14 border-b items-center justify-between px-3 shrink-0 z-30 transition-all w-full relative ${darkMode ? 'border-[rgba(255,255,255,0.07)] bg-[#0B0E14]/95 backdrop-blur-md' : 'border-[#e0e3eb] bg-white/95 backdrop-blur-md shadow-sm'}`}>
-          <div className="flex items-center gap-3 min-w-0">
-            <button onClick={() => setMobileMenuOpen(true)} className={`p-1.5 -ml-1.5 ${t.muted} ${t.hover} rounded-lg`}><Menu size={22} /></button>
-            <div className="flex flex-col cursor-pointer" onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
-              <div className="flex items-center gap-1.5">
-                <span className={`font-black text-[16px] ${t.text} tracking-tight`}>{selectedCoin}</span>
-                <ChevronDown size={14} className={t.muted} />
-              </div>
-              <span className={`text-[11px] font-bold ${(watchlistTickers[selectedCoin]?.change >= 0) ? 'text-emerald-500' : 'text-red-500'}`}>
-                ${livePrice ? formatNumber(livePrice, 2) : '---'} 
-                <span className="ml-1 opacity-80">({(watchlistTickers[selectedCoin]?.change >= 0) ? '+' : ''}{watchlistTickers[selectedCoin]?.change?.toFixed(2) || '0.00'}%)</span>
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <select
-              value={chartInterval}
-              onChange={(e) => setChartInterval(e.target.value)}
-              className={`bg-transparent text-[14px] font-extrabold ${t.text} outline-none cursor-pointer text-right appearance-none mr-1`}
-            >
-              <option value="1s">1s</option>
-              <option value="1m">1m</option>
-              <option value="5m">5m</option>
-              <option value="15m">15m</option>
-              <option value="1h">1H</option>
-              <option value="4h">4H</option>
-              <option value="1d">1D</option>
-              <option value="1w">1W</option>
-            </select>
-            <button onClick={() => { setChartStyle(chartStyle === 'Candles' ? 'Line' : 'Candles'); showToast('Chart Style toggled'); }} className={`p-2 rounded-full ${t.bg} ${t.muted} border ${t.border} shadow-sm transition-colors`}>
-              {chartStyle === 'Candles' ? <TrendingUp size={16} /> : <Activity size={16} />}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* DESKTOP HEADER (Hidden on mobile) */}
-      <div className={`${focusMode ? 'hidden' : 'hidden md:flex'} min-h-11 border-b items-center justify-between px-2 md:px-3 shrink-0 z-30 gap-2 w-full transition-all duration-200 ${darkMode ? 'border-[rgba(255,255,255,0.07)] bg-[#0B0E14]/95 backdrop-blur-md' : 'border-[#e0e3eb] bg-white/95 backdrop-blur-md shadow-sm'}`}>
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            {onBackToCoins && (
-              <button 
-                onClick={onBackToCoins}
-                className="p-1.5 rounded hover:bg-gray-700/20 text-[#8b94a7] hover:text-white transition-colors flex items-center justify-center shrink-0"
-                title="Back to Markets"
-              >
-                <ArrowLeft size={16} className="shrink-0 text-[#ff5722]" />
-              </button>
-            )}
-            {onBackToCoins && <div className={`h-4 w-[1px] bg-[rgba(255,255,255,0.06)] shrink-0`} />}
-            
-            {/* Exchange Dropdown */}
-            <select
-              value={selectedExchange}
-              onChange={(e) => handleExchangeChange(e.target.value)}
-              className={`shrink-0 text-[10px] md:text-[11.5px] font-bold rounded-md px-1.5 py-1 border ${t.border} ${t.bg} ${t.text} outline-none cursor-pointer max-w-[76px] md:max-w-none`}
-              title="Select exchange"
-            >
-              {EXCHANGE_LIST.map((ex) => (
-                <option key={ex.id} value={ex.id}>{ex.name}</option>
-              ))}
-            </select>
-            
-            {/* Coin Search Spotlight Command Bar */}
-            <div className="relative flex items-center shrink-0 z-[100]">
-              <form 
-                onSubmit={(e) => { e.preventDefault(); executeSearch(coinInput || selectedCoin); }} 
-              className={`flex items-center gap-1 md:gap-1.5 border px-1.5 py-1 rounded-md shadow-sm transition-all duration-150 group cursor-text ${darkMode ? 'bg-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.07)] border-[rgba(255,255,255,0.08)] focus-within:border-[rgba(41,98,255,0.5)] focus-within:shadow-[0_0_0_1px_rgba(41,98,255,0.2)]' : 'bg-gray-100 hover:bg-gray-200 border-gray-300 focus-within:border-blue-400'}`}
-                onClick={() => document.getElementById('smart-search')?.focus()}
-              >
-                <Search size={13} className="text-gray-400 group-hover:text-[#7C5CFF] transition-colors shrink-0" />
-                <img 
-                  src={coinIconUrl(selectedCoin)} 
-                  data-tier="0"
-                  onError={(e) => handleCoinIconError(e, selectedCoin)}
-                  alt="coin"
-                  className="w-4 h-4 rounded-full shadow-xs shrink-0 object-cover bg-white" 
-                />
-                <input 
-                  id="smart-search" 
-                  type="text" 
-                  autoComplete="off" 
-                  placeholder={selectedCoin} 
-                  value={coinInput} 
-                  onChange={(e) => { setCoinInput(e.target.value.toUpperCase()); setIsDropdownOpen(true); }} 
-                  onFocus={() => setIsDropdownOpen(true)} 
-                  onBlur={() => setTimeout(() => setIsDropdownOpen(false), 250)} 
-                  className={`w-[45px] md:w-[65px] bg-transparent font-black text-[12px] md:text-[13px] ${t.text} placeholder-gray-500 tracking-wide outline-none focus:text-[#7C5CFF] uppercase`} 
-                />
-                <div className={`hidden lg:flex items-center gap-1 border-l ${darkMode ? 'border-[#2a2e39]' : 'border-gray-300'} pl-1.5 ml-0.5`}>
-                  <kbd className={`text-[8.5px] font-mono font-bold ${darkMode ? 'bg-[#0B0E14] text-[#475569] border-[rgba(255,255,255,0.08)]' : 'bg-white text-gray-400 border-gray-200'} border px-1 py-0.5 rounded`}>Ctrl K</kbd>
-                </div>
-              </form>
-              
-              <button 
-                onClick={() => openModal('Compare / Add Symbol', '', 'compare_symbol')}
-                className="p-1.5 rounded-lg text-fuchsia-400/60 hover:bg-fuchsia-500/10 hover:text-fuchsia-400 transition-colors flex items-center justify-center shrink-0 ml-1.5"
-                title="Compare / Overlay Symbol"
-              >
-                <Scale size={16} />
-              </button>
-              {isDropdownOpen && (
-                <div className={`absolute top-[calc(100%+6px)] left-0 w-[min(18rem,85vw)] border rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.7)] z-[200] max-h-72 md:max-h-96 overflow-y-auto dark-scrollbar py-1.5 ${darkMode ? 'bg-[#0F1117]/98 backdrop-blur-xl border-[rgba(255,255,255,0.08)]' : 'bg-white border-[#e0e3eb] shadow-lg'}`}>
-                  {coinsLoading && (
-                    <div className={`flex items-center gap-2 px-4 py-3 text-[11px] ${t.muted}`}><RefreshCw size={12} className="animate-spin" /> Loading pairs...</div>
-                  )}
-                  {!coinsLoading && filteredCoins.length === 0 && (
-                    <div className={`px-4 py-3 text-[11px] ${t.muted}`}>No pairs found</div>
-                  )}
-                  {filteredCoins.map(coin => (
-                    <div key={coin} onMouseDown={(e) => { e.preventDefault(); executeSearch(coin); }} className={`px-4 py-2.5 text-[11px] font-bold ${t.text} ${t.hover} cursor-pointer transition-colors flex items-center gap-2`}>
-                      <img 
-                        src={coinIconUrl(coin)}
-                        data-tier="0"
-                        onError={(e) => handleCoinIconError(e, coin)}
-                        alt={coin}
-                        className="w-4 h-4 rounded-full object-cover bg-white shrink-0"
-                      />
-                      <span>{coin}</span>
-                      <span className={`${t.muted} font-normal ml-auto text-[10px]`}>{getQuoteAsset(coin)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Live Price Display */}
-            {livePrice > 0 && (
-              <span id="topbar-live-price" className="text-[12px] md:text-[13px] font-bold shrink-0" style={{ color: priceColor }} dangerouslySetInnerHTML={{ __html: '$' + livePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }) }} />
-            )}
-
-            {/* Sentiment info badge */}
-            {fearGreedIndex && (
-              <span 
-                className="hidden lg:inline-flex items-center gap-1 text-[11px] font-extrabold px-2 py-1 rounded-md border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] cursor-pointer shrink-0 transition-all hover:border-[rgba(255,255,255,0.1)]"
-                style={{ color: getFngColor(fearGreedIndex.value) }}
-                title={`Fear & Greed Index: ${fearGreedIndex.value} (${fearGreedIndex.classification}). Click to open Details.`}
-                onClick={() => setRightSidebar('details')}
-              >
-                <Activity size={12} /> {fearGreedIndex.value}
-              </span>
-            )}
-
-            {/* Connection Status Indicator */}
-            <div className="flex items-center justify-center shrink-0" title={`${getExchangeMeta(selectedExchange).name} · ${marketStatus}`}>
-              <div className={`w-1.5 h-1.5 rounded-full ${marketStatus === 'Connected' ? 'bg-[#089981]' : marketStatus === 'Loading' || marketStatus === 'Polling' ? 'bg-amber-500 animate-pulse' : 'bg-red-500'}`} />
-            </div>
-
-            {/* MIDDLE SECTION FOR DESKTOP - COOPERATIVE DROPDOWNS */}
-            <div className="hidden md:flex items-center gap-1 min-w-0">
-              <div className={`h-4 w-[1px] ${darkMode ? 'bg-[#2a2e39]' : 'bg-[#e0e3eb]'} mx-1`} />
-              
-              {/* TIME FRAME DROPDOWN SELECTOR */}
-              <div className="relative">
-                <button 
-                  onClick={() => {
-                    setIsTimeframeDropdownOpen(!isTimeframeDropdownOpen);
-                    setIsStyleDropdownOpen(false);
-                    setIsActionsDropdownOpen(false);
-                  }}
-                  className={`flex items-center gap-0.5 px-2 py-1.5 rounded text-[13px] font-extrabold transition-colors ${isTimeframeDropdownOpen ? `${t.sec} text-white` : `${t.muted} ${t.hover}`}`}
-                  title="Select Timeframe"
-                >
-                  <span>{chartInterval}</span>
-                  <ChevronDown size={11} className="opacity-60" />
-                </button>
-                
-                {isTimeframeDropdownOpen && (
-                  <div className={`absolute top-[calc(100%+6px)] left-0 w-44 border rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.7)] z-[350] py-1.5 ${darkMode ? 'bg-[#0F1117]/98 backdrop-blur-xl border-[rgba(255,255,255,0.08)]' : 'bg-white border-[#e0e3eb] shadow-lg'}`}>
-                    <div className="text-[9px] uppercase font-black tracking-wider px-3 py-1.5 border-b mb-1" style={{color: darkMode ? '#475569' : '#9ca3af', borderColor: darkMode ? 'rgba(255,255,255,0.05)' : '#f0f0f0'}}>Timeframes</div>
-                    <div className="grid grid-cols-3 gap-1 px-2 pb-2">
-                      {timeframeButtons.map(tf => (
-                        <button 
-                          key={tf.label}
-                          onClick={() => {
-                            setChartInterval(tf.val);
-                            setIsTimeframeDropdownOpen(false);
-                            showToast(`Timeframe: ${tf.label}`);
-                          }}
-                          className={`px-1.5 py-1 text-[11px] font-bold rounded text-center transition-colors ${chartInterval === tf.val ? 'bg-blue-500/20 text-blue-400' : `${t.text} ${t.hover}`}`}
-                        >
-                          {tf.label}
-                        </button>
-                      ))}
-                    </div>
-                    
-                    <div className="border-t border-[#2a2e39]/30 my-1" />
-                    
-                    {/* Custom Input inside dropdown */}
-                    <div className="px-3 py-2 flex flex-col gap-1.5">
-                      <div className="text-[9px] text-gray-500 uppercase font-black tracking-wider">Custom Interval</div>
-                      <div className="flex items-center gap-1">
-                        <input
-                          value={customTimeframeInput}
-                          onChange={(e) => setCustomTimeframeInput(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') { applyCustomTimeframe(); setIsTimeframeDropdownOpen(false); } }}
-                          placeholder="e.g. 45m, 2h"
-                          className={`w-full px-2 py-1 rounded text-[11px] border ${t.border} ${t.bg} ${t.text} outline-none focus:border-[#7C5CFF]`}
-                        />
-                        <button 
-                          onClick={() => { applyCustomTimeframe(); setIsTimeframeDropdownOpen(false); }} 
-                          className={`px-2 py-1 rounded text-[11px] font-semibold bg-[#7C5CFF]/15 text-[#7C5CFF] hover:bg-[#7C5CFF]/25`}
-                        >
-                          Set
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div className="border-t border-[#2a2e39]/30 my-1" />
-                    
-                    {/* 6Y History inside dropdown */}
-                    <button 
-                      onClick={() => { loadDeepHistory(); setIsTimeframeDropdownOpen(false); }} 
-                      title="Load up to 6 years of history" 
-                      className={`w-full text-left px-3.5 py-2 text-[11px] font-bold flex items-center gap-2 ${t.text} hover:bg-white/5 transition-colors`}
-                    >
-                      <History size={12} className="text-amber-500" />
-                      <span>Load 6Y History</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-              
-              {/* CHART STYLE SELECTOR */}
-              <div className="relative">
-                <button 
-                  onClick={() => {
-                    setIsStyleDropdownOpen(!isStyleDropdownOpen);
-                    setIsTimeframeDropdownOpen(false);
-                    setIsActionsDropdownOpen(false);
-                  }} 
-                  className={`flex items-center gap-0.5 px-2 py-1.5 rounded transition-colors ${isStyleDropdownOpen ? `bg-emerald-500/15 text-emerald-400` : `text-emerald-400/60 hover:bg-emerald-500/10 hover:text-emerald-400`}`}
-                  title="Chart Style"
-                >
-                  <CandlestickChart size={14} />
-                  <ChevronDown size={11} className="opacity-60" />
-                </button>
-                {isStyleDropdownOpen && (
-                  <div className={`absolute top-[calc(100%+6px)] left-0 w-52 max-h-[70vh] overflow-y-auto custom-scrollbar border rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.7)] z-[300] py-1.5 ${darkMode ? 'bg-[#0F1117]/98 backdrop-blur-xl border-[rgba(255,255,255,0.08)]' : 'bg-white border-[#e0e3eb] shadow-lg'}`}>
-                    {[
-                      { name: 'Candles', desc: 'Standard Candlesticks', icon: '📊', color: 'text-green-500' },
-                      { name: 'Bars', desc: 'Traditional OHLC Bars', icon: '📶', color: 'text-blue-500' },
-                      { name: 'Line', desc: 'Continuous Close Line', icon: '📈', color: 'text-blue-400' },
-                      { name: 'Area', desc: 'Shaded Price Area', icon: '⛰️', color: 'text-indigo-400' },
-                      { name: 'Heikin-Ashi', desc: 'Smoothed HA Candles', icon: '🔥', color: 'text-orange-500' },
-                      { name: 'Hollow Candles', desc: 'Transparent Up Candles', icon: '🟩', color: 'text-emerald-500' },
-                      { name: 'Baseline', desc: 'Relative to First Close', icon: '📏', color: 'text-cyan-500' },
-                      { name: 'Step Line', desc: 'Stepped Close Prices', icon: '🪜', color: 'text-sky-500' },
-                      { name: 'Histogram', desc: 'Vertical Value Bars', icon: '🎚️', color: 'text-purple-500' },
-                      { name: 'High-Low', desc: 'Only Shadows/Wicks', icon: '↕️', color: 'text-zinc-400' },
-                      { name: 'Volume Candles', desc: 'Price + Volume Weight', icon: '📦', color: 'text-amber-500' },
-                      { name: 'Renko', desc: 'Price Movement Bricks', icon: '🧱', color: 'text-red-500', isPro: true },
-                      { name: 'Line Break', desc: 'Reversal Based', icon: '📉', color: 'text-pink-500', isPro: true },
-                      { name: 'Kagi', desc: 'Thickness Reversal', icon: '⛩️', color: 'text-rose-500', isPro: true },
-                      { name: 'Point & Figure', desc: 'X and O Tracking', icon: '❌', color: 'text-fuchsia-500', isPro: true },
-                      { name: 'Range', desc: 'Fixed Price Movement', icon: '🎯', color: 'text-lime-500', isPro: true },
-                      { name: 'TPO', desc: 'Time Price Opportunity', icon: '🕒', color: 'text-teal-500', isPro: true },
-                      { name: 'Footprint', desc: 'Order Flow Detail', icon: '👣', color: 'text-blue-600', isPro: true },
-                      { name: 'Order Flow', desc: 'Volume At Price', icon: '🌊', color: 'text-cyan-600', isPro: true },
-                      { name: 'Market Profile', desc: 'Volume Distribution', icon: '📊', color: 'text-violet-500', isPro: true }
-                    ].map(style => (
-                      <button 
-                        key={style.name} 
-                        onClick={() => {
-                          if (style.isPro) {
-                            showToast(`🔒 ${style.name} is a Pro Feature (Coming Soon)`);
-                            return;
-                          }
-                          setChartStyle(style.name);
-                          setIsStyleDropdownOpen(false);
-                          showToast(`Chart Style: ${style.name}`);
-                        }}
-                        className={`w-full text-left px-3 py-2 text-[11.5px] font-bold transition-colors ${chartStyle === style.name ? 'bg-blue-500/10 text-blue-400' : `${t.text} ${t.hover}`}`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className={`text-base ${style.color}`}>{style.icon}</span>
-                          <div className="flex flex-col">
-                            <span className="flex items-center gap-1.5">
-                              {style.name} 
-                              {style.isPro && <span className="text-[8px] bg-yellow-500/20 text-yellow-500 px-1 py-0 rounded">PRO</span>}
-                            </span>
-                            <span className="text-[9px] text-gray-500 font-medium">{style.desc}</span>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className={`h-4 w-[1px] ${darkMode ? 'bg-[#2a2e39]' : 'bg-[#e0e3eb]'} mx-1`} />
-
-
-
-              {/* VOLUME PROFILE TOGGLE */}
-              <button
-                onClick={() => {
-                  setVolumeProfile(prev => !prev);
-                  showToast(`Volume Profile: ${!volumeProfile ? 'ON' : 'OFF'}`);
-                  requestDraw();
-                }}
-                className={`flex items-center justify-center p-1.5 rounded transition-colors ${
-                  volumeProfile ? 'bg-purple-500/15 text-purple-400' : `text-purple-400/60 hover:bg-purple-500/10 hover:text-purple-400`
-                }`}
-                title={`Volume Profile: ${volumeProfile ? 'ON' : 'OFF'}`}
-              >
-                <BarChartHorizontal size={14} />
-              </button>
-
-              <div className={`h-4 w-[1px] ${darkMode ? 'bg-[#2a2e39]' : 'bg-[#e0e3eb]'} mx-1`} />
-
-              <button 
-                onClick={() => openModal('Indicators, metrics, and strategies', '', 'indicators_search')} 
-                className={`flex items-center justify-center p-1.5 rounded transition-colors text-violet-400/60 hover:bg-violet-500/10 hover:text-violet-400`}
-                title="Indicators"
-              >
-                <LineChart size={14} />
-              </button>
-
-              {/* ALERTS MODAL */}
-              <button 
-                onClick={() => openModal('Create alert on', '', 'alert_creation')} 
-                className={`flex items-center justify-center p-1.5 rounded transition-colors text-amber-400/70 hover:bg-amber-500/10 hover:text-amber-400`}
-                title="Alert"
-              >
-                <Bell size={14} />
-              </button>
-
-              <div className={`h-4 w-[1px] ${darkMode ? 'bg-[#2a2e39]' : 'bg-[#e0e3eb]'} mx-1`} />
-              
-              {/* REPLAY CONTROLLER TOGGLE */}
-              <button onClick={() => {
-                if (replayMode && fullCandlesRef.current.length) {
-                  allCandlesRef.current = [...fullCandlesRef.current];
-                  setAllCandles([...fullCandlesRef.current]);
-                }
-                setReplayMode(!replayMode);
-                if (!replayMode) showToast('⏪ Replay on — use slider');
-                else showToast('▶️ Replay off');
-              }} className={`flex items-center justify-center p-1.5 rounded transition-colors ${replayMode ? 'bg-orange-500/10 text-orange-500' : `text-orange-400/60 hover:bg-orange-500/10 hover:text-orange-400`}`} title="Replay">
-                <Rewind size={14} />
-              </button>
-
-              <div className={`h-4 w-[1px] ${darkMode ? 'bg-[#2a2e39]' : 'bg-[#e0e3eb]'} mx-1`} />
-
-              {/* GRID LAYOUT SELECTION */}
-              <div className="relative">
-                <button 
-                  onClick={() => {
-                    setIsActionsDropdownOpen(!isActionsDropdownOpen);
-                    setIsLayoutMenuOpen(false);
-                    setIsTimeframeDropdownOpen(false);
-                    setIsStyleDropdownOpen(false);
-                  }}
-                  className={`p-1.5 rounded transition-colors ${isActionsDropdownOpen ? `bg-blue-500/15 text-blue-400` : `text-blue-400/60 hover:bg-blue-500/10 hover:text-blue-400`}`}
-                  title="Select Layout"
-                >
-                  <LayoutGrid size={14} />
-                </button>
-                {isActionsDropdownOpen && (
-                  <div className={`absolute top-[calc(100%+4px)] right-0 w-48 ${t.bg} border ${t.border} rounded-lg shadow-2xl z-[350] p-2 text-[11.5px] font-bold origin-top-right`}>
-                    <div className="text-[9px] text-gray-500 uppercase font-black tracking-wider mb-2">Grid Layout</div>
-                    <div className="grid grid-cols-4 gap-1">
-                      {[
-                        { id: '1', label: '1', title: 'Single Chart' },
-                        { id: '2v', label: '◫', title: '2 Split Vertical' },
-                        { id: '2h', label: '⊟', title: '2 Split Horizontal' },
-                        { id: '4', label: '⊞', title: '4 Grid Screen' },
-                      ].map(layout => (
-                        <button
-                          key={layout.id}
-                          onClick={() => {
-                            setChartLayout(layout.id);
-                            setIsActionsDropdownOpen(false);
-                            showToast(`Layout: ${layout.title}`);
-                          }}
-                          className={`h-8 flex items-center justify-center rounded text-[12px] font-black cursor-pointer transition-colors ${
-                            chartLayout === layout.id ? 'bg-blue-500/25 text-blue-400 font-extrabold border border-blue-500/30' : 'text-gray-400 hover:text-white bg-black/10 border border-[#2a2e39]/50'
-                          }`}
-                          title={layout.title}
-                        >
-                          {layout.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* LAYOUT MANAGEMENT DROPDOWN (TRADINGVIEW STYLE) */}
-              <div className="relative ml-0.5">
-                <button 
-                  onClick={() => {
-                    setIsLayoutMenuOpen(!isLayoutMenuOpen);
-                    setIsActionsDropdownOpen(false);
-                    setIsTimeframeDropdownOpen(false);
-                    setIsStyleDropdownOpen(false);
-                  }}
-                  className={`flex items-center gap-0.5 px-2 py-1.5 rounded transition-colors ${isLayoutMenuOpen ? `bg-stone-500/15 text-stone-400` : `text-stone-400/60 hover:bg-stone-500/10 hover:text-stone-400`}`}
-                  title="Manage Layouts"
-                >
-                  <Cloud size={14} />
-                  <ChevronDownIcon size={11} className="opacity-60" />
-                </button>
-
-                {isLayoutMenuOpen && (
-                  <div className={`absolute top-[calc(100%+4px)] right-0 w-56 ${t.bg} border ${t.border} rounded-lg shadow-2xl z-[350] py-1.5 text-[11px] font-bold origin-top-right flex flex-col`}>
-                    <button className={`w-full text-left px-4 py-1.5 flex items-center justify-between ${t.text} hover:bg-white/5 transition-colors`} onClick={() => { showToast('Layout saved'); setIsLayoutMenuOpen(false); }}>
-                      <span>Save layout</span>
-                      <span className="text-[9px] text-gray-500 font-mono">Ctrl+S</span>
-                    </button>
-                    <div className={`w-full px-4 py-1.5 flex items-center justify-between ${t.text} hover:bg-white/5 transition-colors cursor-pointer`} onClick={() => setIsAutosave(!isAutosave)}>
-                      <span>Autosave</span>
-                      <div className={`w-6 h-3 rounded-full relative transition-colors ${isAutosave ? 'bg-blue-500' : 'bg-gray-600'}`}>
-                        <div className={`absolute top-0.5 w-2 h-2 rounded-full bg-white transition-all ${isAutosave ? 'right-0.5' : 'left-0.5'}`} />
-                      </div>
-                    </div>
-                    <div className={`w-full px-4 py-1.5 flex items-center justify-between ${t.text} hover:bg-white/5 transition-colors cursor-pointer`} onClick={() => setIsShareLayout(!isShareLayout)}>
-                      <span className="flex items-center gap-1">Share layout <Info size={10} className="text-gray-500" /></span>
-                      <div className={`w-6 h-3 rounded-full relative transition-colors ${isShareLayout ? 'bg-blue-500' : 'bg-gray-600'}`}>
-                        <div className={`absolute top-0.5 w-2 h-2 rounded-full bg-white transition-all ${isShareLayout ? 'right-0.5' : 'left-0.5'}`} />
-                      </div>
-                    </div>
-                    <div className="border-t border-[#2a2e39]/30 my-1" />
-                    <button className={`w-full text-left px-4 py-1.5 flex items-center gap-2.5 ${t.text} hover:bg-white/5 transition-colors`} onClick={() => { showToast('Making copy...'); setIsLayoutMenuOpen(false); }}>
-                      <Copy size={12} className="text-gray-400" />
-                      <span>Make a copy...</span>
-                    </button>
-                    <button className={`w-full text-left px-4 py-1.5 flex items-center gap-2.5 ${t.text} hover:bg-white/5 transition-colors`} onClick={() => { showToast('Rename layout'); setIsLayoutMenuOpen(false); }}>
-                      <Edit2 size={12} className="text-gray-400" />
-                      <span>Rename...</span>
-                    </button>
-                    <button className={`w-full text-left px-4 py-1.5 flex items-center gap-2.5 ${t.text} hover:bg-white/5 transition-colors`} onClick={() => { showToast('Downloading data...'); setIsLayoutMenuOpen(false); }}>
-                      <Download size={12} className="text-gray-400" />
-                      <span>Download chart data...</span>
-                    </button>
-                    <div className="border-t border-[#2a2e39]/30 my-1" />
-                    <button className={`w-full text-left px-4 py-1.5 flex items-center gap-2.5 ${t.text} hover:bg-white/5 transition-colors`} onClick={() => { showToast('Creating layout...'); setIsLayoutMenuOpen(false); }}>
-                      <Plus size={12} className="text-gray-400" />
-                      <span>Create new layout...</span>
-                    </button>
-                    <div className="border-t border-[#2a2e39]/30 my-1" />
-                    <div className="text-[9px] text-gray-500 uppercase font-black tracking-wider px-4 py-1">Recently Used</div>
-                    <button className={`w-full text-left px-4 py-1.5 bg-blue-500/10 text-blue-400 transition-colors`}>
-                      {layoutName}
-                    </button>
-                    <button className={`w-full text-left px-4 py-1.5 ${t.text} hover:bg-white/5 transition-colors`}>
-                      BTCUSDT, 5
-                    </button>
-                    <div className="border-t border-[#2a2e39]/30 my-1" />
-                    <button className={`w-full text-left px-4 py-1.5 flex items-center gap-2.5 ${t.text} hover:bg-white/5 transition-colors`} onClick={() => { showToast('Open layout menu'); setIsLayoutMenuOpen(false); }}>
-                      <Cloud size={12} className="text-gray-400" />
-                      <span>Open layout...</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-              
-              <div className={`h-4 w-[1px] ${darkMode ? 'bg-[#2a2e39]' : 'bg-[#e0e3eb]'} mx-1`} />
-
-              {/* UTILITIES (Camera, Settings) */}
-              <div className="flex items-center gap-1.5 ml-3 border-l border-[#2a2e39]/50 pl-3">
-                  <button 
-                    onClick={() => {
-                      setTradingTab('Arbitrage Matrix');
-                      if (lowerBoxState === 'minimized') setLowerBoxState('normal');
-                    }}
-                    className={`p-1.5 rounded transition-colors ${tradingTab === 'Arbitrage Matrix' ? 'text-emerald-400 bg-emerald-500/10' : t.muted} hover:text-emerald-400`}
-                    title="Arbitrage Matrix"
-                  >
-                    <Zap size={14} className={tradingTab === 'Arbitrage Matrix' ? "fill-emerald-400 animate-pulse" : ""} />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setTradingTab('Strategy Tester');
-                      if (lowerBoxState === 'minimized') setLowerBoxState('normal');
-                    }}
-                    className={`p-1.5 rounded transition-colors ${tradingTab === 'Strategy Tester' ? 'text-blue-400 bg-blue-500/10' : t.muted} hover:text-blue-400`}
-                    title="Strategy Tester"
-                  >
-                    <FlaskConical size={14} className={tradingTab === 'Strategy Tester' ? "fill-blue-400" : ""} />
-                  </button>
-                </div>
-              <div className="flex items-center gap-0.5">
-                <button 
-                  onClick={() => openModal('Settings', 'Settings', 'settings')}
-                  className={`p-1.5 rounded transition-colors ${t.muted} ${t.hover}`}
-                  title="Chart Settings"
-                >
-                  <Settings size={14} />
-                </button>
-                <button
-                  onClick={() => takeRealScreenshot()}
-                  className={`p-1.5 rounded transition-colors ${t.muted} ${t.hover}`}
-                  title="Take a snapshot"
-                >
-                  <Camera size={14} />
-                </button>
-                <button 
-                  onClick={() => publishStrategy()}
-                  className={`p-1.5 rounded transition-colors ${t.muted} hover:text-purple-400`}
-                  title="Download Code File"
-                >
-                  <Upload size={14} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* RIGHT-HAND SIDE SYSTEM ACTIONS */}
-          <div className="flex items-center gap-0.5 shrink-0 z-40">
-            {/* Mobile chart style toggle */}
-            <button onClick={() => { setChartStyle(chartStyle === 'Candles' ? 'Line' : 'Candles'); showToast('Chart Style toggled'); }} className={`md:hidden p-2 rounded ${t.muted} ${t.hover} transition-colors`}><TrendingUp size={16} strokeWidth={2} /></button>
-            {/* Mobile menu trigger */}
-            <button onClick={() => setMobileMenuOpen(true)} className={`md:hidden p-2 ${t.muted} ${t.hover} rounded transition-colors`} aria-label="Open menu"><Menu size={18} /></button>
-
-            {/* Desktop Clean Utility Panel */}
-            <div className="hidden md:flex items-center gap-1">
-              {/* Fullscreen Toggle */}
-              <button 
-                onClick={toggleFullscreen} 
-                className={`p-1.5 ${t.muted} ${t.hover} rounded transition-colors`} 
-                title="Toggle Fullscreen"
-              >
-                <Maximize2 size={14} />
-              </button>
-
-              {/* Focus Mode Toggle */}
-              <button onClick={() => setFocusMode(!focusMode)} className={`p-1.5 ${t.muted} ${t.hover} rounded transition-colors hidden sm:flex items-center gap-1.5 mr-1`} title="Focus Mode (Maximize Chart)">
-                <Focus size={14} className={focusMode ? 'text-blue-400' : ''} />
-              </button>
-              {/* Theme Toggle (Highly accessible) */}
-              <button onClick={() => { setStealthMode(!stealthMode); if (!stealthMode) document.body.style.background = '#00000000'; }} className={`p-1.5 ${t.muted} ${t.hover} rounded transition-colors hidden sm:flex items-center gap-1.5 mr-1`} title="Stealth / Focus Mode">
-                <Ghost size={14} className={stealthMode ? 'text-blue-400' : ''} />
-              </button>
-              <button onClick={() => setDarkMode(!darkMode)} className={`p-1.5 ${t.muted} ${t.hover} rounded transition-colors`} title="Toggle theme">
-                {darkMode ? <Sun size={14} /> : <Moon size={14} />}
-              </button>
-
-              {/* Timezone Settings Dropdown */}
-              <div className="relative">
-                <button onClick={() => setActiveFlyout(activeFlyout === 'timezone' ? null : 'timezone')} className={`p-1.5 ${activeFlyout === 'timezone' ? 'bg-[#7C5CFF] text-white' : `${t.muted} ${t.hover}`} rounded transition-colors`} title="Timezone Settings">
-                  <Clock size={14} />
-                </button>
-                {activeFlyout === 'timezone' && (
-                  <div className={`absolute top-full right-0 mt-1 w-44 rounded-lg shadow-xl border ${t.border} ${t.bg} overflow-hidden z-50 text-[13px] font-medium`}>
-                    {['UTC', 'IST', 'Auto'].map(tz => (
-                      <button key={tz} onClick={() => { setTimezone(tz); localStorage.setItem('chartTimezone', tz); setActiveFlyout(null); }} className={`w-full text-left px-4 py-2 flex items-center justify-between ${timezone === tz ? 'text-[#7C5CFF] bg-[#7C5CFF]/10' : `${t.text} ${t.hover}`} transition-colors`}>
-                        <span>{tz === 'UTC' ? '🌐 UTC' : tz === 'IST' ? '🇮🇳 IST' : '📍 Auto (Local)'}</span>
-                        {timezone === tz && <Check size={14} />}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Candle count badge */}
-              <div className={`hidden lg:flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono border ${t.border} ${t.sec} ${t.muted} shrink-0`} title="Total candles loaded">
-                <Database size={10} />
-                <span>{allCandles.length.toLocaleString()}</span>
-                <span className="opacity-50">bars</span>
-              </div>
-
-            </div>
-          </div>
-        </div>
-
-        {/* MOBILE HORIZONTAL TIMEFRAME SCROLLER (Hidden in new mobile design) */}
+            <TopNavbar 
+              isMobile={isMobile}
+              focusMode={focusMode}
+              darkMode={darkMode}
+              t={t}
+              selectedCoin={selectedCoin}
+              livePrice={livePrice}
+              watchlistTickers={watchlistTickers}
+              isDropdownOpen={isDropdownOpen}
+              setIsDropdownOpen={setIsDropdownOpen}
+              chartInterval={chartInterval}
+              setChartInterval={setChartInterval}
+              chartStyle={chartStyle}
+              setChartStyle={setChartStyle}
+              onBackToCoins={onBackToCoins}
+              selectedExchange={selectedExchange}
+              handleExchangeChange={handleExchangeChange}
+              EXCHANGE_LIST={EXCHANGE_LIST}
+              executeSearch={executeSearch}
+              coinInput={coinInput}
+              setCoinInput={setCoinInput}
+              openModal={openModal}
+              coinsLoading={coinsLoading}
+              filteredCoins={filteredCoins}
+              getQuoteAsset={getQuoteAsset}
+              fearGreedIndex={fearGreedIndex}
+              marketStatus={marketStatus}
+              isTimeframeDropdownOpen={isTimeframeDropdownOpen}
+              setIsTimeframeDropdownOpen={setIsTimeframeDropdownOpen}
+              isStyleDropdownOpen={isStyleDropdownOpen}
+              setIsStyleDropdownOpen={setIsStyleDropdownOpen}
+              volumeProfile={volumeProfile}
+              setVolumeProfile={setVolumeProfile}
+              isActionsDropdownOpen={isActionsDropdownOpen}
+              setIsActionsDropdownOpen={setIsActionsDropdownOpen}
+              chartLayout={chartLayout}
+              setChartLayout={setChartLayout}
+              isLayoutMenuOpen={isLayoutMenuOpen}
+              setIsLayoutMenuOpen={setIsLayoutMenuOpen}
+              isAutosave={isAutosave}
+              setIsAutosave={setIsAutosave}
+              isShareLayout={isShareLayout}
+              setIsShareLayout={setIsShareLayout}
+              layoutName={layoutName}
+              tradingTab={tradingTab}
+              setTradingTab={setTradingTab}
+              lowerBoxState={lowerBoxState}
+              setLowerBoxState={setLowerBoxState}
+              takeRealScreenshot={takeRealScreenshot}
+              publishStrategy={publishStrategy}
+              stealthMode={stealthMode}
+              setStealthMode={setStealthMode}
+              activeFlyout={activeFlyout}
+              setActiveFlyout={setActiveFlyout}
+              timezone={timezone}
+              setTimezone={setTimezone}
+              allCandles={allCandles}
+              timeframeButtons={timeframeButtons}
+              customTimeframeInput={customTimeframeInput}
+              setCustomTimeframeInput={setCustomTimeframeInput}
+              applyCustomTimeframe={applyCustomTimeframe}
+              loadDeepHistory={loadDeepHistory}
+              showToast={showToast}
+              getFngColor={getFngColor}
+              getExchangeMeta={getExchangeMeta}
+              setMobileMenuOpen={setMobileMenuOpen}
+              formatNumber={formatNumber}
+              coinIconUrl={coinIconUrl}
+              handleCoinIconError={handleCoinIconError}
+              setRightSidebar={setRightSidebar}
+              toggleFullscreen={toggleFullscreen}
+              priceColor={priceColor}
+              replayMode={replayMode}
+              setReplayMode={setReplayMode}
+              fullCandlesRef={fullCandlesRef}
+              allCandlesRef={allCandlesRef}
+              setAllCandles={setAllCandles}
+              requestDraw={requestDraw}
+              setFocusMode={setFocusMode}
+              setDarkMode={setDarkMode}
+            />
+      {/* MOBILE HORIZONTAL TIMEFRAME SCROLLER (Hidden in new mobile design) */}
         {!isMobile && (
           <div className={`${focusMode ? 'hidden' : 'md:hidden flex'} mobile-scroll-x items-center gap-0.5 px-2 py-1 border-b ${t.border} ${t.bg} overflow-x-auto shrink-0`}>
           {timeframeButtons.map(tf => (

@@ -1,91 +1,147 @@
-import React from 'react';
-import { Menu, ChevronDown, TrendingUp, Activity, ArrowLeft, Search, Scale, RefreshCw, ChevronDown as ChevronDownIcon, Cloud, Info, Copy, Edit2, Download, Plus, Zap, FlaskConical, Settings, Camera, Upload, Maximize2, Focus, Ghost, Sun, Moon, Clock, Check, Database, History, CandlestickChart, BarChartHorizontal, LineChart, Bell, Rewind, LayoutGrid } from 'lucide-react';
+return (
+        <div 
+          className={`fixed z-50 flex items-center gap-2 border rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] p-1.5 transition-all ${darkMode ? 'bg-[#0F1117]/98 backdrop-blur-xl border-[rgba(255,255,255,0.09)]' : 'bg-white/98 backdrop-blur-md border-[#e0e3eb] shadow-xl'}`}
+          style={{ 
+            left: `${px}px`, 
+            top: `${py}px`,
+          }}
+        >
+          {/* Quick Color Picker */}
+          <div className="flex items-center gap-1 border-r border-[#2a2e39] pr-1.5">
+            {['#7C5CFF', '#2962ff', '#089981', '#f44336', '#ff9800', '#ffd700', '#ab47bc', '#ffffff'].map(c => (
+              <button 
+                key={c}
+                onClick={() => {
+                  setDrawings(prev => prev.map(d => d.id === selectedDrawingId ? { ...d, color: c } : d));
+                  requestDraw();
+                }}
+                className="w-4 h-4 rounded-full border border-black/30 cursor-pointer hover:scale-110 transition-transform"
+                style={{ backgroundColor: c, outline: (drawings.find(d => d.id === selectedDrawingId) || {}).color === c ? '1.5px solid #2962ff' : 'none' }}
+              />
+            ))}
+          </div>
 
-export const TopNavbar = (props: any) => {
-  const {
-    isMobile,
-    focusMode,
-    darkMode,
-    t,
-    selectedCoin,
-    livePrice,
-    watchlistTickers,
-    isDropdownOpen,
-    setIsDropdownOpen,
-    chartInterval,
-    setChartInterval,
-    chartStyle,
-    setChartStyle,
-    onBackToCoins,
-    selectedExchange,
-    handleExchangeChange,
-    EXCHANGE_LIST,
-    executeSearch,
-    coinInput,
-    setCoinInput,
-    openModal,
-    coinsLoading,
-    filteredCoins,
-    getQuoteAsset,
-    fearGreedIndex,
-    marketStatus,
-    isTimeframeDropdownOpen,
-    setIsTimeframeDropdownOpen,
-    isStyleDropdownOpen,
-    setIsStyleDropdownOpen,
-    volumeProfile,
-    setVolumeProfile,
-    isActionsDropdownOpen,
-    setIsActionsDropdownOpen,
-    chartLayout,
-    setChartLayout,
-    isLayoutMenuOpen,
-    setIsLayoutMenuOpen,
-    isAutosave,
-    setIsAutosave,
-    isShareLayout,
-    setIsShareLayout,
-    layoutName,
-    tradingTab,
-    setTradingTab,
-    lowerBoxState,
-    setLowerBoxState,
-    takeRealScreenshot,
-    publishStrategy,
-    stealthMode,
-    setStealthMode,
-    activeFlyout,
-    setActiveFlyout,
-    timezone,
-    setTimezone,
-    allCandles,
-    timeframeButtons,
-    customTimeframeInput,
-    setCustomTimeframeInput,
-    applyCustomTimeframe,
-    loadDeepHistory,
-    showToast,
-    getFngColor,
-    getExchangeMeta,
-    setMobileMenuOpen,
-    formatNumber,
-    coinIconUrl,
-    handleCoinIconError,
-    setRightSidebar,
-    toggleFullscreen,
-    priceColor,
-    replayMode,
-    setReplayMode,
-    fullCandlesRef,
-    allCandlesRef,
-    setAllCandles,
-    requestDraw,
-    setFocusMode,
-    setDarkMode
-  } = props;
+          {/* Line Width */}
+          <select 
+            value={(drawings.find(d => d.id === selectedDrawingId) || {}).lineWidth || 2}
+            onChange={(e) => {
+              const val = parseInt(e.target.value);
+              setDrawings(prev => prev.map(d => d.id === selectedDrawingId ? { ...d, lineWidth: val } : d));
+              requestDraw();
+            }}
+            className="bg-transparent text-white text-[10px] font-bold outline-none border border-[#2a2e39] rounded px-1 py-0.5 cursor-pointer"
+          >
+            <option value="1">1px</option>
+            <option value="2">2px</option>
+            <option value="3">3px</option>
+            <option value="4">4px</option>
+          </select>
 
-  return (
-    <>
+          {/* Line Style */}
+          <select 
+            value={(drawings.find(d => d.id === selectedDrawingId) || {}).lineStyle || 'solid'}
+            onChange={(e) => {
+              const val = e.target.value;
+              setDrawings(prev => prev.map(d => d.id === selectedDrawingId ? { ...d, lineStyle: val } : d));
+              requestDraw();
+            }}
+            className="bg-transparent text-white text-[10px] font-bold outline-none border border-[#2a2e39] rounded px-1 py-0.5 cursor-pointer"
+          >
+            <option value="solid">Solid</option>
+            <option value="dashed">Dashed</option>
+            <option value="dotted">Dotted</option>
+          </select>
+
+          {/* Lock / Unlock Toggle */}
+          <button
+            onClick={() => {
+              const isLocked = !(drawings.find(d => d.id === selectedDrawingId) || {}).locked;
+              setDrawings(prev => prev.map(d => d.id === selectedDrawingId ? { ...d, locked: isLocked } : d));
+              showToast(isLocked ? '🔒 Drawing Locked' : '🔓 Drawing Unlocked');
+              if (isLocked) {
+                setSelectedDrawingId(null);
+                setFloatingToolbarCoords(null);
+              }
+              requestDraw();
+            }}
+            className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-800 transition-colors cursor-pointer"
+            title={(drawings.find(d => d.id === selectedDrawingId) || {}).locked ? "Unlock Drawing" : "Lock Drawing"}
+          >
+            {(drawings.find(d => d.id === selectedDrawingId) || {}).locked ? <Lock size={12} className="text-red-400" /> : <Unlock size={12} />}
+          </button>
+
+          {/* Delete Button */}
+          <button
+            onClick={() => {
+              setDrawings(prev => prev.filter(d => d.id !== selectedDrawingId));
+              setSelectedDrawingId(null);
+              setFloatingToolbarCoords(null);
+              showToast('🗑️ Drawing deleted');
+              requestDraw();
+            }}
+            className="p-1 rounded text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+            title="Delete Drawing"
+          >
+            <Trash2 size={12} />
+          </button>
+
+          {/* Close Toolbar */}
+          <button
+            onClick={() => {
+              setSelectedDrawingId(null);
+              setFloatingToolbarCoords(null);
+              requestDraw();
+            }}
+            className="p-1 rounded text-gray-500 hover:text-white hover:bg-gray-800 transition-colors cursor-pointer ml-1"
+          >
+            <X size={12} />
+          </button>
+        </div>
+        );
+      })()}
+
+      {isMobile && mobileMenuOpen && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setMobileMenuOpen(false)} />
+          <div className={`fixed top-0 right-0 z-50 h-full w-[min(280px,85vw)] ${t.bg} border-l ${t.border} shadow-2xl flex flex-col safe-top safe-bottom`}>
+            <div className={`h-12 border-b ${t.border} flex items-center justify-between px-4 ${t.sec}`}>
+              <span className={`font-bold ${t.text}`}>Menu</span>
+              <button onClick={() => setMobileMenuOpen(false)} className={`p-2 ${t.muted} ${t.hover} rounded-md`}><X size={18} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto dark-scrollbar p-3 space-y-1">
+              {[
+                { label: 'AI Assistant', icon: Sparkles, action: () => { openEditor(editorMode, 'ai'); setMobileMenuOpen(false); } },
+                { label: 'Pine Editor', icon: Code2, action: () => { openEditor('pine', 'code'); setMobileMenuOpen(false); } },
+                { label: 'Python Editor', icon: FileCode, action: () => { openEditor('python', 'code'); setMobileMenuOpen(false); } },
+                { label: 'Indicators', icon: Layers, action: () => { openModal('Indicators, metrics, and strategies', '', 'indicators_search'); setMobileMenuOpen(false); } },
+                { label: 'Alerts', icon: Bell, action: () => { openModal('Create alert on', '', 'alert_creation'); setMobileMenuOpen(false); } },
+                { label: replayMode ? 'Exit Replay' : 'Replay', icon: History, action: () => { setReplayMode(!replayMode); if (replayMode) showToast('▶️ Replay off'); setMobileMenuOpen(false); } },
+                { label: 'Screenshot', icon: Camera, action: () => { takeRealScreenshot(); setMobileMenuOpen(false); } },
+                { label: 'Fullscreen', icon: Maximize2, action: () => { toggleFullscreen(); setMobileMenuOpen(false); } },
+                { label: 'Publish Script', icon: Upload, action: () => { publishStrategy(); setMobileMenuOpen(false); } },
+                  { label: 'Settings', icon: Settings, action: () => { openModal('Settings', '', 'settings'); setMobileMenuOpen(false); } },
+              ].map(({ label, icon: Icon, action }) => (
+                <button key={label} onClick={action} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${t.text} ${t.hover} text-[13px] font-medium transition-colors`}>
+                  <Icon size={18} className={label === 'Alert' ? 'text-amber-500' : label === 'Indicators' ? 'text-[#7C5CFF]' : ''} />
+                  {label}
+                </button>
+              ))}
+              <div className={`my-2 h-px ${t.border}`} />
+              <button onClick={() => { setDarkMode(!darkMode); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${t.text} ${t.hover} text-[13px] font-medium transition-colors`}>
+                {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+                {darkMode ? 'Light Mode' : 'Dark Mode'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {isEditorOpen && (
+        <div className={`md:hidden fixed inset-0 z-40 ${t.bg} flex flex-col safe-top safe-bottom`}>
+          {renderEditorPanel('', () => setIsEditorOpen(false))}
+        </div>
+      )}
+
       {/* MOBILE NEW TOP HEADER */}
       {isMobile && !focusMode && (
         <div className={`flex min-h-14 border-b items-center justify-between px-3 shrink-0 z-30 transition-all w-full relative ${darkMode ? 'border-[rgba(255,255,255,0.07)] bg-[#0B0E14]/95 backdrop-blur-md' : 'border-[#e0e3eb] bg-white/95 backdrop-blur-md shadow-sm'}`}>
@@ -654,6 +710,26 @@ export const TopNavbar = (props: any) => {
           </div>
         </div>
 
-    </>
-  );
-};
+        {/* MOBILE HORIZONTAL TIMEFRAME SCROLLER (Hidden in new mobile design) */}
+        {!isMobile && (
+          <div className={`${focusMode ? 'hidden' : 'md:hidden flex'} mobile-scroll-x items-center gap-0.5 px-2 py-1 border-b ${t.border} ${t.bg} overflow-x-auto shrink-0`}>
+          {timeframeButtons.map(tf => (
+            <button key={tf.label} onClick={() => { setChartInterval(tf.val); showToast(`Timeframe: ${tf.label}`); }} className={`px-3 py-1.5 font-semibold rounded-full text-[11px] whitespace-nowrap transition-colors ${chartInterval === tf.val ? 'bg-[#7C5CFF] text-white' : `${t.muted} ${t.sec}`}`}>{tf.label}</button>
+          ))}
+          <input
+            value={customTimeframeInput}
+            onChange={(e) => setCustomTimeframeInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') applyCustomTimeframe(); }}
+            placeholder="e.g 45m"
+            className={`w-[80px] shrink-0 px-2 py-1.5 rounded-full text-[11px] border ${t.border} ${t.bg} ${t.text} outline-none`}
+          />
+          <button onClick={applyCustomTimeframe} className={`shrink-0 px-2.5 py-1.5 rounded-full text-[11px] font-semibold ${t.sec} ${t.text}`}>Set</button>
+          <button onClick={loadDeepHistory} className={`shrink-0 px-2.5 py-1.5 rounded-full text-[11px] font-semibold ${t.muted} ${t.sec}`}>6Y</button>
+        </div>
+        )}
+
+        <div className="flex flex-1 min-h-0 min-w-0 flex-col md:flex-row overflow-hidden">
+          <div className={`flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden md:border-r ${t.border}`}>
+            <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
+          <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
+            {!isMobile && !focusMode && 

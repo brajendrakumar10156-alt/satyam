@@ -1,0 +1,400 @@
+    return (
+      <div className={`absolute top-2.5 left-2.5 z-25 flex flex-wrap items-center gap-2 text-[11px] font-mono font-bold select-none pointer-events-none drop-shadow-md`}>
+        <span className={`${darkMode ? 'text-white' : 'text-black'} flex items-center gap-1.5 text-[13px] tracking-wide`}>
+          <img 
+            src={coinIconUrl(selectedCoin)} 
+            data-tier="0"
+            onError={(e) => handleCoinIconError(e, selectedCoin)}
+            alt=""
+            className="w-3.5 h-3.5 rounded-full bg-white object-cover shadow-sm" 
+          />
+          {selectedCoin}
+        </span>
+        <span className="text-gray-400 font-semibold">·</span>
+        <span className={`${darkMode ? 'text-gray-400' : 'text-gray-500'} font-semibold`}>{selectedExchange.toUpperCase()}</span>
+        <span className="text-gray-400 font-semibold">·</span>
+        <span className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{chartInterval}</span>
+        
+        <span className={`${darkMode ? 'text-gray-450' : 'text-gray-500'} ml-2`}>O</span>
+        <span id="ohlc-open" className={darkMode ? "text-white" : "text-black"} dangerouslySetInnerHTML={{ __html: (current.open ?? 0).toFixed(2) }} />
+        
+        <span className={darkMode ? 'text-gray-450' : 'text-gray-500'}>H</span>
+        <span id="ohlc-high" className={darkMode ? "text-white" : "text-black"} dangerouslySetInnerHTML={{ __html: (current.high ?? 0).toFixed(2) }} />
+        
+        <span className={darkMode ? 'text-gray-450' : 'text-gray-500'}>L</span>
+        <span id="ohlc-low" className={darkMode ? "text-white" : "text-black"} dangerouslySetInnerHTML={{ __html: (current.low ?? 0).toFixed(2) }} />
+        
+        <span className={darkMode ? 'text-gray-450' : 'text-gray-500'}>C</span>
+        <span id="ohlc-close" className={colorClass} dangerouslySetInnerHTML={{ __html: (current.close ?? 0).toFixed(2) }} />
+        
+        <span id="ohlc-change" className={`${colorClass} ml-1`} dangerouslySetInnerHTML={{ __html: `${isUp ? '+' : ''}${change.toFixed(2)} (${isUp ? '+' : ''}${changePct.toFixed(2)}%)` }} />
+
+        {isPerpetualSymbol(selectedCoin) && (fundingRate !== null || openInterest !== null) && (
+          <>
+            <span className="text-gray-400 font-semibold ml-2">·</span>
+            {fundingRate !== null && (
+              <>
+                <span className="text-gray-450 ml-1">Funding</span>
+                <span style={{ color: fundingRate > 0 ? '#F23645' : fundingRate < 0 ? '#089981' : '#787b86' }} className="font-mono">
+                  {(fundingRate * 100).toFixed(4)}%
+                </span>
+              </>
+            )}
+            {openInterest !== null && (
+              <>
+                <span className="text-gray-450 ml-2">OI</span>
+                <span className="text-white font-mono">{formatShortNumber(openInterest)} {getBaseAsset(selectedCoin)}</span>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const formatIndValue = (val) => {
+    if (val === undefined || val === null) return '∅';
+    return typeof val === 'number' ? val.toFixed(2) : String(val);
+  };
+
+  const renderIndValues = (ind) => {
+    const results = indicatorDataMapRef.current[ind.id];
+    if (!results) return null;
+    
+    const reg = INDICATOR_REGISTRY[ind.type];
+    if (!reg) return null;
+
+    const keys = reg.seriesConfig.map(s => s.key);
+    const targetTime = allCandles.length > 0 ? allCandles[allCandles.length - 1].time : null;
+    if (!targetTime) return null;
+
+    const valsText = keys.map(k => {
+      const arr = results[k] || [];
+      const pt = arr.find(p => p.time === targetTime);
+      const val = pt ? pt.value : null;
+      
+      const label = keys.length > 1 ? `${k.toUpperCase().slice(0, 3)}: ` : '';
+      return `${label}${formatIndValue(val)}`;
+    }).join('  ');
+
+    return <span id={`ind-val-${ind.id}`} className="text-[10.5px] font-mono text-gray-300 ml-1 font-bold" dangerouslySetInnerHTML={{ __html: valsText }} />;
+  };
+
+  const renderChartOverlays = () => {
+    return (
+      <>
+        {/* Quick Buy/Sell Buttons */}
+        {livePrice > 0 && (
+          <div className={`absolute top-2.5 right-[75px] transition-all duration-300 z-20 flex items-center ${darkMode ? 'bg-[#1c2030]/90 border-[#2a2e39]' : 'bg-white/90 border-gray-200'} border rounded-lg shadow-xl overflow-hidden font-mono text-[11px] pointer-events-none`}>
+            <button 
+              onClick={() => executeMarketOrder('SELL', quickTradeQty)}
+              className="px-2.5 py-1.5 bg-[#F23645] hover:bg-[#ff4d5a] text-white font-extrabold flex flex-col items-center transition-colors cursor-pointer min-w-[65px] pointer-events-auto"
+              title={`Quick Sell ${quickTradeQty} ${getBaseAsset(selectedCoin)}`}
+            >
+              <span className="text-[8.5px] uppercase tracking-wide opacity-80">SELL</span>
+              <span id="quick-sell-price" dangerouslySetInnerHTML={{ __html: (livePrice * 0.9998).toFixed(2) }} />
+            </button>
+            <input 
+              type="number"
+              step="0.001"
+              min="0.001"
+              value={quickTradeQty}
+              onChange={(e) => setQuickTradeQty(parseFloat(e.target.value) || 0.01)}
+              className={`w-12 ${darkMode ? 'bg-[#131722] text-white border-[#2a2e39]' : 'bg-gray-100 text-black border-gray-200'} text-center font-bold border-x py-2 outline-none text-[11px] pointer-events-auto`}
+            />
+            <button 
+              onClick={() => executeMarketOrder('BUY', quickTradeQty)}
+              className="px-2.5 py-1.5 bg-[#2962ff] hover:bg-[#4d7eff] text-white font-extrabold flex flex-col items-center transition-colors cursor-pointer min-w-[65px] pointer-events-auto"
+              title={`Quick Buy ${quickTradeQty} ${getBaseAsset(selectedCoin)}`}
+            >
+              <span className="text-[8.5px] uppercase tracking-wide opacity-80">BUY</span>
+              <span id="quick-buy-price" dangerouslySetInnerHTML={{ __html: (livePrice * 1.0002).toFixed(2) }} />
+            </button>
+          </div>
+        )}
+
+        {/* Historical Data Loading Indicator */}
+        {isLoadingOlderData && (
+          <div className="absolute top-3 left-3 z-30 flex items-center gap-2 bg-[#131722]/90 border border-[#2a2e39] text-[#b2b5be] text-[11px] font-semibold px-3 py-1.5 rounded-full shadow-xl backdrop-blur-sm pointer-events-none">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+            </span>
+            Loading historical data...
+          </div>
+        )}
+
+        {/* Jump to Realtime Button */}
+        {!isAtLiveEdge && (
+          <button
+            onClick={() => {
+              if (renderEngine === 'canvas2d' && chartInstance.current) {
+                chartInstance.current.timeScale().scrollToRealTime();
+              } else if ((renderEngine === 'webgl' || renderEngine === 'webgpu') && webGLEngineRef.current) {
+                webGLEngineRef.current.scrollToRealTime();
+              }
+              setIsAtLiveEdge(true);
+            }}
+            className={`absolute top-1/2 left-6 -translate-y-1/2 z-[60] flex items-center justify-center w-8 h-8 rounded-full ${t.sec} border ${t.border} text-[#787b86] hover:text-black dark:hover:text-white shadow-lg cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors pointer-events-auto group`}
+            title="Jump to Realtime"
+          >
+            <ChevronRight className="text-blue-400 group-hover:scale-110 transition-transform" size={18} />
+          </button>
+        )}
+
+        {/* TradingView-style Price Scale Settings Gear (At 0,0 origin) */}
+        <div className={`absolute bottom-0 right-0 z-[60] p-1 flex items-center justify-center ${darkMode ? 'bg-[#131722]' : 'bg-[#ffffff]'}`}>
+          <button 
+            onClick={() => setIsPriceScaleMenuOpen(!isPriceScaleMenuOpen)}
+            className={`w-[20px] h-[20px] flex items-center justify-center rounded ${isPriceScaleMenuOpen ? 'text-white bg-[#2a2e39]' : `text-gray-500/70 hover:text-white hover:bg-[#2a2e39]`} transition-all`}
+            title="Price Scale Settings"
+          >
+            <Settings size={12} strokeWidth={2.5} />
+          </button>
+
+          {isPriceScaleMenuOpen && (
+            <div className={`absolute bottom-[110%] right-0 mb-1 w-56 ${t.bg} border ${t.border} rounded-lg shadow-2xl py-1 text-[12px] font-medium origin-bottom-right z-[70]`}>
+              <button onClick={() => { setAutoScale(true); setPriceScaleMode(0); setInvertScale(false); setIsPriceScaleMenuOpen(false); }} className={`w-full text-left px-3.5 py-1.5 flex items-center gap-2 text-gray-300 hover:bg-white/5`}>
+                <RotateCcw size={13} className="text-gray-400" />
+                <span>Reset price scale</span>
+              </button>
+              
+              <div className={`border-t ${t.border} my-1`} />
+
+              <button onClick={() => { setAutoScale(!autoScale); setIsPriceScaleMenuOpen(false); }} className={`w-full text-left px-3.5 py-1.5 flex items-center justify-between text-gray-300 hover:bg-white/5`}>
+                <span>Auto (fits data to screen)</span>
+                {autoScale && <Check size={14} className="text-blue-500" />}
+              </button>
+              <button onClick={() => { setInvertScale(!invertScale); setIsPriceScaleMenuOpen(false); }} className={`w-full text-left px-3.5 py-1.5 flex items-center justify-between text-gray-300 hover:bg-white/5`}>
+                <span>Invert scale</span>
+                {invertScale && <Check size={14} className="text-blue-500" />}
+              </button>
+
+              <div className={`border-t ${t.border} my-1`} />
+
+              <button onClick={() => { setPriceScaleMode(0); setIsPriceScaleMenuOpen(false); }} className={`w-full text-left px-3.5 py-1.5 flex items-center justify-between text-gray-300 hover:bg-white/5`}>
+                <span>Regular</span>
+                {priceScaleMode === 0 && <Check size={14} className="text-blue-500" />}
+              </button>
+              <button onClick={() => { setPriceScaleMode(2); setIsPriceScaleMenuOpen(false); }} className={`w-full text-left px-3.5 py-1.5 flex items-center justify-between text-gray-300 hover:bg-white/5`}>
+                <span>Percent</span>
+                {priceScaleMode === 2 && <Check size={14} className="text-blue-500" />}
+              </button>
+              <button onClick={() => { setPriceScaleMode(3); setIsPriceScaleMenuOpen(false); }} className={`w-full text-left px-3.5 py-1.5 flex items-center justify-between text-gray-300 hover:bg-white/5`}>
+                <span>Indexed to 100</span>
+                {priceScaleMode === 3 && <Check size={14} className="text-blue-500" />}
+              </button>
+              <button onClick={() => { setPriceScaleMode(1); setIsPriceScaleMenuOpen(false); }} className={`w-full text-left px-3.5 py-1.5 flex items-center justify-between text-gray-300 hover:bg-white/5`}>
+                <span>Logarithmic</span>
+                {priceScaleMode === 1 && <Check size={14} className="text-blue-500" />}
+              </button>
+
+              <div className={`border-t ${t.border} my-1`} />
+
+              <button 
+                onClick={() => { openModal('Settings', 'Settings', 'settings'); setIsPriceScaleMenuOpen(false); }}
+                className={`w-full text-left px-3.5 py-1.5 flex items-center gap-2 text-gray-300 hover:bg-white/5`}
+              >
+                <Settings size={13} className="text-gray-400" />
+                <span>More settings...</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+
+        {/* ── TradingView-style News Flash Button + Panel ── */}
+        <div className="absolute bottom-[28px] right-14 z-40 flex flex-col items-end gap-1.5 pointer-events-none select-none">
+          {/* News Popup Panel */}
+          {showNewsPanel && (
+            <div
+              className="mb-1 w-[320px] bg-[#121626]/90 backdrop-blur-md border border-[#ea39ff]/40 rounded-xl shadow-[0_8px_32px_rgba(234,57,255,0.22)] overflow-hidden animate-fade-in pointer-events-auto origin-bottom-right"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#ea39ff]/25">
+                <div className="flex items-center gap-2">
+                  <span className="text-[#ea39ff] text-[13px]">⚡</span>
+                  <span className="text-white font-extrabold text-[12px] tracking-wide">Latest updates</span>
+                </div>
+                <button
+                  onClick={() => setShowNewsPanel(false)}
+                  className="text-gray-500 hover:text-white transition-colors text-[11px] font-black p-0.5"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* News List */}
+              <div className="max-h-[280px] overflow-y-auto dark-scrollbar">
+                {newsLoading ? (
+                  <div className="flex flex-col items-center py-6 gap-1.5 text-gray-500">
+                    <RefreshCw size={13} className="animate-spin text-[#ea39ff]" />
+                    <span className="text-[10px] font-bold">Loading news...</span>
+                  </div>
+                ) : newsError || newsList.length === 0 ? (
+                  <div className="py-5 text-center text-[11px] text-gray-500">
+                    No news available right now
+                  </div>
+                ) : (
+                  newsList.map((item, i) => {
+                    const timeAgo = item.time || '';
+                    return (
+                      <a
+                        key={item.id || i}
+                        href={item.url || '#'}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex flex-col gap-0.5 px-4 py-2.5 border-b border-[#ea39ff]/10 hover:bg-[#ea39ff]/5 transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-1.5 text-[9.5px] text-gray-500 font-semibold">
+                          <span>{timeAgo}</span>
+                          <span>·</span>
+                          <span className="text-[#ea39ff] opacity-80">{item.source}</span>
+                        </div>
+                        <p className="text-white text-[11px] font-semibold leading-snug group-hover:text-[#ea39ff] transition-colors line-clamp-2">
+                          {item.title}
+                        </p>
+                      </a>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Footer */}
+              <div
+                className="flex items-center justify-center py-2 bg-[#ea39ff]/5 border-t border-[#ea39ff]/20 cursor-pointer hover:bg-[#ea39ff]/10 transition-colors"
+                onClick={() => { setShowNewsPanel(false); setRightSidebar('news'); }}
+              >
+                <span className="text-[10.5px] font-extrabold text-[#ea39ff] hover:text-white transition-colors">
+                  More events →
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Lightning Button */}
+          <button
+            onClick={() => setShowNewsPanel(prev => !prev)}
+            title="Latest News"
+            className={`relative flex items-center justify-center w-[26px] h-[26px] rounded-full transition-all duration-200 shadow-lg border pointer-events-auto ${
+              showNewsPanel
+                ? 'bg-[#ea39ff] border-[#ea39ff] shadow-[0_0_14px_rgba(234,57,255,0.7)]'
+                : 'bg-[#1e222d] border-[#ea39ff]/50 hover:bg-[#ea39ff]/10 hover:border-[#ea39ff] hover:shadow-[0_0_10px_rgba(234,57,255,0.4)]'
+            }`}
+          >
+            <span
+              className={`text-[12px] font-black leading-none transition-colors ${
+                showNewsPanel ? 'text-white' : 'text-[#ea39ff]'
+              }`}
+            >
+              ⚡
+            </span>
+            {/* 6K Badge equivalent when news is available */}
+            {!showNewsPanel && newsList.length > 0 && (
+              <span className="absolute -top-[4px] -right-[6px] flex items-center justify-center min-w-[16px] h-[14px] px-1 bg-[#ea39ff] text-[#1e222d] text-[8.5px] font-black rounded-full border border-[#1e222d] shadow-sm tracking-tighter">
+                {newsList.length > 999 ? '1K+' : newsList.length}
+              </span>
+            )}
+          </button>
+        </div>
+      </>
+    );
+  };
+
+  useEffect(() => { requestDraw(); }, [requestDraw, allCandles, drawings, tempShape, renderEngine]);
+
+  useEffect(() => {
+    let unsub;
+    if (chartCreated && chartInstance.current) {
+      const handler = (range) => {
+        if (range?.from && range?.to) {
+          if (saveRangeTimeoutRef.current) clearTimeout(saveRangeTimeoutRef.current);
+          saveRangeTimeoutRef.current = setTimeout(() => {
+            localStorage.setItem(visibleRangeStorageKey, JSON.stringify(range));
+          }, 300);
+
+          if (allCandles.length > 0) {
+            const lastCandle = allCandles[allCandles.length - 1];
+            setIsAtLiveEdge(range.to >= lastCandle.time);
+          }
+        }
+        requestDraw();
+      };
+      
+      const throttledHandler = throttle(handler, 100);
+      chartInstance.current.timeScale().subscribeVisibleTimeRangeChange(throttledHandler);
+      unsub = () => chartInstance.current?.timeScale().unsubscribeVisibleTimeRangeChange(throttledHandler);
+    }
+    return () => { if (unsub) unsub(); };
+  }, [chartCreated, requestDraw, visibleRangeStorageKey, allCandles]);
+
+  const getChartCoords = (clientX, clientY) => {
+    const el = chartContainerRef.current || chartRef.current;
+    if (!el) return { x: 0, y: 0 };
+    const rect = el.getBoundingClientRect();
+    return { x: clientX - rect.left, y: clientY - rect.top };
+  };
+
+  const findDrawingAtCoords = (x, y) => {
+    if (renderEngine === 'canvas2d' && (!chartInstance.current || !candleSeries.current)) return -1;
+    
+    // getPixel is already available in the component scope, so we use it directly instead of redefining it locally.
+    // Wait, the outer getPixel might not be captured here if we shadow it or if we define this function before getPixel.
+    // Let's rely on the outer getPixel by removing the local definition.
+
+    const distanceToSegment = (px, py, x1, y1, x2, y2) => {
+      const l2 = Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2);
+      if (l2 === 0) return Math.sqrt(Math.pow(px - x1, 2) + Math.pow(py - y1, 2));
+      let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+      t = Math.max(0, Math.min(1, t));
+      return Math.sqrt(Math.pow(px - (x1 + t * (x2 - x1)), 2) + Math.pow(py - (y1 + t * (y2 - y1)), 2));
+    };
+
+    const hitRadius = 12;
+
+    for (let i = drawings.length - 1; i >= 0; i--) {
+      const d = drawings[i];
+      const p1 = getPixel(d.start.time, d.start.price);
+      const p2 = d.end ? getPixel(d.end.time, d.end.price) : null;
+      if (!p1) continue;
+
+      if (['horizontal_line', 'horizontal_ray'].includes(d.type)) {
+        if (Math.abs(y - p1.y) < hitRadius) return d.id;
+      } else if (d.type === 'vertical_line') {
+        if (Math.abs(x - p1.x) < hitRadius) return d.id;
+      } else if (p2) {
+        if (['trendline', 'ray', 'infoline', 'extendedline', 'parallel_channel', 'regression_trend'].includes(d.type)) {
+          if (distanceToSegment(x, y, p1.x, p1.y, p2.x, p2.y) < hitRadius) return d.id;
+        } else {
+          const dist1 = Math.sqrt(Math.pow(x - p1.x, 2) + Math.pow(y - p1.y, 2));
+          const dist2 = Math.sqrt(Math.pow(x - p2.x, 2) + Math.pow(y - p2.y, 2));
+          if (dist1 < hitRadius || dist2 < hitRadius) return d.id;
+        }
+      } else {
+        const dist = Math.sqrt(Math.pow(x - p1.x, 2) + Math.pow(y - p1.y, 2));
+        if (dist < hitRadius * 1.5) return d.id;
+      }
+    }
+    return null;
+  };
+
+  
+  const handlePointerDown = (e) => {
+    if (renderEngine === 'canvas2d' && (!chartInstance.current || !candleSeries.current)) return;
+
+    if (!activeTool) {
+      const { x, y } = getChartCoords(e.clientX, e.clientY);
+      const hitId = findDrawingAtCoords(x, y);
+      if (hitId) {
+        setSelectedDrawingId(hitId);
+        const hitDrawing = drawings.find(d => d.id === hitId);
+        const rect = chartRef.current.getBoundingClientRect();
+        setFloatingToolbarCoords({
+          time: hitDrawing.start.time,
+          price: hitDrawing.start.price,
+          offsetX: -100,
+          offsetY: -60,
+          x: Math.max(16, Math.min(window.innerWidth - 320, e.clientX - 100)),
+          y: Math.max(80, rect.top + y - 60)
+        });
+        requestDraw();
