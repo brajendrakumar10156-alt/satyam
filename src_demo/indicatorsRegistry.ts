@@ -1,153 +1,90 @@
 // ─── Client-Side Technical Indicators Registry & Calculations ───
+import { CPUMathEngine } from './core_math_rust/pkg/quantaai_math_engine.ts';
+
+function getFloat32Data(data) {
+  const arr = new Float32Array(data.length);
+  for (let i = 0; i < data.length; i++) {
+    arr[i] = data[i].close !== undefined ? data[i].close : (data[i].value !== undefined ? data[i].value : data[i]);
+  }
+  return arr;
+}
 
 // A. Mathematical Helper Functions
 
 export function calculateEMA(data, period) {
-  if (data.length < period) return [];
+  if (data.length < period || period === 0) return [];
+  const prices = getFloat32Data(data);
+  const result = CPUMathEngine.calculate_ema(prices, period);
   const ema = [];
-  const k = 2 / (period + 1);
-  let sum = 0;
-  for (let i = 0; i < period; i++) {
-    const val = data[i].close !== undefined ? data[i].close : (data[i].value !== undefined ? data[i].value : data[i]);
-    sum += val;
-  }
-  let val = sum / period;
-  ema.push({ time: data[period - 1].time, value: val });
-  for (let i = period; i < data.length; i++) {
-    const currVal = data[i].close !== undefined ? data[i].close : (data[i].value !== undefined ? data[i].value : data[i]);
-    val = currVal * k + val * (1 - k);
-    ema.push({ time: data[i].time, value: val });
+  for (let i = period - 1; i < data.length; i++) {
+    ema.push({ time: data[i].time, value: result[i] });
   }
   return ema;
 }
 
 export function calculateSMA(data, period) {
-  if (data.length < period) return [];
+  if (data.length < period || period === 0) return [];
+  const prices = getFloat32Data(data);
+  const result = CPUMathEngine.calculate_sma(prices, period);
   const sma = [];
-  let sum = 0;
-  for (let i = 0; i < period; i++) {
-    const val = data[i].close !== undefined ? data[i].close : (data[i].value !== undefined ? data[i].value : data[i]);
-    sum += val;
-  }
-  sma.push({ time: data[period - 1].time, value: sum / period });
-  for (let i = period; i < data.length; i++) {
-    const prevVal = data[i - period].close !== undefined ? data[i - period].close : (data[i - period].value !== undefined ? data[i - period].value : data[i - period]);
-    const currVal = data[i].close !== undefined ? data[i].close : (data[i].value !== undefined ? data[i].value : data[i]);
-    sum = sum - prevVal + currVal;
-    sma.push({ time: data[i].time, value: sum / period });
+  for (let i = period - 1; i < data.length; i++) {
+    sma.push({ time: data[i].time, value: result[i] });
   }
   return sma;
 }
 
 export function calculateBB(data, period, stdDevMultiplier) {
-  if (data.length < period) return { upper: [], middle: [], lower: [] };
+  if (data.length < period || period === 0) return { upper: [], middle: [], lower: [] };
+  const prices = getFloat32Data(data);
+  const result = CPUMathEngine.calculate_bb(prices, period, stdDevMultiplier);
   const upper = [];
   const middle = [];
   const lower = [];
   for (let i = period - 1; i < data.length; i++) {
-    let sum = 0;
-    for (let j = i - period + 1; j <= i; j++) {
-      sum += data[j].close;
-    }
-    const ma = sum / period;
-    let varianceSum = 0;
-    for (let j = i - period + 1; j <= i; j++) {
-      varianceSum += Math.pow(data[j].close - ma, 2);
-    }
-    const stdDev = Math.sqrt(varianceSum / period);
+    const baseIdx = i * 3;
     const time = data[i].time;
-    middle.push({ time, value: ma });
-    upper.push({ time, value: ma + stdDevMultiplier * stdDev });
-    lower.push({ time, value: ma - stdDevMultiplier * stdDev });
+    upper.push({ time, value: result[baseIdx] });
+    middle.push({ time, value: result[baseIdx + 1] });
+    lower.push({ time, value: result[baseIdx + 2] });
   }
   return { upper, middle, lower };
 }
 
 export function calculateRSI(data, period = 14) {
-  if (data.length <= period) return [];
+  if (data.length <= period || period === 0) return [];
+  const prices = getFloat32Data(data);
+  const result = CPUMathEngine.calculate_rsi(prices, period);
   const rsi = [];
-  let gains = 0;
-  let losses = 0;
-
-  // Welles Wilder initial average calculation (SMA)
-  for (let i = 1; i <= period; i++) {
-    const diff = data[i].close - data[i - 1].close;
-    if (diff > 0) gains += diff;
-    else losses -= diff;
-  }
-
-  let avgGain = gains / period;
-  let avgLoss = losses / period;
-  
-  let val;
-  if (avgLoss === 0) {
-    val = 100;
-  } else if (avgGain === 0) {
-    val = 0;
-  } else {
-    const rs = avgGain / avgLoss;
-    val = 100 - (100 / (1 + rs));
-  }
-  rsi.push({ time: data[period].time, value: val });
-
-  // Welles Wilder smoothing calculation for remaining periods
-  for (let i = period + 1; i < data.length; i++) {
-    const diff = data[i].close - data[i - 1].close;
-    const gain = diff > 0 ? diff : 0;
-    const loss = diff < 0 ? -diff : 0;
-
-    avgGain = (avgGain * (period - 1) + gain) / period;
-    avgLoss = (avgLoss * (period - 1) + loss) / period;
-
-    if (avgLoss === 0) {
-      val = 100;
-    } else if (avgGain === 0) {
-      val = 0;
-    } else {
-      const rs = avgGain / avgLoss;
-      val = 100 - (100 / (1 + rs));
-    }
-    rsi.push({ time: data[i].time, value: val });
+  for (let i = period; i < data.length; i++) {
+    rsi.push({ time: data[i].time, value: result[i] });
   }
   return rsi;
 }
 
 export function calculateMACD(data, fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
   if (data.length <= slowPeriod + signalPeriod) return { macd: [], signal: [], hist: [] };
-
-  const fastEma = calculateEMA(data, fastPeriod);
-  const slowEma = calculateEMA(data, slowPeriod);
-
-  const macdLine = [];
-  const slowMap = new Map(slowEma.map(item => [item.time, item.value]));
-
-  fastEma.forEach(item => {
-    if (slowMap.has(item.time)) {
-      macdLine.push({ time: item.time, value: item.value - slowMap.get(item.time) });
-    }
-  });
-
-  const signalLine = calculateEMA(macdLine, signalPeriod);
-  const signalMap = new Map(signalLine.map(item => [item.time, item.value]));
-
+  const prices = getFloat32Data(data);
+  const result = CPUMathEngine.calculate_macd(prices, fastPeriod, slowPeriod, signalPeriod);
+  
+  const macd = [];
+  const signal = [];
   const hist = [];
-  macdLine.forEach(item => {
-    if (signalMap.has(item.time)) {
-      hist.push({ time: item.time, value: item.value - signalMap.get(item.time) });
-    }
-  });
-
-  const coloredHist = hist.map(h => ({
-    time: h.time,
-    value: h.value,
-    color: h.value >= 0 ? 'rgba(8, 153, 129, 0.5)' : 'rgba(242, 54, 69, 0.5)'
-  }));
-
-  return {
-    macd: macdLine.filter(item => signalMap.has(item.time)),
-    signal: signalLine,
-    hist: coloredHist
-  };
+  
+  const signalStart = (slowPeriod - 1) + (signalPeriod - 1);
+  
+  for (let i = signalStart; i < data.length; i++) {
+    const baseIdx = i * 3;
+    const time = data[i].time;
+    const histVal = result[baseIdx + 2];
+    macd.push({ time, value: result[baseIdx] });
+    signal.push({ time, value: result[baseIdx + 1] });
+    hist.push({ 
+      time, 
+      value: histVal, 
+      color: histVal >= 0 ? 'rgba(8, 153, 129, 0.5)' : 'rgba(242, 54, 69, 0.5)' 
+    });
+  }
+  return { macd, signal, hist };
 }
 
 export function calculateVWAP(data) {

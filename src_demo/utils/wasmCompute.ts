@@ -11,18 +11,28 @@ export async function initWASMCompute() {
   return true;
 }
 
-export async function executeWASMCompute(indicator, inputData, period) {
+export async function executeWASMCompute(indicator, inputData, params = {}) {
   if (!isInitialized) {
     await initWASMCompute();
   }
   
   // inputData is assumed to be a Float32Array containing 'close' prices
   if (indicator === 'SMA') {
-    return CPUMathEngine.calculate_sma(inputData, period);
+    return CPUMathEngine.calculate_sma(inputData, params.period || 14);
   } else if (indicator === 'EMA') {
-    return CPUMathEngine.calculate_ema(inputData, period);
+    return CPUMathEngine.calculate_ema(inputData, params.period || 14);
+  } else if (indicator === 'RSI') {
+    return CPUMathEngine.calculate_rsi(inputData, params.period || 14);
+  } else if (indicator === 'BB') {
+    return CPUMathEngine.calculate_bb(inputData, params.period || 20, params.stdDev || 2.0);
+  } else if (indicator === 'MACD') {
+    return CPUMathEngine.calculate_macd(
+      inputData, 
+      params.fastPeriod || 12, 
+      params.slowPeriod || 26, 
+      params.signalPeriod || 9
+    );
   } else {
-    // If we haven't implemented RSI in WASM yet, fallback to a JS error or fake it
     throw new Error(`WASM function calculate_${indicator.toLowerCase()} not found`);
   }
 }

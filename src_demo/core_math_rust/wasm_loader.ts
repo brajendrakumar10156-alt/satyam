@@ -53,13 +53,13 @@ export class WasmMathEngine {
   /** Simple Moving Average */
   sma(prices, period) {
     this._check();
-    return Array.from(this._wasm.sma(new Float32Array(prices), period));
+    return Array.from(this._wasm.CPUMathEngine.calculate_sma(new Float32Array(prices), period));
   }
 
   /** Exponential Moving Average */
   ema(prices, period) {
     this._check();
-    return Array.from(this._wasm.ema(new Float32Array(prices), period));
+    return Array.from(this._wasm.CPUMathEngine.calculate_ema(new Float32Array(prices), period));
   }
 
   /** Weighted Moving Average */
