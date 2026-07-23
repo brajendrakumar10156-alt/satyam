@@ -25,7 +25,7 @@ We are splitting the app into **3 distinct layers**:
 3. **Core Rendering Engines (Native)**: Extracting Canvas/GPU logic into isolated folders (core_render_webgpu/, core_render_webgl/).
    *(Language: WGSL for WebGPU, GLSL for WebGL, TypeScript for Web Worker/Math)*
 
-### 📊 Architecture Flowchart (Before vs After)
+### 📊 Current Architecture Flowchart (Before vs Now)
 `mermaid
 graph TD
     subgraph "BEFORE (The 8000-Line Monolith)"
@@ -37,7 +37,7 @@ graph TD
         A -->|Contains| G(WebGL Engine bindings)
     end
 
-    subgraph "AFTER (The Modular 'Titan' Architecture)"
+    subgraph "CURRENT (The Modular 'Titan' Architecture)"
         Z[App.tsx - Clean Container]
         
         %% State Management
@@ -58,6 +58,63 @@ graph TD
         %% Engine Internals
         E2 --> W1[WGSL Shaders]
         E3 --> W2[GLSL Shaders]
+    end
+`
+
+---
+
+## 🔮 Future Roadmap: Complete Eradication of the Monolith
+*(Here is exactly what we will break in the FUTURE, into how many parts, and using what languages).*
+
+### 1. What will be broken down in the future?
+App.tsx currently still holds the **WebSocket logic**, **Chart Canvas Container**, and **Event Listeners**. In the future, App.tsx will have exactly 0 logic. It will just be a <Layout> wrapper.
+
+### 2. How many parts & what language?
+- **Network / Socket Layer (2 parts - TypeScript)**: 
+  - BinanceSocketManager.ts: For live ticker streaming.
+  - APIClient.ts: For historical candle fetching.
+- **Chart Data Context (1 part - TypeScript/Zustand)**: 
+  - ChartDataStore.ts: Will hold all candles and live price data globally.
+- **UI Interaction Layer (3 parts - TSX)**:
+  - TopNavbar.tsx: Search and intervals.
+  - BottomPanel.tsx: Time ranges.
+  - Modals.tsx: Popups for indicators and settings.
+- **Core Math / Execution Engine (2 parts - Rust/WASM & C++)**:
+  - lib.rs (Rust): High-performance indicator math running off the main thread.
+  - HFT Server (C++): C++ backend executing ML inferences via CUDA.
+
+### 📊 Future Architecture Flowchart (The Ultimate Goal)
+`mermaid
+graph TD
+    subgraph "FRONTEND UI (TSX / Tailwind)"
+        APP[App.tsx - Bare Wrapper]
+        APP --> L1[TopNavbar.tsx]
+        APP --> L2[LeftToolbar.tsx]
+        APP --> L3[RightSidebar.tsx]
+        APP --> L4[BottomPanel.tsx]
+        APP --> L5[ChartContainer.tsx]
+    end
+
+    subgraph "GLOBAL STATE (Zustand / TS)"
+        UI_STATE[(UIStore.ts)] -.->|UI Sync| APP
+        DATA_STATE[(ChartDataStore.ts)] -.->|Data Sync| L5
+    end
+
+    subgraph "DATA STREAMING (TypeScript)"
+        WS[BinanceSocketManager.ts] -->|Live Ticker| DATA_STATE
+        REST[APIClient.ts] -->|Historical| DATA_STATE
+    end
+
+    subgraph "NATIVE GRAPHICS PIPELINE (WGSL / TS)"
+        L5 --> NM[NativeEngineManager.ts]
+        NM -->|Zero-Copy| GPU[WebGPU Engine]
+        GPU --> SH[WGSL Compute Shaders]
+    end
+
+    subgraph "MATH & BACKEND (Rust / C++)"
+        DATA_STATE -->|WASM Memory| RUST[Rust / WASM Core]
+        RUST -->|Heavy Math| IND[Technical Indicators]
+        RUST <--> C_BACKEND((C++ / CUDA Backend))
     end
 `
 
