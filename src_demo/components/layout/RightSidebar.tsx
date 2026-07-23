@@ -24,7 +24,7 @@ export const RightSidebar = (props) => {
 
       <div className={`flex-1 min-h-0 overflow-y-auto dark-scrollbar p-3 space-y-4 ${t.bg}`}>
         {rightSidebar === 'orderbook' && OrderBookPanel && (
-          <OrderBookPanel livePrice={props.livePrice} selectedCoin={props.selectedCoin} />
+          <OrderBookPanel livePrice={props.livePrice} selectedCoin={props.selectedCoin} selectedExchange={props.selectedExchange} />
         )}
         
         {rightSidebar === 'watchlist' && (

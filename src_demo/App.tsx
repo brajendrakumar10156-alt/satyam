@@ -7442,12 +7442,16 @@ export default function App({ onLogout, onBackToCoins }) {
   rightSidebar={rightSidebar} setRightSidebar={setRightSidebar} themeConfig={t} 
   OrderBookPanel={OrderBookPanel} livePrice={livePrice} selectedCoin={selectedCoin} setSelectedCoin={setSelectedCoin}
   selectedCoinStats={selectedCoinStats} selectedExchange={selectedExchange} fearGreedIndex={fearGreedIndex}
-  formatNumber={formatNumber} formatCompactNumber={formatCompactNumber}
   watchlist={watchlist} setWatchlist={setWatchlist} watchlistTickers={watchlistTickers}
   watchlistSearchInput={watchlistSearchInput} setWatchlistSearchInput={setWatchlistSearchInput}
   watchlistDropdownOpen={watchlistDropdownOpen} setWatchlistDropdownOpen={setWatchlistDropdownOpen}
   binanceCoins={binanceCoins} showToast={showToast} setMarketStatus={setMarketStatus}
   coinIconUrl={coinIconUrl} handleCoinIconError={handleCoinIconError}
+  priceColor={priceColor} getBaseAsset={getBaseAsset} isPerpetualSymbol={isPerpetualSymbol}
+  futuresLoading={futuresLoading} fundingRate={fundingRate} openInterest={openInterest}
+  formatShortNumber={formatShortNumber} fundamentalsLoading={fundamentalsLoading}
+  fundamentalsError={fundamentalsError} coinFundamentals={coinFundamentals}
+  formatUSD={formatUSD} getFngColor={getFngColor}
 />
               </div>
             </div>
@@ -7459,20 +7463,18 @@ export default function App({ onLogout, onBackToCoins }) {
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
               <RightSidebar 
   rightSidebar={rightSidebar} setRightSidebar={setRightSidebar} themeConfig={t} 
-  OrderBookPanel={OrderBookPanel} livePrice={livePrice} selectedCoin={selectedCoin} 
-  selectedCoinStats={selectedCoinStats} handleRemoveWatchlist={handleRemoveWatchlist}
-  isWatchlistMode={isWatchlistMode} setIsWatchlistMode={setIsWatchlistMode}
-  showToast={showToast} isFavorite={isFavorite} toggleFavorite={toggleFavorite}
-  isConnected={isConnected} showVolume={showVolume} setShowVolume={setShowVolume}
-  showPerformance={showPerformance} setShowPerformance={setShowPerformance}
-  hideDrawings={hideDrawings} setHideDrawings={setHideDrawings} chartType={chartType}
-  setChartType={setChartType} toggleIndicator={toggleIndicator} activeIndicators={activeIndicators}
-  getBaseAsset={getBaseAsset} removeAlert={removeAlert} alerts={alerts}
-  alertCondition={alertCondition} setAlertCondition={setAlertCondition}
-  alertPrice={alertPrice} setAlertPrice={setAlertPrice} addPriceAlert={addPriceAlert}
-  newsFilterType={newsFilterType} setNewsFilterType={setNewsFilterType}
-  newsLoading={newsLoading} newsError={newsError} newsList={newsList}
-  watchlist={watchlist} renderBountyPanel={renderBountyPanel} darkMode={darkMode}
+  OrderBookPanel={OrderBookPanel} livePrice={livePrice} selectedCoin={selectedCoin} setSelectedCoin={setSelectedCoin}
+  selectedCoinStats={selectedCoinStats} selectedExchange={selectedExchange} fearGreedIndex={fearGreedIndex}
+  watchlist={watchlist} setWatchlist={setWatchlist} watchlistTickers={watchlistTickers}
+  watchlistSearchInput={watchlistSearchInput} setWatchlistSearchInput={setWatchlistSearchInput}
+  watchlistDropdownOpen={watchlistDropdownOpen} setWatchlistDropdownOpen={setWatchlistDropdownOpen}
+  binanceCoins={binanceCoins} showToast={showToast} setMarketStatus={setMarketStatus}
+  coinIconUrl={coinIconUrl} handleCoinIconError={handleCoinIconError}
+  priceColor={priceColor} getBaseAsset={getBaseAsset} isPerpetualSymbol={isPerpetualSymbol}
+  futuresLoading={futuresLoading} fundingRate={fundingRate} openInterest={openInterest}
+  formatShortNumber={formatShortNumber} fundamentalsLoading={fundamentalsLoading}
+  fundamentalsError={fundamentalsError} coinFundamentals={coinFundamentals}
+  formatUSD={formatUSD} getFngColor={getFngColor}
 />
             </div>
           )}
