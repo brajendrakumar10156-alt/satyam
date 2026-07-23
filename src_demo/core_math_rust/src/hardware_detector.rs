@@ -1,6 +1,6 @@
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 use web_sys::window;
-
 #[wasm_bindgen]
 pub struct HardwareDetector {
     pub has_webgpu: bool,
@@ -27,32 +27,25 @@ impl HardwareDetector {
     pub fn detect_sync(&mut self) {
         if let Some(win) = window() {
             // Detect WebGPU (navigator.gpu)
-            if let Some(navigator) = win.navigator() {
-                // Check if gpu property exists dynamically (web_sys doesn't have it natively exposed on all versions yet)
-                let nav_val = JsValue::from(navigator.clone());
-                if js_sys::Reflect::has(&nav_val, &JsValue::from_str("gpu")).unwrap_or(false) {
-                    self.has_webgpu = true;
-                }
-
-                // Check WebNN (navigator.ml)
-                if js_sys::Reflect::has(&nav_val, &JsValue::from_str("ml")).unwrap_or(false) {
-                    self.has_webnn = true;
-                }
-
-                self.cpu_cores = navigator.hardware_concurrency() as u32;
+            let navigator = win.navigator();
+            // Check if gpu property exists dynamically (web_sys doesn't have it natively exposed on all versions yet)
+            let nav_val = JsValue::from(navigator.clone());
+            if js_sys::Reflect::has(&nav_val, &JsValue::from_str("gpu")).unwrap_or(false) {
+                self.has_webgpu = true;
             }
+
+            // Check WebNN (navigator.ml)
+            if js_sys::Reflect::has(&nav_val, &JsValue::from_str("ml")).unwrap_or(false) {
+                self.has_webnn = true;
+            }
+
+            self.cpu_cores = navigator.hardware_concurrency() as u32;
 
             // Detect WebGL
             if let Some(document) = win.document() {
                 if let Ok(canvas) = document.create_element("canvas") {
-                    let canvas_val = JsValue::from(canvas);
-                    // Check webgl2
-                    if let Ok(gl) = js_sys::Reflect::apply(
-                        &js_sys::Reflect::get(&canvas_val, &JsValue::from_str("getContext")).unwrap(),
-                        &canvas_val,
-                        &js_sys::Array::of1(&JsValue::from_str("webgl2"))
-                    ) {
-                        if !gl.is_null() && !gl.is_undefined() {
+                    if let Ok(canvas_el) = canvas.dyn_into::<web_sys::HtmlCanvasElement>() {
+                        if let Ok(Some(_gl)) = canvas_el.get_context("webgl2") {
                             self.has_webgl = true;
                         }
                     }

@@ -1,10 +1,9 @@
 module.exports = {
   apps: [
     {
-      name: "my-fastapi-backend",
-      script: "C:\\Users\\satya\\OneDrive\\Documents\\Desktop\\satyam\\.venv\\Scripts\\python.exe",
-      args: "-m uvicorn main:app --host 0.0.0.0 --port 8000",
-      cwd: "C:\\Users\\satya\\OneDrive\\Documents\\Desktop\\satyam\\backend",
+      name: "rust-backend-engine",
+      script: "C:\\Users\\satya\\OneDrive\\Documents\\Desktop\\satyam\\backend_rust\\target\\debug\\backend_rust.exe",
+      cwd: "C:\\Users\\satya\\OneDrive\\Documents\\Desktop\\satyam\\backend_rust",
       autorestart: true,
       watch: false
     }

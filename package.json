@@ -4,9 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
-    "backend": "cd backend && .\\venv\\Scripts\\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload",
-    "otp-watcher": "cd backend && .\\venv\\Scripts\\python.exe otp_watcher.py",
-    "otp-auto": "cd backend && .\\venv\\Scripts\\python.exe test_otp_auto.py",
+    "backend": "cd backend && ./venv/Scripts/python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload",
+    "otp-watcher": "cd backend && ./venv/Scripts/python.exe otp_watcher.py",
+    "otp-auto": "cd backend && ./venv/Scripts/python.exe test_otp_auto.py",
     "build": "vite build",
     "preview": "vite preview"
   },
