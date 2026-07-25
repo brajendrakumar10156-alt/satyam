@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState, useImperativeHandle } from 'react';
 import { lineToQuad, raycastDrawings } from '../utils/webgpuMath';
 import { calculateHorizontalTimeAxisLabels, calculateVerticalPriceAxisLabels } from '../utils/axisCollisionEngine';
 import { INDICATOR_REGISTRY } from '../indicatorsRegistry';
-
+import { generateHDGlyphAtlas } from '../utils/hdGlyphAtlas';
 import { generateSDFAtlas } from '../utils/sdfFontGenerator';
 
 // Basic utility to map time to index
@@ -220,8 +220,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 const wgslTextShader = `
 struct TextUniforms {
   resolution: vec2<f32>,
-  pad: vec2<f32>,
-  textColor: vec4<f32>,
+  textColor: vec4<f32>,  // dark/light mode color passed from CPU
 };
 @group(0) @binding(0) var<uniform> uniforms: TextUniforms;
 @group(0) @binding(1) var fontSampler: sampler;
@@ -249,24 +248,20 @@ fn vs_main(@builtin(vertex_index) vIdx: u32, @builtin(instance_index) iIdx: u32)
   );
   let q = quad[vIdx % 6u];
   
-  let uvW = charData.uvInfo.z;
-  let uvH = charData.uvInfo.w;
-  let posW = charData.posInfo.z;
-  let posH = charData.posInfo.w;
-  
-  let px = charData.posInfo.x + (q.x * posW);
-  let py = charData.posInfo.y + (q.y * posH);
+  let w = charData.uvInfo.z;
+  let h = charData.uvInfo.w;
+  // Pixel-snap the glyph quad position for crisp rendering (same as Canvas 2D)
+  let px = floor(charData.posInfo.x) + (q.x * w);
+  let py = floor(charData.posInfo.y) + (q.y * h);
   
   let clipX = (px / uniforms.resolution.x) * 2.0 - 1.0;
   let clipY = 1.0 - (py / uniforms.resolution.y) * 2.0;
   out.position = vec4<f32>(clipX, clipY, 0.0, 1.0);
   
-  let atlasSize = 512.0; // Handled by uv coordinates ratio mapping if dynamic, but we can rely on standard 512-1024
-  let dynamicAtlasSize = uvW * 0.0 + 512.0; // If you wanted to pass it, but for now we'll just read from texture if possible, wait, we must use 1024 if size > 32
-  // Actually, wait, let's fix atlasSize to 1024.0 in shader
+  let atlasSize = 512.0;
   out.uv = vec2<f32>(
-    (charData.uvInfo.x + q.x * uvW) / 1024.0,
-    (charData.uvInfo.y + q.y * uvH) / 1024.0
+    (charData.uvInfo.x + q.x * w) / atlasSize,
+    (charData.uvInfo.y + q.y * h) / atlasSize
   );
   return out;
 }
@@ -274,50 +269,10 @@ fn vs_main(@builtin(vertex_index) vIdx: u32, @builtin(instance_index) iIdx: u32)
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   let distance = textureSample(fontTexture, fontSampler, in.uv).r;
-  // Smoothly antialias the edge of the glyph using standard SDF thresholding
-  let width = 0.05; // SDF transition width
-  let alpha = smoothstep(0.5 - width, 0.5 + width, distance);
-  if (alpha < 0.01) { discard; }
-  return vec4<f32>(uniforms.textColor.rgb, uniforms.textColor.a * alpha); 
-}
-`;
-
-const wgslImageShader = `
-struct Uniforms {
-  resolution: vec2<f32>,
-  pad: vec2<f32>,
-  tint: vec4<f32>,
-};
-@group(0) @binding(0) var<uniform> uniforms: Uniforms;
-@group(0) @binding(1) var imgSampler: sampler;
-@group(0) @binding(2) var imgTexture: texture_2d<f32>;
-
-struct QuadData {
-  pos: vec2<f32>,
-  uv: vec2<f32>,
-};
-@group(0) @binding(3) var<storage, read> quads: array<QuadData>;
-
-struct VertexOutput {
-  @builtin(position) position: vec4<f32>,
-  @location(0) uv: vec2<f32>,
-};
-
-@vertex
-fn vs_main(@builtin(vertex_index) vIdx: u32) -> VertexOutput {
-  var out: VertexOutput;
-  let q = quads[vIdx];
-  let clipX = (q.pos.x / uniforms.resolution.x) * 2.0 - 1.0;
-  let clipY = 1.0 - (q.pos.y / uniforms.resolution.y) * 2.0;
-  out.position = vec4<f32>(clipX, clipY, 0.0, 1.0);
-  out.uv = q.uv;
-  return out;
-}
-
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-  let color = textureSample(imgTexture, imgSampler, in.uv);
-  return color * uniforms.tint;
+  // Crisp smoothstep threshold — identical look to Canvas 2D fillText
+  let crispAlpha = smoothstep(0.40, 0.55, distance);
+  if (crispAlpha < 0.01) { discard; }
+  return vec4<f32>(uniforms.textColor.rgb, uniforms.textColor.a * crispAlpha);
 }
 `;
 
@@ -414,15 +369,6 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
   const containerRef = useRef(null);
   const gpuCanvasRef = useRef(null);
   const rAFRef = useRef(null);
-  const renderRef = useRef(null);
-  
-  const scheduleRender = () => {
-    if (rAFRef.current !== null) return;
-    rAFRef.current = requestAnimationFrame(() => {
-      rAFRef.current = null;
-      if (renderRef.current) renderRef.current();
-    });
-  };
 
   const [gpuError, setGpuError] = useState(null);
   const [gpuDeviceName, setGpuDeviceName] = useState('Detecting GPU...');
@@ -491,7 +437,7 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
       }
     }
     lastCandleTimeRef.current = currentLastTime;
-    scheduleRender();
+    requestAnimationFrame(render);
   }, [drawings, activeTool, visualIndicators, indicatorDataMap, candles, onVisibleRangeChange]);
 
   const isInitializedRef = useRef(false);
@@ -508,7 +454,7 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
         to: candles.length - 1 + 20
       };
     }
-    scheduleRender();
+    rAFRef.current = requestAnimationFrame(render);
   }, [initialVisibleRange, candles]);
 
 
@@ -725,10 +671,10 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
           entries: [{ binding: 0, resource: { buffer: gridUniformBuffer } }]
         });
 
-        // Generate SDF at high-res 64px for sharp scalable text
+        // ── TEXTURE ATLAS (NATIVE GPU TEXT RENDERING via SDF) ──
         const { sdfData, charMap, atlasSize } = generateSDFAtlas(
           "'Inter', -apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, sans-serif",
-          64, 
+          Math.floor(12 * dpr), // Keep it standard size
           8
         );
         gpu.current.charMap = charMap;
@@ -751,7 +697,8 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
         });
 
         const textUniformBuffer = device.createBuffer({
-          size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+          size: 32, // resolution(vec2) + textColor(vec4) = 6 floats, padded to 32 bytes
+          usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
         gpu.current.textUniformBuffer = textUniformBuffer;
 
@@ -788,71 +735,6 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
             { binding: 3, resource: { buffer: textStorageBuffer } }
           ]
         });
-        
-        // ── LOGO WATERMARK PIPELINE ──
-        try {
-          const response = await fetch('/src/assets/logo.png');
-          const blob = await response.blob();
-          // Scale it down using browser's high quality scaler so WebGPU doesn't alias
-          const imgBitmap = await createImageBitmap(blob, { resizeWidth: 512, resizeHeight: 512, resizeQuality: 'high' });
-          
-          const logoTexture = device.createTexture({
-            size: [imgBitmap.width, imgBitmap.height, 1],
-            format: 'rgba8unorm',
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
-          });
-          device.queue.copyExternalImageToTexture(
-            { source: imgBitmap },
-            { texture: logoTexture },
-            [imgBitmap.width, imgBitmap.height]
-          );
-
-          gpu.current.logoTexture = logoTexture;
-          
-          const imageUniformBuffer = device.createBuffer({
-            size: 32, // resolution(2), pad(2), tint(4)
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-          });
-          gpu.current.imageUniformBuffer = imageUniformBuffer;
-          
-          const imageStorageBuffer = device.createBuffer({
-            size: 6 * 16, // 6 vertices * 4 floats (pos2, uv2)
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-          });
-          gpu.current.imageStorageBuffer = imageStorageBuffer;
-
-          const imageShaderModule = device.createShaderModule({ code: wgslImageShader });
-          gpu.current.imagePipeline = device.createRenderPipeline({
-            layout: 'auto',
-            vertex: { module: imageShaderModule, entryPoint: 'vs_main' },
-            fragment: {
-              module: imageShaderModule, entryPoint: 'fs_main',
-              targets: [{
-                format, blend: {
-                  color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-                  alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
-                }
-              }]
-            },
-            primitive: { topology: 'triangle-list' }
-          });
-          
-          const imageSampler = device.createSampler({
-            magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge'
-          });
-
-          gpu.current.imageBindGroup = device.createBindGroup({
-            layout: gpu.current.imagePipeline.getBindGroupLayout(0),
-            entries: [
-              { binding: 0, resource: { buffer: imageUniformBuffer } },
-              { binding: 1, resource: imageSampler },
-              { binding: 2, resource: logoTexture.createView() },
-              { binding: 3, resource: { buffer: imageStorageBuffer } }
-            ]
-          });
-        } catch(e) {
-          console.error("Failed to load logo watermark", e);
-        }
 
         // ── 5. DRAWINGS PIPELINE (USER TRENDLINES) ──
         const wgslDrawing = `
@@ -918,7 +800,7 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
         });
 
         if (onChartReady) onChartReady();
-        scheduleRender();
+        requestAnimationFrame(render);
 
       } catch (err: any) {
         console.error('[WebGPU Init Error]', err);
@@ -934,7 +816,7 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
 
     return () => {
       isMounted = false;
-      if (rAFRef.current) { cancelAnimationFrame(rAFRef.current); rAFRef.current = null; }
+      if (rAFRef.current) cancelAnimationFrame(rAFRef.current);
       if (gpu.current.device) {
         gpu.current.deviceLost = true;
         gpu.current.device.destroy();
@@ -950,6 +832,8 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
     const cw = gpuCanvasRef.current.width || (vState.current.width * dpr);
     const ch = gpuCanvasRef.current.height || (vState.current.height * dpr);
     if (cw <= 0 || ch <= 0) return;
+    // Calculate layout metrics
+    const pAxisW = 50 * dpr;
     const timeAxisY = ch - (24 * dpr);
 
     let timeAxisWinners = [];
@@ -958,12 +842,25 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
     // Auto-Scale Y-Axis (Smooth Easing)
     if (autoScale && !vState.current.manualPriceScale && candles && candles.length > 0) {
       let minP = Infinity, maxP = -Infinity;
-      const fromIdx = Math.max(0, Math.floor(vState.current.logicalRange.from));
-      const toIdx = Math.min(candles.length - 1, Math.ceil(vState.current.logicalRange.to));
+      const fromIdx = Math.max(0, Math.min(candles.length - 1, Math.floor(vState.current.logicalRange.from)));
+      const toIdx = Math.max(0, Math.min(candles.length - 1, Math.ceil(vState.current.logicalRange.to)));
 
       for (let i = fromIdx; i <= toIdx; i++) {
-        if (candles[i].low < minP) minP = candles[i].low;
-        if (candles[i].high > maxP) maxP = candles[i].high;
+        const c = candles[i];
+        if (c && Number.isFinite(c.low) && Number.isFinite(c.high)) {
+          if (c.low < minP) minP = c.low;
+          if (c.high > maxP) maxP = c.high;
+        }
+      }
+
+      if (minP === Infinity || maxP === -Infinity) {
+        for (let i = 0; i < candles.length; i++) {
+          const c = candles[i];
+          if (c && Number.isFinite(c.low) && Number.isFinite(c.high)) {
+            if (c.low < minP) minP = c.low;
+            if (c.high > maxP) maxP = c.high;
+          }
+        }
       }
 
       if (minP !== Infinity && maxP !== -Infinity) {
@@ -973,16 +870,13 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
         const targetMin = minP - pad;
         const targetMax = maxP + pad;
 
-        // Smoothly interpolate current priceRange towards target
         const diffMin = targetMin - vState.current.priceRange.min;
         const diffMax = targetMax - vState.current.priceRange.max;
 
-        // Only apply and request next frame if difference is meaningful
         if (Math.abs(diffMin) > 0.000001 || Math.abs(diffMax) > 0.000001) {
           vState.current.priceRange.min += diffMin * 0.4;
           vState.current.priceRange.max += diffMax * 0.4;
-          // Queue next frame for continuous smooth easing
-          scheduleRender();
+          rAFRef.current = requestAnimationFrame(render);
         }
       }
     }
@@ -1009,52 +903,6 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
     const rangeLen = (logicalRange.to - logicalRange.from) || 1;
     const { min, max } = vState.current.priceRange;
     const priceRange = (max - min) || 1;
-
-    // ── Dynamic price step calculation first to get maxPriceW ──
-    const targetSteps = Math.max(4, Math.floor(ch / (60 * dpr)));
-    const rawStep = priceRange / targetSteps;
-    const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
-    const normalized = rawStep / magnitude;
-
-    let stepMult = 1;
-    if (normalized > 7.5) stepMult = 10;
-    else if (normalized > 3.5) stepMult = 5;
-    else if (normalized > 1.5) stepMult = 2;
-
-    const pStep = Math.max(0.000001, stepMult * magnitude);
-    const decPlaces = pStep >= 1 ? 0 : pStep >= 0.1 ? 2 : pStep >= 0.01 ? 2 : pStep >= 0.001 ? 3 : 4;
-
-    const sdfFontSize = 64;
-    const targetFontSize = 12 * dpr;
-    const fontScale = targetFontSize / sdfFontSize;
-
-    const getTextWidth = (str) => {
-      let w = 0;
-      const paddingValue = 8;
-      if (!gpu.current.charMap) return 0;
-      for (let i = 0; i < str.length; i++) {
-        const map = gpu.current.charMap[str[i]];
-        if (map) w += (map.w - paddingValue * 2) * fontScale;
-      }
-      return w;
-    };
-
-    let maxPriceW = 36 * dpr;
-    const startP = Math.floor(min / pStep) * pStep;
-    for (let p = startP; p <= max; p += pStep) {
-      if (p < min || p > max) continue;
-      const w = getTextWidth(p.toFixed(decPlaces));
-      if (w > maxPriceW) maxPriceW = w;
-    }
-    if (candles && candles.length > 0) {
-      const lastC = candles[candles.length - 1];
-      const w = getTextWidth(lastC.close.toFixed(decPlaces));
-      if (w > maxPriceW) maxPriceW = w;
-    }
-
-    const pAxisW = maxPriceW + 16 * dpr;
-    vState.current.pAxisW = pAxisW / dpr; // Save in CSS pixels for mouse events
-
     const scaleX = (cw - pAxisW) / (rangeLen * 10);
     const scaleY = timeAxisY / priceRange;
     const offsetX = -(logicalRange.from * 10 * scaleX);
@@ -1077,17 +925,9 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
           if (!map) continue;
           if (charCount >= gpu.current.maxChars) break;
           const off = charCount * 8;
-          const charW = (map.w - paddingValue * 2) * fontScale;
-          
-          textData[off] = x - (paddingValue * fontScale); 
-          textData[off + 1] = y - (map.h * fontScale) / 2; 
-          textData[off + 2] = map.w * fontScale; // posW
-          textData[off + 3] = map.h * fontScale; // posH
-          
-          textData[off + 4] = map.x; // uvX
-          textData[off + 5] = map.y; // uvY
-          textData[off + 6] = map.w; // uvW
-          textData[off + 7] = map.h; // uvH
+          const charW = map.w - paddingValue * 2;
+          textData[off] = x - paddingValue; textData[off + 1] = y - map.h / 2; textData[off + 2] = 0; textData[off + 3] = 0;
+          textData[off + 4] = map.x; textData[off + 5] = map.y; textData[off + 6] = map.w; textData[off + 7] = map.h;
           x += charW;
           charCount++;
         }
@@ -1099,8 +939,49 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
       const endIdx = Math.min(candles.length - 1, Math.ceil(logicalRange.to));
       const timeAxisY_initial = ch - (28 * dpr);
 
-      // ── Dynamic price step calculation already done above ──
+      // ── Dynamic price step calculation first to get maxPriceW ──
       const rawPriceLabels_temp = [];
+      const { min, max } = vState.current.priceRange;
+      const priceRange = (max - min) || 1;
+
+      const targetSteps = Math.max(4, Math.floor(ch / (60 * dpr)));
+      const rawStep = priceRange / targetSteps;
+      const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+      const normalized = rawStep / magnitude;
+
+      let stepMult = 1;
+      if (normalized > 7.5) stepMult = 10;
+      else if (normalized > 3.5) stepMult = 5;
+      else if (normalized > 1.5) stepMult = 2;
+
+      const pStep = Math.max(0.000001, stepMult * magnitude);
+      const decPlaces = pStep >= 1 ? 0 : pStep >= 0.1 ? 2 : pStep >= 0.01 ? 2 : pStep >= 0.001 ? 3 : 4;
+
+      const getTextWidth = (str) => {
+        let w = 0;
+        const paddingValue = 8;
+        for (let i = 0; i < str.length; i++) {
+          const map = gpu.current.charMap[str[i]];
+          if (map) w += (map.w - paddingValue * 2);
+        }
+        return w;
+      };
+
+      let maxPriceW = 36 * dpr;
+      const startP = Math.floor(min / pStep) * pStep;
+      for (let p = startP; p <= max; p += pStep) {
+        if (p < min || p > max) continue;
+        const w = getTextWidth(p.toFixed(decPlaces));
+        if (w > maxPriceW) maxPriceW = w;
+      }
+
+      // Equal side margin: 8px (8 * dpr) on both sides of the price digits
+      const pAxisW = maxPriceW + 16 * dpr;
+      vState.current.pAxisW = pAxisW / dpr; // Save in CSS pixels for mouse events
+
+      const rangeLen = (logicalRange.to - logicalRange.from) || 1;
+      const scaleX = (cw - pAxisW) / (rangeLen * 10);
+      const offsetX = -(logicalRange.from * 10 * scaleX);
 
       const rawTimeLabels = [];
       let lastMonth = -1, lastDay = -1;
@@ -1182,12 +1063,13 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
       // Draw Axis Labels
       timeAxisWinners.forEach(({ x, label }) => {
         const w = getTextWidth(label);
-        pushText(label, Math.floor(x - w / 2), Math.floor(timeAxisY + timeAxisH / 2));
+        pushText(label, Math.round(x - w / 2), Math.round(timeAxisY + timeAxisH / 2));
       });
       priceAxisWinners.forEach(({ y, label }) => {
         const w = getTextWidth(label);
-        const labelX = cw - 8 * dpr - w;
-        pushText(label, Math.floor(labelX), Math.floor(y));
+        const fontSize = Math.floor(11 * dpr);
+        const centerX = Math.round(cw - pAxisW + (pAxisW - w) / 2);
+        pushText(label, centerX, Math.round(y - (fontSize / 2)));
       });
 
       // ── Live Price Text (GPU Native) ──
@@ -1202,8 +1084,8 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
         if (livePixelY >= 0 && livePixelY <= timeAxisY) {
           const lbl = lastC.close.toFixed(decPlaces);
           const w = getTextWidth(lbl);
-          const labelX = cw - 8 * dpr - w;
-          pushText(lbl, Math.floor(labelX), Math.floor(livePixelY));
+          const centerX = Math.round(cw - pAxisW + (pAxisW - w) / 2);
+          pushText(lbl, centerX, Math.round(livePixelY));
         }
       }
 
@@ -1214,11 +1096,11 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
         const hy = hoverPixel.y * dpr;
         if (hx >= 0 && hx <= cw - pAxisW && hy >= 0 && hy <= timeAxisY) {
           // Calculate price at hover position
-          const hoverPrice = max - (hy / scaleY);
-          const hoverPriceStr = hoverPrice.toFixed(decPlaces);
-          const wPrice = getTextWidth(hoverPriceStr);
-          const labelX = cw - 8 * dpr - wPrice;
-          pushText(hoverPriceStr, Math.floor(labelX), Math.floor(hy));
+          const price = max - (hy / scaleY);
+          const priceStr = price.toFixed(decPlaces);
+          const wPrice = getTextWidth(priceStr);
+          const centerX = Math.round(cw - pAxisW + (pAxisW - wPrice) / 2);
+          pushText(priceStr, centerX, Math.round(hy));
 
           // Calculate time at hover position
           const idx = logicalRange.from + ((hx / (cw - pAxisW)) * rangeLen);
@@ -1234,7 +1116,7 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
             const M = d.getMinutes().toString().padStart(2, '0');
             const timeStr = `${dd} ${mo} '${yy} ${H}:${M}`;
             const timeW = getTextWidth(timeStr);
-            pushText(timeStr, Math.floor(hx - timeW / 2), Math.floor(timeAxisY + timeAxisH / 2));
+            pushText(timeStr, Math.round(hx - timeW / 2), Math.round(timeAxisY + timeAxisH / 2));
           }
         }
       }
@@ -1242,6 +1124,7 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
       if (charCount > 0) {
         gpu.current.device.queue.writeBuffer(gpu.current.textStorageBuffer, 0, textData);
         const txtCol = darkMode ? [0.788, 0.820, 0.851, 1.0] : [0.075, 0.090, 0.133, 1.0];
+        // Struct: resolution(vec2<f32>) + textColor(vec4<f32>) = 24 bytes, padded to 32
         gpu.current.device.queue.writeBuffer(gpu.current.textUniformBuffer, 0, new Float32Array([cw, ch, 0, 0, ...txtCol]));
       }
     }
@@ -1268,37 +1151,6 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
         storeOp: 'store',
       }]
     });
-    
-    // ── 0.5 DRAW WATERMARK LOGO ──
-    if (gpu.current.imagePipeline && gpu.current.logoTexture) {
-      const tint = darkMode ? [1.0, 1.0, 1.0, 0.05] : [0.0, 0.0, 0.0, 0.05];
-      gpu.current.device.queue.writeBuffer(gpu.current.imageUniformBuffer, 0, new Float32Array([cw, ch, 0, 0, ...tint]));
-      
-      const chartW = cw - pAxisW;
-      const chartH = timeAxisY;
-      const size = Math.min(chartW, chartH) * 0.4; 
-      const centerX = chartW / 2;
-      const centerY = chartH / 2;
-      const x1 = Math.round(centerX - size / 2);
-      const y1 = Math.round(centerY - size / 2);
-      const x2 = Math.round(centerX + size / 2);
-      const y2 = Math.round(centerY + size / 2);
-      
-      const logoData = new Float32Array([
-        x1, y1, 0.0, 0.0,
-        x2, y1, 1.0, 0.0,
-        x1, y2, 0.0, 1.0,
-        
-        x1, y2, 0.0, 1.0,
-        x2, y1, 1.0, 0.0,
-        x2, y2, 1.0, 1.0
-      ]);
-      gpu.current.device.queue.writeBuffer(gpu.current.imageStorageBuffer, 0, logoData);
-      
-      renderPass.setPipeline(gpu.current.imagePipeline);
-      renderPass.setBindGroup(0, gpu.current.imageBindGroup);
-      renderPass.draw(6);
-    }
 
     // ── 1. DRAW PROCEDURAL SDF GRID & CROSSHAIR ──
     if (gpu.current.gridPipeline) {
@@ -1364,20 +1216,13 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
         }
       };
 
-      const gridLineColor = darkMode ? [42/255, 46/255, 57/255, 0.6] : [224/255, 227/255, 235/255, 1.0];
-      const axisBorderColor = darkMode ? [42/255, 46/255, 57/255, 1.0] : [224/255, 227/255, 235/255, 1.0];
-      timeAxisWinners.forEach(({ x }) => {
-        pushThickLine({ x, y: 0 }, { x, y: timeAxisY }, 1, gridLineColor);
-        pushThickLine({ x, y: timeAxisY }, { x, y: timeAxisY + 4 * dpr }, 1, gridLineColor); // Tick mark
-      });
-      priceAxisWinners.forEach(({ y }) => {
-        pushThickLine({ x: 0, y }, { x: cw - pAxisW, y }, 1, gridLineColor);
-        pushThickLine({ x: cw - pAxisW, y }, { x: cw - pAxisW + 4 * dpr, y }, 1, gridLineColor); // Tick mark
-      });
+      const gridLineColor = darkMode ? [0.168, 0.184, 0.223, 1.0] : [0.878, 0.890, 0.921, 1.0]; // #2B2F36 or #e0e3eb
+      timeAxisWinners.forEach(({ x }) => pushThickLine({ x, y: 0 }, { x, y: timeAxisY }, 1, gridLineColor));
+      priceAxisWinners.forEach(({ y }) => pushThickLine({ x: 0, y }, { x: cw - pAxisW, y }, 1, gridLineColor));
 
       // Axis Borders (drawn slightly darker/thicker depending on theme)
-      pushThickLine({ x: cw - pAxisW, y: 0 }, { x: cw - pAxisW, y: timeAxisY }, 1, axisBorderColor);
-      pushThickLine({ x: 0, y: timeAxisY }, { x: cw - pAxisW, y: timeAxisY }, 1, axisBorderColor);
+      pushThickLine({ x: cw - pAxisW, y: 0 }, { x: cw - pAxisW, y: timeAxisY }, 1, gridLineColor);
+      pushThickLine({ x: 0, y: timeAxisY }, { x: cw - pAxisW, y: timeAxisY }, 1, gridLineColor);
 
       const byteLen = gridData.byteLength;
       gpu.current.device.queue.writeBuffer(gpu.current.drawingBuffer, drawingBufferOffset, gridData.buffer, gridData.byteOffset, byteLen);
@@ -1536,7 +1381,7 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
       };
 
       const crosshairColor = [1.0, 1.0, 1.0, 0.3];
-      const hoverBgColor = darkMode ? [42/255, 46/255, 57/255, 1.0] : [224/255, 227/255, 235/255, 1.0];
+      const hoverBgColor = darkMode ? [0.165, 0.180, 0.224, 1.0] : [0.878, 0.890, 0.922, 1.0];
 
       // Live Price Tag Background
       let livePixelY = -1.0;
@@ -1813,7 +1658,7 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
           }
         }
 
-        scheduleRender();
+        requestAnimationFrame(render);
       }
     });
     observer.observe(containerRef.current);
@@ -1822,7 +1667,7 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
   // Auto-scale effect when toggled on manually
   useEffect(() => {
     if (autoScale) vState.current.manualPriceScale = false;
-    scheduleRender();
+    requestAnimationFrame(render);
   }, [autoScale]);
 
   // Pointer Events for Panning and Zooming
@@ -1914,7 +1759,7 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
           gpu.current.activeDrawStart = null;
           gpu.current.activeTempShape = null;
         }
-        scheduleRender();
+        requestAnimationFrame(render);
         return;
       }
 
@@ -1969,7 +1814,7 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
         vState.current.hoverPixel = { x: px / dpr, y: py / dpr };
 
         gpu.current.activeTempShape = { time, price: snapPrice };
-        scheduleRender();
+        requestAnimationFrame(render);
         return;
       }
 
@@ -2004,7 +1849,7 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
 
 
 
-        scheduleRender();
+        rAFRef.current = requestAnimationFrame(render);
         return;
       }
 
@@ -2037,7 +1882,7 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
           to: candles[Math.min(candles.length - 1, Math.ceil(vState.current.logicalRange.to))]?.time
         });
       }
-      scheduleRender();
+      rAFRef.current = requestAnimationFrame(render);
     };
 
     const onPointerUp = (e) => {
@@ -2047,6 +1892,7 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
 
     const onWheel = (e) => {
       e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
       const cw = vState.current.width;
       const rangeLen = vState.current.logicalRange.to - vState.current.logicalRange.from;
 
@@ -2057,13 +1903,28 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
         vState.current.logicalRange.from += shift;
         vState.current.logicalRange.to += shift;
       } else {
-        // Vertical scroll -> zoom
-        const zoomFactor = e.deltaY > 0 ? 1.05 : 0.95;
-        const center = vState.current.logicalRange.from + (rangeLen / 2);
+        // Mouse Cursor Anchored Zoom
+        const px = Math.max(0, Math.min(cw, e.clientX - rect.left));
+        const pAxisW = vState.current.pAxisW || 65;
+        const chartW = Math.max(1, cw - pAxisW);
+        const ratio = Math.max(0, Math.min(1, px / chartW));
 
-        const newLen = Math.max(10, Math.min(candles.length, rangeLen * zoomFactor));
-        vState.current.logicalRange.from = center - (newLen / 2);
-        vState.current.logicalRange.to = center + (newLen / 2);
+        let zoomFactor;
+        if (e.ctrlKey) {
+          // Touchpad pinch delta is continuous and fine-grained
+          const pinchSensitivity = 0.015;
+          zoomFactor = Math.exp(e.deltaY * pinchSensitivity);
+        } else {
+          // Standard physical mouse wheel clicks
+          const zoomSensitivity = 0.0018;
+          zoomFactor = Math.exp(e.deltaY * zoomSensitivity);
+        }
+
+        const pivotCandle = vState.current.logicalRange.from + (rangeLen * ratio);
+        const newLen = Math.max(5, Math.min(50000, rangeLen * zoomFactor));
+
+        vState.current.logicalRange.from = pivotCandle - (newLen * ratio);
+        vState.current.logicalRange.to = pivotCandle + (newLen * (1 - ratio));
       }
 
       if (onVisibleRangeChange && candles && candles.length > 0) {
@@ -2072,13 +1933,13 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
           to: candles[Math.min(candles.length - 1, Math.ceil(vState.current.logicalRange.to))]?.time
         });
       }
-      scheduleRender();
+      rAFRef.current = requestAnimationFrame(render);
     };
 
     const onPointerLeave = (e) => {
       isDragging = false;
       vState.current.hoverPixel = null;
-      scheduleRender();
+      rAFRef.current = requestAnimationFrame(render);
     };
 
     canvas.addEventListener('pointerdown', onPointerDown);
@@ -2099,7 +1960,7 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
   }, [candles, activeTool, onVisibleRangeChange]);
 
   useImperativeHandle(ref, () => ({
-    render: () => scheduleRender(),
+    render: () => requestAnimationFrame(render),
     scrollToRealTime: () => {
       if (!candles || candles.length === 0) return;
       const lastIdx = candles.length - 1;
@@ -2108,7 +1969,7 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
       vState.current.logicalRange.from = lastIdx - rangeLen + padding;
       vState.current.logicalRange.to = lastIdx + padding;
       vState.current.manualPriceScale = false;
-      scheduleRender();
+      requestAnimationFrame(render);
       if (onVisibleRangeChange) {
         onVisibleRangeChange({
           from: candles[Math.max(0, Math.floor(vState.current.logicalRange.from))]?.time,
@@ -2165,8 +2026,6 @@ const WebGPUChartEngine = React.forwardRef((props, ref) => {
       return { time, price };
     }
   }));
-
-  renderRef.current = render;
 
   useEffect(() => {
     if (gpuError && onFallback) {

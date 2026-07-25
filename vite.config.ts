@@ -14,18 +14,34 @@ export default defineConfig({
     },
   },
   build: {
+    chunkSizeWarningLimit: 5000,
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
-
-          if (id.includes('lightweight-charts')) return 'market-chart';
-          if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-vendor')) return 'report-chart';
-          if (id.includes('lucide-react')) return 'icons';
-          return 'vendor';
+          
+          if (id.includes('monaco-editor')) return 'vendor-monaco';
+          if (id.includes('lightweight-charts')) return 'vendor-charts';
+          if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-vendor')) return 'vendor-recharts';
+          if (id.includes('lucide-react')) return 'vendor-icons';
+          if (id.includes('react') || id.includes('react-dom')) return 'vendor-react';
+          if (id.includes('@tauri-apps')) return 'vendor-tauri';
+          if (id.includes('pixi.js')) return 'vendor-pixi';
+          return 'vendor-core';
         }
       }
     }
-  }
+  },
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'lucide-react',
+      'lightweight-charts',
+      'recharts',
+      'zustand',
+      'framer-motion',
+    ],
+  },
 })
 

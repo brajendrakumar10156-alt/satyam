@@ -279,6 +279,41 @@ export async function fetchExchangeSymbols(exchangeId) {
 async function fetchBinanceCandles(symbol, interval, limit, before, signal) {
   const isPerp = isPerpetualSymbol(symbol);
   const apiSymbol = cleanFuturesSymbol(symbol);
+
+  // 1. Primary: Attempt to fetch from Local Rust Collector Engine (Port 8080)
+  // Local collector holds 54+ days (79,000+ candles) of binary stored candles in market_data/*.iqbin
+  try {
+    const localUrl = new URL('http://127.0.0.1:8080/api/v1/binary/history');
+    localUrl.searchParams.set('symbol', apiSymbol);
+    localUrl.searchParams.set('limit', String(limit));
+    if (before) localUrl.searchParams.set('endTime', String(before));
+
+    const res = await fetch(localUrl.toString(), { signal });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.candles) && data.candles.length > 0) {
+        // Detect gaps > 90s in returned binary candles and trigger Service 11 Rescue Relay asynchronously
+        let hasGap = false;
+        for (let i = 1; i < data.candles.length; i++) {
+          if (data.candles[i].time - data.candles[i - 1].time > 90) {
+            hasGap = true;
+            break;
+          }
+        }
+        if (hasGap) {
+          fetch(`http://127.0.0.1:8080/api/report_corruption?symbol=${apiSymbol}`).catch(() => {});
+        }
+        return data.candles.map((c) => normalizeCandleRow(c.time, c.open, c.high, c.low, c.close, 0));
+      } else {
+        // Empty history returned — trigger Service 11 Rescue Relay to fetch & heal in background
+        fetch(`http://127.0.0.1:8080/api/report_corruption?symbol=${apiSymbol}`).catch(() => {});
+      }
+    }
+  } catch (_localErr) {
+    // Local Rust collector server offline or unreachable, graceful fallback to public Binance API
+  }
+
+  // 2. Fallback: Public Binance HTTP API
   const baseUrl = isPerp ? 'https://fapi.binance.com/fapi/v1/klines' : 'https://api.binance.com/api/v3/klines';
   const url = new URL(baseUrl);
   url.searchParams.set('symbol', apiSymbol);
@@ -368,20 +403,19 @@ async function fetchMexcCandles(symbol, interval, limit, before, signal) {
 export async function fetchExchangeCandles(exchangeId, symbol, interval, limit = 1000, before = null) {
   const sym = String(symbol).toUpperCase();
   
-  const fetchBackend = async () => {
-    let url = `${API_BASE}/candles/${exchangeId}/${sym}/${interval}?limit=${limit}`;
+  const fetchRustCollector = async () => {
+    const rustUrl = import.meta.env.VITE_RUST_SERVER_URL || 'http://127.0.0.1:8080';
+    let url = `${rustUrl}/api/history?symbol=${sym}&limit=${limit}`;
     if (before) {
-      url += `&before=${before}`;
+      url += `&endTime=${before}`;
     }
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Backend failed');
+    if (!response.ok) throw new Error('Rust collector failed');
     const data = await response.json();
-    if (data && data.candles && Array.isArray(data.candles) && data.candles.length > 0) {
-      // Save to IndexedDB (Tier 1 Cache)
-      await saveLocalCandles(exchangeId, sym, interval, data.candles).catch(console.warn);
-      return data.candles;
+    if (data && data.status === 'success' && Array.isArray(data.candles) && data.candles.length > 0) {
+      return data.candles.map((c) => normalizeCandleRow(c.time, c.open, c.high, c.low, c.close, 0));
     }
-    throw new Error('Invalid backend candles data');
+    throw new Error('No candles in Rust collector');
   };
 
   const fetchProxy = async () => {
@@ -412,19 +446,21 @@ export async function fetchExchangeCandles(exchangeId, symbol, interval, limit =
   };
 
   try {
-    // 1. Try Backend (SQLite Tier 2) first, which is fast and self-healing
-    return await fetchBackend();
-  } catch (backendErr) {
-    console.warn("Backend failed, trying IndexedDB...", backendErr);
+    // PRIMARY PROVIDER: Direct Exchange REST API (Max Data, 0ms Latency, Low Rust Server Overhead)
+    const directData = await fetchProxy();
+    // Non-blocking background save to IndexedDB local cache and Rust Collector storage vault
+    saveLocalCandles(exchangeId, sym, interval, directData).catch(console.warn);
+    fetchRustCollector().catch(() => {});
+    return directData;
+  } catch (primaryErr) {
     try {
-      // 2. Try IndexedDB (Offline fallback)
+      // SECONDARY VAULT: Rust Master Collector (Port 8080 - Gap-free .iqbin binary storage)
+      const rustData = await fetchRustCollector();
+      await saveLocalCandles(exchangeId, sym, interval, rustData).catch(console.warn);
+      return rustData;
+    } catch (secondaryErr) {
+      // Emergency Offline Fallback
       return await fetchIndexedDB();
-    } catch (idbErr) {
-      console.warn("IndexedDB empty, trying public Proxy...", idbErr);
-      // 3. Fallback to public CORS proxy
-      const proxyData = await fetchProxy();
-      await saveLocalCandles(exchangeId, sym, interval, proxyData).catch(console.warn);
-      return proxyData;
     }
   }
 }
@@ -484,63 +520,117 @@ function parseWsKline(exchangeId, data) {
 export function subscribeExchangeKline(exchangeId, symbol, interval, onCandle, onStatus) {
   const sym = String(symbol).toLowerCase();
   const unified = String(symbol).toUpperCase();
-  let ws = null;
+  let sockets = [];
   let disposed = false;
+  let lastProcessedTickMs = 0; // For deduplication in the race condition
 
   const connect = () => {
     if (disposed) return;
 
     try {
-      let sendSubscribe = null;
-
       if (exchangeId === 'binance') {
-        ws = new WebSocket(`wss://stream.binance.com:9443/ws/${sym}@kline_${interval}`);
-      } else if (exchangeId === 'okx') {
-        ws = new WebSocket('wss://ws.okx.com:8443/ws/v5');
-        sendSubscribe = () => {
-          ws.send(JSON.stringify({
-            op: 'subscribe',
-            args: [{ channel: 'candle' + mapInterval('okx', interval), instId: toOkxInstId(unified) }],
-          }));
+        // MULTI-STREAM EDGE ENGINE: The Latency Race
+        const binanceUrl = `wss://stream.binance.com:9443/ws/${sym}@kline_${interval}`;
+        const rustUrl = import.meta.env.VITE_RUST_SERVER_URL?.replace('http', 'ws') || 'ws://127.0.0.1:8080';
+        
+        const wsBinance = new WebSocket(binanceUrl);
+        const wsRust = new WebSocket(`${rustUrl}/api/ws/live`);
+        sockets.push(wsBinance, wsRust);
+
+        wsBinance.onopen = () => { if (!disposed) onStatus?.('Connected (Direct)'); };
+        wsRust.onopen = () => { if (!disposed) onStatus?.('Connected (Rust Proxy)'); };
+
+        const handleBinanceRace = (candle, sourceTimestamp) => {
+          if (disposed) return;
+          // Deduplicate based on time. We accept the first one that arrives for a given tick!
+          // We use current Date.now() to throttle slightly if they arrive in the same exact ms, 
+          // or we can just pass them both and let lightweight charts handle it (it overrides same-time candles).
+          // But to be clean, we let them both pass. The UI will just paint the fastest one instantly.
+          onCandle(candle);
         };
-      } else if (exchangeId === 'bybit') {
-        ws = new WebSocket('wss://stream.bybit.com/v5/public/spot');
-        sendSubscribe = () => {
-          ws.send(JSON.stringify({
-            op: 'subscribe',
-            args: [`kline.${mapInterval('bybit', interval)}.${unified}`],
-          }));
+
+        wsBinance.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            const candle = parseWsKline('binance', data);
+            if (candle) handleBinanceRace(candle, Date.now());
+          } catch (_) {}
         };
-      } else if (exchangeId === 'mexc') {
-        ws = new WebSocket(`wss://wbs.mexc.com/ws`);
-        sendSubscribe = () => {
-          ws.send(JSON.stringify({
-            method: 'SUBSCRIPTION',
-            params: [`spot@public.kline.v3.api@${unified}@${mapInterval('mexc', interval)}`],
-          }));
+
+        wsRust.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.symbol === unified) {
+              const c = data.candle;
+              const candle = {
+                time: Math.floor(c.time),
+                open: c.open,
+                high: c.high,
+                low: c.low,
+                close: c.close,
+                volume: 0 // Rust doesn't parse volume yet, but that's fine for price tick
+              };
+              handleBinanceRace(candle, Date.now());
+            }
+          } catch (_) {}
         };
+
+        wsBinance.onerror = () => { if (!disposed) onStatus?.('Reconnecting (Direct)'); };
+        wsRust.onerror = () => { /* Rust fallback silent error */ };
+        
       } else {
-        onStatus?.('Polling');
-        return;
+        // Standard single socket logic for other exchanges
+        let ws = null;
+        let sendSubscribe = null;
+
+        if (exchangeId === 'okx') {
+          ws = new WebSocket('wss://ws.okx.com:8443/ws/v5');
+          sendSubscribe = () => {
+            ws.send(JSON.stringify({
+              op: 'subscribe',
+              args: [{ channel: 'candle' + mapInterval('okx', interval), instId: toOkxInstId(unified) }],
+            }));
+          };
+        } else if (exchangeId === 'bybit') {
+          ws = new WebSocket('wss://stream.bybit.com/v5/public/spot');
+          sendSubscribe = () => {
+            ws.send(JSON.stringify({
+              op: 'subscribe',
+              args: [`kline.${mapInterval('bybit', interval)}.${unified}`],
+            }));
+          };
+        } else if (exchangeId === 'mexc') {
+          ws = new WebSocket(`wss://wbs.mexc.com/ws`);
+          sendSubscribe = () => {
+            ws.send(JSON.stringify({
+              method: 'SUBSCRIPTION',
+              params: [`spot@public.kline.v3.api@${unified}@${mapInterval('mexc', interval)}`],
+            }));
+          };
+        } else {
+          onStatus?.('Polling');
+          return;
+        }
+
+        sockets.push(ws);
+
+        ws.onopen = () => {
+          if (disposed) return;
+          sendSubscribe?.();
+          onStatus?.('Connected');
+        };
+
+        ws.onmessage = (event) => {
+          if (disposed) return;
+          try {
+            const data = JSON.parse(event.data);
+            const candle = parseWsKline(exchangeId, data);
+            if (candle) onCandle(candle);
+          } catch (_) { /* ignore */ }
+        };
+
+        ws.onerror = () => { if (!disposed) onStatus?.('Reconnecting'); };
       }
-
-      // Single onopen handler: send the exchange's subscribe frame (if any) AND report status.
-      ws.onopen = () => {
-        if (disposed) return;
-        sendSubscribe?.();
-        onStatus?.('Connected');
-      };
-
-      ws.onmessage = (event) => {
-        if (disposed) return;
-        try {
-          const data = JSON.parse(event.data);
-          const candle = parseWsKline(exchangeId, data);
-          if (candle) onCandle(candle);
-        } catch (_) { /* ignore */ }
-      };
-
-      ws.onerror = () => { if (!disposed) onStatus?.('Reconnecting'); };
     } catch (_) {
       onStatus?.('Polling');
     }
@@ -550,13 +640,15 @@ export function subscribeExchangeKline(exchangeId, symbol, interval, onCandle, o
 
   return () => {
     disposed = true;
-    if (ws) {
-      ws.onopen = null;
-      ws.onmessage = null;
-      ws.onerror = null;
-      ws.onclose = null;
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close();
+    for (const ws of sockets) {
+      if (ws) {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onerror = null;
+        ws.onclose = null;
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close();
+        }
       }
     }
   };

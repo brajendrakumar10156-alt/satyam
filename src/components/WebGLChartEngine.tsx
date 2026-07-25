@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { INDICATOR_REGISTRY } from '../indicatorsRegistry';
 import { calculateHorizontalTimeAxisLabels, calculateVerticalPriceAxisLabels } from '../utils/axisCollisionEngine';
-import { generateSDFAtlas } from '../utils/sdfFontGenerator';
+import { generateHDGlyphAtlas } from '../utils/hdGlyphAtlas';
 
 // ── WebGL2 Shader Sources ──
 
@@ -169,7 +169,7 @@ void main() {
     float clipX = (a_position.x / u_resolution.x) * 2.0 - 1.0;
     float clipY = 1.0 - (a_position.y / u_resolution.y) * 2.0;
     gl_Position = vec4(clipX, clipY, 0.0, 1.0);
-    v_uv = vec2(a_uv.x, a_uv.y);
+    v_uv = vec2(a_uv.x, 1.0 - a_uv.y);
 }
 `;
 
@@ -181,38 +181,11 @@ uniform sampler2D u_fontTexture;
 uniform vec4 u_textColor;
 
 void main() {
-    float distance = texture(u_fontTexture, v_uv).r;
-    float smoothing = 0.05;
-    float alpha = smoothstep(0.5 - smoothing, 0.5 + smoothing, distance);
-    if (alpha < 0.01) { discard; }
-    fragColor = vec4(u_textColor.rgb, u_textColor.a * alpha);
-}
-`;
-
-const vsImageSource = `#version 300 es
-in vec2 a_position;
-in vec2 a_uv;
-uniform vec2 u_resolution;
-out vec2 v_uv;
-
-void main() {
-    float clipX = (a_position.x / u_resolution.x) * 2.0 - 1.0;
-    float clipY = 1.0 - (a_position.y / u_resolution.y) * 2.0;
-    gl_Position = vec4(clipX, clipY, 0.0, 1.0);
-    v_uv = vec2(a_uv.x, 1.0 - a_uv.y);
-}
-`;
-
-const fsImageSource = `#version 300 es
-precision mediump float;
-in vec2 v_uv;
-out vec4 fragColor;
-uniform sampler2D u_imageTexture;
-uniform vec4 u_tint;
-
-void main() {
-    vec4 texColor = texture(u_imageTexture, v_uv);
-    fragColor = texColor * u_tint;
+    float alpha = texture(u_fontTexture, v_uv).r;
+    // Crisp threshold for exact pixel rendering, preventing blur from sub-pixel linear interpolation
+    float crispAlpha = smoothstep(0.40, 0.55, alpha); 
+    if (crispAlpha < 0.01) { discard; }
+    fragColor = vec4(u_textColor.rgb, u_textColor.a * crispAlpha);
 }
 `;
 
@@ -284,17 +257,6 @@ const WebGLChartEngine = forwardRef(({
     hoverPixel: null
   });
 
-  const rAFRef = useRef(null);
-  const renderRef = useRef(null);
-  
-  const scheduleRender = () => {
-    if (rAFRef.current !== null) return;
-    rAFRef.current = requestAnimationFrame(() => {
-      rAFRef.current = null;
-      if (renderRef.current) renderRef.current();
-    });
-  };
-
   const dpr = window.devicePixelRatio || 1;
 
   const timeToIndex = (time, arr) => {
@@ -322,7 +284,7 @@ const WebGLChartEngine = forwardRef(({
           glCanvasRef.current.width = Math.floor(width * dpr);
           glCanvasRef.current.height = Math.floor(height * dpr);
         }
-        scheduleRender();
+        requestAnimationFrame(render);
       }
     });
     observer.observe(containerRef.current);
@@ -344,7 +306,7 @@ const WebGLChartEngine = forwardRef(({
         to: candles.length - 1 + 20
       };
     }
-    scheduleRender();
+    requestAnimationFrame(render);
   }, [initialVisibleRange, candles]);
 
   // Setup WebGL2
@@ -363,7 +325,6 @@ const WebGLChartEngine = forwardRef(({
     programsRef.current.candle = createProgram(gl, vsCandleSource, fsCandleSource);
     programsRef.current.line = createProgram(gl, vsLineSource, fsLineSource);
     programsRef.current.sdfText = createProgram(gl, vsSdfTextSource, fsSdfTextSource);
-    programsRef.current.image = createProgram(gl, vsImageSource, fsImageSource);
 
     // Quad geometry (for instanced candles + grid quad)
     const quadVertices = new Float32Array([
@@ -401,12 +362,11 @@ const WebGLChartEngine = forwardRef(({
     // SDF Text dynamic Buffer
     buffersRef.current.text = gl.createBuffer();
 
-    // Generate and upload SDF Atlas Texture
-    // Generate and upload SDF Atlas Texture at high resolution (64px) for sharp curves
-    const { sdfData, charMap, atlasSize } = generateSDFAtlas(
-      "'Inter', -apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, sans-serif",
-      64,
-      8
+    // Generate and upload HD Glyph Atlas Texture
+    const { alphaData, charMap, atlasSize } = generateHDGlyphAtlas(
+      "'Inter', 'SF Pro Display', -apple-system, sans-serif",
+      11,
+      dpr
     );
     charMapRef.current = charMap;
 
@@ -421,37 +381,18 @@ const WebGLChartEngine = forwardRef(({
       0,
       gl.RED,
       gl.UNSIGNED_BYTE,
-      sdfData
+      alphaData
     );
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     textureRef.current = texture;
-    
-    // Load logo texture
-    const logoImg = new Image();
-    logoImg.src = '/src/assets/logo.png';
-    const logoTexture = gl.createTexture();
-    textureRef.current_logo = logoTexture;
-    
-    logoImg.onload = () => {
-      const gl = glRef.current;
-      if (gl) {
-        gl.bindTexture(gl.TEXTURE_2D, logoTexture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, logoImg);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.generateMipmap(gl.TEXTURE_2D);
-        scheduleRender();
-      }
-    };
 
     if (onChartReady) onChartReady();
-    scheduleRender();
+    requestAnimationFrame(render);
 
     return () => {
-      if (rAFRef.current !== null) { cancelAnimationFrame(rAFRef.current); rAFRef.current = null; }
       gl.deleteBuffer(buffersRef.current.quad);
       gl.deleteBuffer(buffersRef.current.fsQuad);
       gl.deleteBuffer(buffersRef.current.dynamic);
@@ -488,70 +429,29 @@ const WebGLChartEngine = forwardRef(({
     let timeAxisWinners = [];
     let livePixelY = -1.0;
     let priceAxisWinners = [];
-    
-    // ── DRAW LOGO WATERMARK ──
-    const progImage = programsRef.current.image;
-    if (progImage && textureRef.current_logo) {
-      gl.useProgram(progImage);
-      
-      gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, textureRef.current_logo);
-      gl.uniform1i(gl.getUniformLocation(progImage, 'u_imageTexture'), 1);
-      gl.uniform2f(gl.getUniformLocation(progImage, 'u_resolution'), cw, ch);
-      
-      const tint = darkMode ? [1.0, 1.0, 1.0, 0.05] : [0.0, 0.0, 0.0, 0.05];
-      gl.uniform4fv(gl.getUniformLocation(progImage, 'u_tint'), tint);
-      
-      const pAxisW = vState.current.pAxisW || 65;
-      const chartW = cw - pAxisW;
-      const chartH = timeAxisY;
-      
-      // Assume square logo. Fit inside chart area.
-      const size = Math.min(chartW, chartH) * 0.4; 
-      const centerX = chartW / 2;
-      const centerY = chartH / 2;
-      const x1 = Math.round(centerX - size / 2);
-      const y1 = Math.round(centerY - size / 2);
-      const x2 = Math.round(centerX + size / 2);
-      const y2 = Math.round(centerY + size / 2);
-      
-      const logoData = new Float32Array([
-        x1, y1, 0.0, 0.0,
-        x2, y1, 1.0, 0.0,
-        x1, y2, 0.0, 1.0,
-        
-        x1, y2, 0.0, 1.0,
-        x2, y1, 1.0, 0.0,
-        x2, y2, 1.0, 1.0
-      ]);
-      
-      gl.bindBuffer(gl.ARRAY_BUFFER, buffersRef.current.text);
-      gl.bufferData(gl.ARRAY_BUFFER, logoData, gl.DYNAMIC_DRAW);
-      
-      const aPos = gl.getAttribLocation(progImage, 'a_position');
-      const aUv = gl.getAttribLocation(progImage, 'a_uv');
-      
-      gl.enableVertexAttribArray(aPos);
-      gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 16, 0);
-      
-      gl.enableVertexAttribArray(aUv);
-      gl.vertexAttribPointer(aUv, 2, gl.FLOAT, false, 16, 8);
-      
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-      
-      gl.disableVertexAttribArray(aPos);
-      gl.disableVertexAttribArray(aUv);
-    }
 
     // Auto-Scale
     if (autoScale && !vState.current.manualPriceScale && candles && candles.length > 0) {
       let minP = Infinity, maxP = -Infinity;
-      const fromIdx = Math.max(0, Math.floor(vState.current.logicalRange.from));
-      const toIdx = Math.min(candles.length - 1, Math.ceil(vState.current.logicalRange.to));
+      const fromIdx = Math.max(0, Math.min(candles.length - 1, Math.floor(vState.current.logicalRange.from)));
+      const toIdx = Math.max(0, Math.min(candles.length - 1, Math.ceil(vState.current.logicalRange.to)));
 
       for (let i = fromIdx; i <= toIdx; i++) {
-        if (candles[i].low < minP) minP = candles[i].low;
-        if (candles[i].high > maxP) maxP = candles[i].high;
+        const c = candles[i];
+        if (c && Number.isFinite(c.low) && Number.isFinite(c.high)) {
+          if (c.low < minP) minP = c.low;
+          if (c.high > maxP) maxP = c.high;
+        }
+      }
+
+      if (minP === Infinity || maxP === -Infinity) {
+        for (let i = 0; i < candles.length; i++) {
+          const c = candles[i];
+          if (c && Number.isFinite(c.low) && Number.isFinite(c.high)) {
+            if (c.low < minP) minP = c.low;
+            if (c.high > maxP) maxP = c.high;
+          }
+        }
       }
 
       if (minP !== Infinity && maxP !== -Infinity) {
@@ -567,7 +467,7 @@ const WebGLChartEngine = forwardRef(({
         if (Math.abs(diffMin) > 0.000001 || Math.abs(diffMax) > 0.000001) {
           vState.current.priceRange.min += diffMin * 0.4;
           vState.current.priceRange.max += diffMax * 0.4;
-          scheduleRender();
+          requestAnimationFrame(render);
         }
       }
     }
@@ -607,11 +507,6 @@ const WebGLChartEngine = forwardRef(({
     for (let p = startP; p <= max; p += pStep) {
       if (p < min || p > max) continue;
       const w = getTextWidth(p.toFixed(decPlaces));
-      if (w > maxPriceW) maxPriceW = w;
-    }
-    if (candles && candles.length > 0) {
-      const lastC = candles[candles.length - 1];
-      const w = getTextWidth(lastC.close.toFixed(decPlaces));
       if (w > maxPriceW) maxPriceW = w;
     }
 
@@ -762,21 +657,13 @@ const WebGLChartEngine = forwardRef(({
         quadSegments.push(r, b, ...color);
       };
 
-      const gridLineColor = darkMode ? [42/255, 46/255, 57/255, 0.6] : [224/255, 227/255, 235/255, 1.0];
-      const axisBorderColor = darkMode ? [42/255, 46/255, 57/255, 1.0] : [224/255, 227/255, 235/255, 1.0];
+      const gridLineColor = darkMode ? [0.168, 0.184, 0.223, 1.0] : [0.878, 0.890, 0.921, 1.0];
 
-      // Draw grid lines and tick marks
-      timeAxisWinners.forEach(({ x }) => {
-        pushLine(x, 0, x, timeAxisY, gridLineColor);
-        pushLine(x, timeAxisY, x, timeAxisY + 4 * dpr, gridLineColor); // Time axis tick
-      });
-      priceAxisWinners.forEach(({ y }) => {
-        pushLine(0, y, cw - pAxisW, y, gridLineColor);
-        pushLine(cw - pAxisW, y, cw - pAxisW + 4 * dpr, y, gridLineColor); // Price axis tick
-      });
+      timeAxisWinners.forEach(({ x }) => pushLine(x, 0, x, timeAxisY, gridLineColor));
+      priceAxisWinners.forEach(({ y }) => pushLine(0, y, cw - pAxisW, y, gridLineColor));
 
-      pushLine(cw - pAxisW, 0, cw - pAxisW, timeAxisY, axisBorderColor);
-      pushLine(0, timeAxisY, cw - pAxisW, timeAxisY, axisBorderColor);
+      pushLine(cw - pAxisW, 0, cw - pAxisW, timeAxisY, gridLineColor);
+      pushLine(0, timeAxisY, cw - pAxisW, timeAxisY, gridLineColor);
 
       if (candles && candles.length > 0) {
         let maxVol = 0;
@@ -919,11 +806,10 @@ const WebGLChartEngine = forwardRef(({
       // 1. Live Price Box
       if (livePixelY >= 0 && livePixelY <= timeAxisY && candles && candles.length > 0) {
         const lastC = candles[candles.length - 1];
-        const lastPriceStr = lastC.close.toFixed(decPlaces);
-        const w = getTextWidth(lastPriceStr);
-        const labelX = cw - 8 * dpr - w;
         const isUp = lastC.close >= lastC.open;
-        const col = isUp ? [0.031, 0.600, 0.505, 1.0] : [0.949, 0.211, 0.270, 1.0];
+        const red = [0.949, 0.211, 0.270, 1.0];
+        const green = [0.031, 0.600, 0.505, 1.0];
+        const col = isUp ? green : red;
         pushOverlayRectMinMax(cw - pAxisW, livePixelY - 10 * dpr, cw, livePixelY + 10 * dpr, col);
       }
 
@@ -931,13 +817,10 @@ const WebGLChartEngine = forwardRef(({
       if (hoverPixel) {
         const hx = hoverPixel.x * dpr;
         const hy = hoverPixel.y * dpr;
+        const hoverBgColor = darkMode ? [0.165, 0.180, 0.224, 1.0] : [0.878, 0.890, 0.922, 1.0];
         if (hx >= 0 && hx <= cw - pAxisW && hy >= 0 && hy <= timeAxisY) {
-          const hoverPrice = max - (hy / scaleY);
-          const hoverPriceStr = hoverPrice.toFixed(decPlaces);
-          const w = getTextWidth(hoverPriceStr);
-          const labelX = cw - 8 * dpr - w;
-          pushOverlayRectMinMax(cw - pAxisW, hy - 10 * dpr, cw, hy + 10 * dpr, [0.1, 0.1, 0.1, 1.0]);
-          pushOverlayRectMinMax(hx - 60 * dpr, timeAxisY, hx + 60 * dpr, timeAxisY + timeAxisH, darkMode ? [42/255, 46/255, 57/255, 1.0] : [224/255, 227/255, 235/255, 1.0]);
+          pushOverlayRectMinMax(cw - pAxisW, hy - 11 * dpr, cw, hy + 11 * dpr, hoverBgColor);
+          pushOverlayRectMinMax(hx - 60 * dpr, timeAxisY, hx + 60 * dpr, timeAxisY + timeAxisH, hoverBgColor);
         }
       }
 
@@ -1036,38 +919,40 @@ const WebGLChartEngine = forwardRef(({
 
       const textColor = darkMode ? [0.788, 0.820, 0.851, 1.0] : [0.075, 0.090, 0.133, 1.0];
       gl.uniform4fv(gl.getUniformLocation(progText, 'u_textColor'), textColor);
-      
-      const atlasSize = 1024.0;
-      const sdfFontSize = 64;
-      const targetFontSize = 12 * dpr;
-      const fontScale = targetFontSize / sdfFontSize;
 
       const textData = [];
       const pushCharQuad = (x, y, w, h, map) => {
-        const x2 = x + w;
-        const y2 = y + h;
+        const atlasSize = 512.0;
         const ux1 = map.x / atlasSize;
         const uy1 = map.y / atlasSize;
-        const ux2 = (map.x + map.w) / atlasSize;
-        const uy2 = (map.y + map.h) / atlasSize;
+        const ux2 = (map.x + map.cellW) / atlasSize;
+        const uy2 = (map.y + map.cellH) / atlasSize;
 
-        textData.push(x, y, ux1, uy1);
-        textData.push(x2, y, ux2, uy1);
-        textData.push(x, y2, ux1, uy2);
-        textData.push(x, y2, ux1, uy2);
-        textData.push(x2, y, ux2, uy1);
+        const x1 = x;
+        const x2 = x + w;
+        const y1 = y;
+        const y2 = y + h;
+
+        // Tri 1
+        textData.push(x1, y1, ux1, uy1);
+        textData.push(x2, y1, ux2, uy1);
+        textData.push(x1, y2, ux1, uy2);
+        // Tri 2
+        textData.push(x1, y2, ux1, uy2);
+        textData.push(x2, y1, ux2, uy1);
         textData.push(x2, y2, ux2, uy2);
       };
 
       const pushText = (str, startX, startY) => {
-        let curX = startX;
+        let curX = Math.round(startX); // Prevent sub-pixel horizontal blur
+        const yPos = Math.round(startY); // Prevent sub-pixel vertical blur
         const paddingValue = 8;
         for (let i = 0; i < str.length; i++) {
           const c = str[i];
           const map = charMap[c];
           if (!map) continue;
-          const charW = (map.w - paddingValue * 2) * fontScale;
-          pushCharQuad(curX - (paddingValue * fontScale), startY - (map.cellH * fontScale) / 2, map.cellW * fontScale, map.cellH * fontScale, map);
+          const charW = map.w - paddingValue * 2;
+          pushCharQuad(curX - paddingValue, yPos - map.cellH / 2, map.cellW, map.cellH, map);
           curX += charW;
         }
       };
@@ -1077,7 +962,7 @@ const WebGLChartEngine = forwardRef(({
         const paddingValue = 8;
         for (let i = 0; i < str.length; i++) {
           const map = charMap[str[i]];
-          if (map) w += (map.w - paddingValue * 2) * fontScale;
+          if (map) w += (map.w - paddingValue * 2);
         }
         return w;
       };
@@ -1090,8 +975,8 @@ const WebGLChartEngine = forwardRef(({
       // Draw vertical price labels
       priceAxisWinners.forEach(({ y, label }) => {
         const w = getTextWidth(label);
-        const labelX = cw - 8 * dpr - w;
-        pushText(label, Math.floor(labelX), y);
+        const centerX = Math.floor(cw - pAxisW + (pAxisW - w) / 2);
+        pushText(label, centerX, y);
       });
 
       // ── Live Price Text (WebGL Native) ──
@@ -1100,8 +985,8 @@ const WebGLChartEngine = forwardRef(({
         if (livePixelY >= 0 && livePixelY <= timeAxisY) {
           const lbl = lastC.close.toFixed(decPlaces);
           const w = getTextWidth(lbl);
-          const labelX = cw - 8 * dpr - w;
-          pushText(lbl, Math.floor(labelX), Math.floor(livePixelY));
+          const centerX = Math.floor(cw - pAxisW + (pAxisW - w) / 2);
+          pushText(lbl, centerX, Math.floor(livePixelY));
         }
       }
 
@@ -1113,10 +998,8 @@ const WebGLChartEngine = forwardRef(({
           const price = max - (hy / scaleY);
           const priceStr = price.toFixed(decPlaces);
           const wPrice = getTextWidth(priceStr);
-          const centerX = Math.floor(cw - pAxisW + (pAxisW - wPrice) / 2);
-          
-          gl.uniform4fv(gl.getUniformLocation(progText, 'u_textColor'), darkMode ? [1.0, 1.0, 1.0, 1.0] : [0.0, 0.0, 0.0, 1.0]);
-          pushText(priceStr, centerX, Math.floor(hy));
+          const centerX = Math.round(cw - pAxisW + (pAxisW - wPrice) / 2);
+          pushText(priceStr, centerX, Math.round(hy));
 
           const idx = logicalRange.from + ((hx / (cw - pAxisW)) * rangeLen);
           const cIdx = Math.min(candles.length - 1, Math.max(0, Math.floor(idx)));
@@ -1133,8 +1016,6 @@ const WebGLChartEngine = forwardRef(({
             const timeW = getTextWidth(timeStr);
             pushText(timeStr, Math.floor(hx - timeW / 2), Math.floor(timeAxisY + timeAxisH / 2));
           }
-          
-          gl.uniform4fv(gl.getUniformLocation(progText, 'u_textColor'), textColor);
         }
       }
 
@@ -1179,6 +1060,8 @@ const WebGLChartEngine = forwardRef(({
       const px = e.clientX - left;
       const py = e.clientY - top;
 
+      const cw = vState.current.width;
+      const ch = vState.current.height;
       const pAxisW = vState.current.pAxisW || 65;
       const isAxisClick = (px > cw - pAxisW) || (py > ch - (vState.current.timeAxisH || 28));
 
@@ -1244,7 +1127,7 @@ const WebGLChartEngine = forwardRef(({
           to: candles[Math.min(candles.length - 1, Math.ceil(vState.current.logicalRange.to))]?.time
         });
       }
-      scheduleRender();
+      requestAnimationFrame(render);
     };
 
     const onPointerUp = (e) => {
@@ -1254,20 +1137,39 @@ const WebGLChartEngine = forwardRef(({
 
     const onWheel = (e) => {
       e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
       const cw = vState.current.width;
       const rangeLen = vState.current.logicalRange.to - vState.current.logicalRange.from;
 
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        // Trackpad horizontal swipe panning
         const candlesPerPixel = rangeLen / cw;
         const shift = (e.deltaX * 0.5) * candlesPerPixel;
         vState.current.logicalRange.from += shift;
         vState.current.logicalRange.to += shift;
       } else {
-        const zoomFactor = e.deltaY > 0 ? 1.05 : 0.95;
-        const center = vState.current.logicalRange.from + (rangeLen / 2);
-        const newLen = Math.max(10, Math.min(candles.length, rangeLen * zoomFactor));
-        vState.current.logicalRange.from = center - (newLen / 2);
-        vState.current.logicalRange.to = center + (newLen / 2);
+        // Mouse Cursor Anchored Zoom
+        const px = Math.max(0, Math.min(cw, e.clientX - rect.left));
+        const pAxisW = vState.current.pAxisW || 65;
+        const chartW = Math.max(1, cw - pAxisW);
+        const ratio = Math.max(0, Math.min(1, px / chartW));
+
+        let zoomFactor;
+        if (e.ctrlKey) {
+          // Touchpad pinch delta is continuous and fine-grained
+          const pinchSensitivity = 0.015;
+          zoomFactor = Math.exp(e.deltaY * pinchSensitivity);
+        } else {
+          // Standard physical mouse wheel clicks
+          const zoomSensitivity = 0.0018;
+          zoomFactor = Math.exp(e.deltaY * zoomSensitivity);
+        }
+
+        const pivotCandle = vState.current.logicalRange.from + (rangeLen * ratio);
+        const newLen = Math.max(5, Math.min(50000, rangeLen * zoomFactor));
+
+        vState.current.logicalRange.from = pivotCandle - (newLen * ratio);
+        vState.current.logicalRange.to = pivotCandle + (newLen * (1 - ratio));
       }
 
       if (onVisibleRangeChange && candles && candles.length > 0) {
@@ -1276,13 +1178,13 @@ const WebGLChartEngine = forwardRef(({
           to: candles[Math.min(candles.length - 1, Math.ceil(vState.current.logicalRange.to))]?.time
         });
       }
-      scheduleRender();
+      requestAnimationFrame(render);
     };
 
     const onPointerLeave = () => {
       isDragging = false;
       vState.current.hoverPixel = null;
-      scheduleRender();
+      requestAnimationFrame(render);
     };
 
     canvas.addEventListener('pointerdown', onPointerDown);
@@ -1303,7 +1205,7 @@ const WebGLChartEngine = forwardRef(({
   }, [candles, onVisibleRangeChange]);
 
   useImperativeHandle(ref, () => ({
-    render: () => scheduleRender(),
+    render: () => requestAnimationFrame(render),
     scrollToRealTime: () => {
       if (!candles || candles.length === 0) return;
       const lastIdx = candles.length - 1;
@@ -1312,7 +1214,7 @@ const WebGLChartEngine = forwardRef(({
       vState.current.logicalRange.from = lastIdx - rangeLen + padding;
       vState.current.logicalRange.to = lastIdx + padding;
       vState.current.manualPriceScale = false;
-      scheduleRender();
+      requestAnimationFrame(render);
       if (onVisibleRangeChange) {
         onVisibleRangeChange({
           from: candles[Math.max(0, Math.floor(vState.current.logicalRange.from))]?.time,
@@ -1370,10 +1272,8 @@ const WebGLChartEngine = forwardRef(({
     }
   }));
 
-  renderRef.current = render;
-
   useEffect(() => {
-    scheduleRender();
+    requestAnimationFrame(render);
   }, [candles, drawings, visualIndicators, indicatorDataMap, darkMode]);
 
   return (

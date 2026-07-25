@@ -682,6 +682,16 @@ def parse_and_run_backtest(df, code_content):
 async def health():
     return {"ok": True, "service": "quantaai-backend"}
 
+class LogData(BaseModel):
+    type: str
+    args: list
+    
+@app.post("/log")
+async def log_receiver(data: LogData):
+    with open("browser_logs.txt", "a") as f:
+        f.write(f"[BROWSER {data.type.upper()}] {data.args}\n")
+    return {"status": "ok"}
+
 
 @app.get("/coins")
 async def get_coins():

@@ -4,14 +4,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
-    "backend": "cd backend && ./venv/Scripts/python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload",
-    "otp-watcher": "cd backend && ./venv/Scripts/python.exe otp_watcher.py",
-    "otp-auto": "cd backend && ./venv/Scripts/python.exe test_otp_auto.py",
+    "backend": "cd backend && venv\\Scripts\\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload",
+    "otp-watcher": "cd backend && venv\\Scripts\\python.exe otp_watcher.py",
+    "otp-auto": "cd backend && venv\\Scripts\\python.exe test_otp_auto.py",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
+    "@tauri-apps/api": "^2.11.1",
     "framer-motion": "^12.40.0",
     "html2canvas": "^1.4.1",
     "lightweight-charts": "^4.2.3",
@@ -20,9 +22,11 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "recharts": "^2.15.4",
-    "sonner": "^2.0.7"
+    "sonner": "^2.0.7",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
     "@vitejs/plugin-react-swc": "^4.3.2",
     "autoprefixer": "^10.4.18",
     "eslint": "^9.39.4",
