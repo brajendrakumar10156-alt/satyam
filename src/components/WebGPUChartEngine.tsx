@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useRef, useState, useImperativeHandle } from 'react';
-import { lineToQuad, raycastDrawings } from '../utils/webgpuMath';
+import { lineToQuad, raycastDrawings } from '../core_math_webgpu/webgpuMath';
 import { calculateHorizontalTimeAxisLabels, calculateVerticalPriceAxisLabels } from '../utils/axisCollisionEngine';
 import { INDICATOR_REGISTRY } from '../indicatorsRegistry';
 import { generateHDGlyphAtlas } from '../utils/hdGlyphAtlas';

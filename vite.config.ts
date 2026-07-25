@@ -19,10 +19,52 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:3030',
+      // Rust Collector (primary data source)
+      '/rust-api': {
+        target: 'http://127.0.0.1:8080',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
+        rewrite: (path) => path.replace(/^\/rust-api/, '/api'),
+      },
+      // Python backend (symbols list)
+      '/backend-api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/backend-api/, ''),
+      },
+      // Binance Spot CORS Bypass
+      '/proxy-binance': {
+        target: 'https://api.binance.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/proxy-binance/, ''),
+      },
+      // Binance Futures CORS Bypass
+      '/proxy-binance-futures': {
+        target: 'https://fapi.binance.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/proxy-binance-futures/, ''),
+      },
+      // OKX CORS Bypass
+      '/proxy-okx': {
+        target: 'https://www.okx.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/proxy-okx/, ''),
+      },
+      // KuCoin CORS Bypass
+      '/proxy-kucoin': {
+        target: 'https://api.kucoin.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/proxy-kucoin/, ''),
+      },
+      // Bybit CORS Bypass
+      '/proxy-bybit': {
+        target: 'https://api.bybit.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/proxy-bybit/, ''),
       },
     },
   },

@@ -9,9 +9,15 @@ import { BinaryDataBridge } from './translators/BinaryDataBridge';
 
 export class PerfectDataSplicer {
     private rustServerUrl: string;
+    private wasmEngine: any;
 
     constructor() {
         this.rustServerUrl = import.meta.env.VITE_RUST_SERVER_URL || "http://127.0.0.1:8080";
+        this.wasmEngine = null;
+    }
+
+    injectWasmEngine(engine: any) {
+        this.wasmEngine = engine;
     }
 
     /**

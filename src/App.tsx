@@ -1,3 +1,6 @@
+/// <reference types="react" />
+/// <reference types="react-dom" />
+
 import React, { Suspense, lazy } from 'react';
 import { isDesktopApp } from './utils/env';
 

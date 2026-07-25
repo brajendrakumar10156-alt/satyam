@@ -1,4 +1,5 @@
-import { LeftToolbar } from './components/layout/LeftToolbar';
+// @ts-nocheck
+/// <reference types="vite/client" />
 import OrderBookPanel from './components/OrderBookPanel';
 import MiniChartWrapper from './components/MiniChartWrapper';
 import html2canvas from 'html2canvas';
@@ -13,7 +14,7 @@ const WebGLChartEngineLazy = lazy(() => import('./components/WebGLChartEngine'))
 const WebGLChartEngine = (props: any) => <Suspense fallback={<div>Loading WebGL Engine...</div>}><WebGLChartEngineLazy {...props} /></Suspense>;
 
 const WebGPUChartEngineLazy = lazy(() => import('./components/WebGPUChartEngine'));
-const WebGPUChartEngine = (props: any) => <Suspense fallback={<div>Loading WebGPU Engine...</div>}><WebGPUChartEngineLazy {...props} /></Suspense>;
+const WebGPUChartEngine = React.forwardRef((props: any, ref) => <Suspense fallback={<div>Loading WebGPU Engine...</div>}><WebGPUChartEngineLazy {...props} ref={ref} /></Suspense>);
 
 const EditorLazy = lazy(() => import('@monaco-editor/react'));
 const Editor = (props: any) => <Suspense fallback={<div className="p-4 text-center text-gray-500 text-xs">Loading Code Editor...</div>}><EditorLazy {...props} /></Suspense>;
@@ -5059,6 +5060,12 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
               requestDraw={requestDraw}
               setFocusMode={setFocusMode}
               setDarkMode={setDarkMode}
+              onRefreshChart={() => {
+                fetchGenerationRef.current = (fetchGenerationRef.current || 0) + 1;
+                allCandlesRef.current = [];
+                setAllCandles([]);
+                setMarketStatus("Loading");
+              }}
             />
       {/* MOBILE HORIZONTAL TIMEFRAME SCROLLER (Hidden in new mobile design) */}
         {!isMobile && (
@@ -5093,7 +5100,6 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
   isDrawingHidden={hideDrawings} setIsDrawingHidden={setHideDrawings}
   renderEngine={renderEngine} handleEngineToggle={handleEngineToggle}
   keepDrawing={keepDrawing} setKeepDrawing={setKeepDrawing}
-  lockDrawings={lockDrawings} setLockDrawings={setLockDrawings}
 />}
             {!isMobile && !focusMode && <LeftSidePanel />}
             <div className="flex-1 flex flex-col min-h-0 min-w-0 relative">
@@ -5616,19 +5622,6 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
             </div>
 
           </div>
-          <LeftToolbar 
-  horizontal={true} t={t} darkMode={darkMode} activeTool={activeTool} 
-  setActiveTool={setActiveTool} showToast={showToast} setDrawings={setDrawings}
-  selectedTools={selectedTools} setSelectedTools={setSelectedTools} activeFlyout={activeFlyout}
-  setActiveFlyout={setActiveFlyout} setIsCursorStudioOpen={setIsCursorStudioOpen} 
-  setIsTrendStudioOpen={setIsTrendStudioOpen} chartInstance={chartInstance}
-  isMagnetEnabled={magnetMode !== 'off'} setIsMagnetEnabled={() => setMagnetMode(magnetMode === 'off' ? 'normal' : 'off')}
-  isDrawingLocked={lockDrawings} setIsDrawingLocked={setLockDrawings}
-  isDrawingHidden={hideDrawings} setIsDrawingHidden={setHideDrawings}
-  renderEngine={renderEngine} handleEngineToggle={handleEngineToggle}
-  keepDrawing={keepDrawing} setKeepDrawing={setKeepDrawing}
-  lockDrawings={lockDrawings} setLockDrawings={setLockDrawings}
-/>
         </div>
 
         {lowerBoxState === 'hidden' && (

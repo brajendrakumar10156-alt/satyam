@@ -7,9 +7,12 @@
 import computeWgsl from './math_compute.wgsl?raw';
 
 export class WebGPUComputeDriver {
+    device: GPUDevice | null;
+    pipelines: Map<string, GPUComputePipeline>;
+
     constructor() {
         this.device = null;
-        this.computePipeline = null;
+        this.pipelines = new Map();
     }
 
     async init() {
@@ -28,42 +31,55 @@ export class WebGPUComputeDriver {
         const wgslCode = computeWgsl;
 
         const shaderModule = this.device.createShaderModule({
-            label: "SMA Compute Shader",
+            label: "Math Compute Shader",
             code: wgslCode
         });
 
-        this.computePipeline = await this.device.createComputePipelineAsync({
+        const smaPipeline = await this.device.createComputePipelineAsync({
             label: "SMA Compute Pipeline",
             layout: "auto",
             compute: {
                 module: shaderModule,
-                entryPoint: "main"
+                entryPoint: "sma_main"
             }
         });
-        
-        console.log("🚀 [WebGPU] Native WGSL Compute Driver Initialized!");
-    }
 
-    async loadWGSL(url) {
-        // In a real bundler like Vite, we would import the raw WGSL string.
-        // For development, we fetch it.
-        try {
-            const res = await fetch(url);
-            return await res.text();
-        } catch(e) {
-            console.error("Failed to load WGSL shader:", e);
-            return "";
-        }
+        const rsiPipeline = await this.device.createComputePipelineAsync({
+            label: "RSI Compute Pipeline",
+            layout: "auto",
+            compute: {
+                module: shaderModule,
+                entryPoint: "rsi_main"
+            }
+        });
+
+        const macdPipeline = await this.device.createComputePipelineAsync({
+            label: "MACD Compute Pipeline",
+            layout: "auto",
+            compute: {
+                module: shaderModule,
+                entryPoint: "macd_main"
+            }
+        });
+
+        this.pipelines.set('SMA', smaPipeline);
+        this.pipelines.set('RSI', rsiPipeline);
+        this.pipelines.set('MACD', macdPipeline);
+        
+        console.log("?? [WebGPU] Native WGSL Compute Driver Initialized!");
     }
 
     /**
-     * Executes SMA natively on the GPU using WGSL.
-     * @param {Float32Array} data 
-     * @param {number} period 
+     * Executes Indicator natively on the GPU using WGSL.
      */
-    async calculateSMA(data, period) {
-        if (!this.device || !this.computePipeline) {
+    async calculate(indicator: string, data: Float32Array, period: number) {
+        if (!this.device) {
             throw new Error("WebGPU driver not initialized.");
+        }
+
+        const pipeline = this.pipelines.get(indicator.toUpperCase());
+        if (!pipeline) {
+            throw new Error(`No WGSL pipeline found for ${indicator}`);
         }
 
         const dataByteLength = data.byteLength;
@@ -92,7 +108,7 @@ export class WebGPUComputeDriver {
 
         // 3. Bind Groups
         const bindGroup = this.device.createBindGroup({
-            layout: this.computePipeline.getBindGroupLayout(0),
+            layout: pipeline.getBindGroupLayout(0),
             entries: [
                 { binding: 0, resource: { buffer: inputBuffer } },
                 { binding: 1, resource: { buffer: outputBuffer } },
@@ -103,7 +119,7 @@ export class WebGPUComputeDriver {
         // 4. Dispatch Commands
         const commandEncoder = this.device.createCommandEncoder();
         const passEncoder = commandEncoder.beginComputePass();
-        passEncoder.setPipeline(this.computePipeline);
+        passEncoder.setPipeline(pipeline);
         passEncoder.setBindGroup(0, bindGroup);
         
         const workgroups = Math.ceil(totalCandles / 64);

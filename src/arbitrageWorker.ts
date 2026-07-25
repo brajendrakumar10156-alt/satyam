@@ -4,6 +4,9 @@
  */
 
 export class ArbitrageMatrixEngine {
+  exchangePrices: Map<string, {bid: number, ask: number, time: number}>;
+  opportunities: any[];
+
   constructor() {
     this.exchangePrices = new Map(); // exchange:symbol -> price
     this.opportunities = [];
@@ -16,7 +19,7 @@ export class ArbitrageMatrixEngine {
    * @param {number} bid Live bid price
    * @param {number} ask Live ask price
    */
-  updatePrice(exchange, symbol, bid, ask) {
+  updatePrice(exchange: string, symbol: string, bid: number, ask: number) {
     const key = `${exchange.toLowerCase()}:${symbol.toUpperCase()}`;
     this.exchangePrices.set(key, { bid, ask, time: Date.now() });
   }
@@ -26,10 +29,10 @@ export class ArbitrageMatrixEngine {
    * @param {string} symbol Target symbol (e.g. 'BTCUSDT')
    * @returns {Array<{buyExchange: string, sellExchange: string, spreadPct: number, netProfitPct: number}>}
    */
-  scanCrossExchangeArbitrage(symbol = 'BTCUSDT') {
+  scanCrossExchangeArbitrage(symbol: string = 'BTCUSDT') {
     const sym = symbol.toUpperCase();
     const exchanges = ['binance', 'bybit', 'okx'];
-    const results = [];
+    const results: any[] = [];
 
     const feeRate = 0.001; // 0.1% trading fee per leg (0.2% roundtrip)
 

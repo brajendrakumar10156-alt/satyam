@@ -669,6 +669,10 @@ async fn fetch_recent_klines_parallel(symbol: &str, start_time_ms: u64, end_time
             let mut attempts = 0;
             loop {
                 attempts += 1;
+                if attempts > 5 {
+                    println!("[Proxy Shield] Abandoning fetch chunk for {} after {} attempts.", sym_clone, attempts);
+                    return 0; // return 0 parsed on max failure
+                }
                 let base_url = proxy_mgr_clone.get_random_base_url();
                 let url = format!(
                     "{}/api/v3/klines?symbol={}&interval=1m&startTime={}&endTime={}&limit=1000",

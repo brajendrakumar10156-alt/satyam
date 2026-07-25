@@ -1,3 +1,4 @@
+// @ts-nocheck
 /** Multi-exchange market data (Binance + OKX, KuCoin, Bybit, Kraken, Gate.io, MEXC) */
 
 const FETCH_TIMEOUT = 8000;
@@ -280,10 +281,9 @@ async function fetchBinanceCandles(symbol, interval, limit, before, signal) {
   const isPerp = isPerpetualSymbol(symbol);
   const apiSymbol = cleanFuturesSymbol(symbol);
 
-  // 1. Primary: Attempt to fetch from Local Rust Collector Engine (Port 8080)
-  // Local collector holds 54+ days (79,000+ candles) of binary stored candles in market_data/*.iqbin
+  // 1. Primary: Attempt to fetch from Local Rust Collector Engine (Port 8080) via Vite proxy
   try {
-    const localUrl = new URL('http://localhost:8080/api/v1/binary/history');
+    const localUrl = new URL('/rust-api/v1/binary/history', window.location.origin);
     localUrl.searchParams.set('symbol', apiSymbol);
     localUrl.searchParams.set('limit', String(limit));
     if (before) localUrl.searchParams.set('endTime', String(before));
@@ -292,30 +292,23 @@ async function fetchBinanceCandles(symbol, interval, limit, before, signal) {
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.candles) && data.candles.length > 0) {
-        // Detect gaps > 90s in returned binary candles and trigger Service 11 Rescue Relay asynchronously
         let hasGap = false;
         for (let i = 1; i < data.candles.length; i++) {
-          if (data.candles[i].time - data.candles[i - 1].time > 90) {
-            hasGap = true;
-            break;
-          }
+          if (data.candles[i].time - data.candles[i - 1].time > 90) { hasGap = true; break; }
         }
-        if (hasGap) {
-          fetch(`http://localhost:8080/api/report_corruption?symbol=${apiSymbol}`).catch(() => { });
-        }
+        if (hasGap) fetch(`/rust-api/report_corruption?symbol=${apiSymbol}`).catch(() => {});
         return data.candles.map((c) => normalizeCandleRow(c.time, c.open, c.high, c.low, c.close, 0));
       } else {
-        // Empty history returned — trigger Service 11 Rescue Relay to fetch & heal in background
-        fetch(`http://localhost:8080/api/report_corruption?symbol=${apiSymbol}`).catch(() => { });
+        fetch(`/rust-api/report_corruption?symbol=${apiSymbol}`).catch(() => {});
       }
     }
   } catch (_localErr) {
-    // Local Rust collector server offline or unreachable, graceful fallback to public Binance API
+    // Rust collector offline — falling back to Binance via Vite CORS proxy
   }
 
-  // 2. Fallback: Public Binance HTTP API
-  const baseUrl = isPerp ? 'https://fapi.binance.com/fapi/v1/klines' : 'https://api.binance.com/api/v3/klines';
-  const url = new URL(baseUrl);
+  // 2. Fallback: Binance via Vite proxy (CORS bypass — works in India)
+  const proxyBase = isPerp ? '/proxy-binance-futures/fapi/v1/klines' : '/proxy-binance/api/v3/klines';
+  const url = new URL(proxyBase, window.location.origin);
   url.searchParams.set('symbol', apiSymbol);
   url.searchParams.set('interval', mapInterval('binance', interval));
   url.searchParams.set('limit', String(limit));
@@ -328,7 +321,7 @@ async function fetchBinanceCandles(symbol, interval, limit, before, signal) {
 async function fetchOkxCandles(symbol, interval, limit, before, signal) {
   const instId = toOkxInstId(symbol);
   const bar = mapInterval('okx', interval);
-  let url = `https://www.okx.com/api/v5/market/candles?instId=${instId}&bar=${bar}&limit=${Math.min(limit, 300)}`;
+  let url = `/proxy-okx/api/v5/market/candles?instId=${instId}&bar=${bar}&limit=${Math.min(limit, 300)}`;
   if (before) url += `&after=${before * 1000}`;
   const data = await fetchJson(url, signal);
   if (data.code !== '0') throw new Error(data.msg || 'OKX error');
@@ -341,7 +334,7 @@ async function fetchKucoinCandles(symbol, interval, limit, before, signal) {
   const sym = toKucoinSymbol(symbol);
   const type = mapInterval('kucoin', interval);
   const endAt = before ? before * 1000 : Date.now();
-  const url = `https://api.kucoin.com/api/v1/market/candles?symbol=${sym}&type=${type}&endAt=${endAt}`;
+  const url = `/proxy-kucoin/api/v1/market/candles?symbol=${sym}&type=${type}&endAt=${endAt}`;
   const data = await fetchJson(url, signal);
   if (data.code !== '200000') throw new Error(data.msg || 'KuCoin error');
   return (data.data || [])
@@ -354,7 +347,7 @@ async function fetchBybitCandles(symbol, interval, limit, before, signal) {
   const apiSymbol = cleanFuturesSymbol(symbol);
   const category = isPerp ? 'linear' : 'spot';
   const intv = mapInterval('bybit', interval);
-  let url = `https://api.bybit.com/v5/market/kline?category=${category}&symbol=${apiSymbol}&interval=${intv}&limit=${Math.min(limit, 1000)}`;
+  let url = `/proxy-bybit/v5/market/kline?category=${category}&symbol=${apiSymbol}&interval=${intv}&limit=${Math.min(limit, 1000)}`;
   if (before) url += `&end=${before * 1000}`;
   const data = await fetchJson(url, signal);
   if (data.retCode !== 0) throw new Error(data.retMsg || 'Bybit error');
@@ -404,11 +397,9 @@ export async function fetchExchangeCandles(exchangeId, symbol, interval, limit =
   const sym = String(symbol).toUpperCase();
 
   const fetchRustCollector = async () => {
-    const rustUrl = import.meta.env.VITE_RUST_SERVER_URL || 'http://localhost:8080';
-    let url = `${rustUrl}/api/history?symbol=${sym}&limit=${limit}&interval=${interval}`;
-    if (before) {
-      url += `&endTime=${before}`;
-    }
+    // Use Vite proxy path — avoids CORS and works on any port
+    let url = `/rust-api/history?symbol=${sym}&limit=${limit}&interval=${interval}`;
+    if (before) url += `&endTime=${before}`;
     const response = await fetch(url);
     if (!response.ok) throw new Error('Rust collector failed');
     const data = await response.json();

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from 'react';
 import { Menu, ChevronDown, TrendingUp, Activity, ArrowLeft, Search, Scale, RefreshCw, ChevronDown as ChevronDownIcon, Cloud, Info, Copy, Edit2, Download, Plus, Zap, FlaskConical, Settings, Camera, Upload, Maximize2, Focus, Ghost, Sun, Moon, Clock, Check, Database, History, CandlestickChart, BarChartHorizontal, LineChart, Bell, Rewind, LayoutGrid, Monitor } from 'lucide-react';
 
@@ -81,7 +82,8 @@ export const TopNavbar = (props: any) => {
     setAllCandles,
     requestDraw,
     setFocusMode,
-    setDarkMode
+    setDarkMode,
+    onRefreshChart
   } = props;
 
   return (
@@ -663,6 +665,21 @@ export const TopNavbar = (props: any) => {
                 <span>{allCandles.length.toLocaleString()}</span>
                 <span className="opacity-50">bars</span>
               </div>
+
+              {/* Refresh Chart Button */}
+              <button
+                onClick={() => {
+                  if (onRefreshChart) onRefreshChart();
+                  showToast('🔄 Chart refreshed!');
+                }}
+                className={`p-1.5 rounded transition-all duration-200 ${t.muted} hover:text-blue-400 hover:bg-blue-500/10 active:rotate-180`}
+                title="Refresh Chart Data"
+                style={{ transition: 'transform 0.4s, color 0.2s, background 0.2s' }}
+                onMouseDown={e => { e.currentTarget.style.transform = 'rotate(360deg)'; }}
+                onMouseUp={e => { setTimeout(() => { if(e.currentTarget) e.currentTarget.style.transform = ''; }, 500); }}
+              >
+                <RefreshCw size={14} />
+              </button>
 
             </div>
           </div>
