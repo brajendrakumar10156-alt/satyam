@@ -1,7 +1,7 @@
 /** Multi-exchange market data (Binance + OKX, KuCoin, Bybit, Kraken, Gate.io, MEXC) */
 
 const FETCH_TIMEOUT = 8000;
-const API_BASE = import.meta.env.VITE_BACKEND_URL ?? 'http://127.0.0.1:8000';
+const API_BASE = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
 
 import { getLocalCandles, saveLocalCandles } from './db/indexedDB';
 
@@ -105,7 +105,7 @@ export async function fetchJson(url, signal) {
     if (res.ok) {
       return await res.json();
     }
-  } catch (_) {}
+  } catch (_) { }
 
   // Try proxies list
   const proxies = [
@@ -283,7 +283,7 @@ async function fetchBinanceCandles(symbol, interval, limit, before, signal) {
   // 1. Primary: Attempt to fetch from Local Rust Collector Engine (Port 8080)
   // Local collector holds 54+ days (79,000+ candles) of binary stored candles in market_data/*.iqbin
   try {
-    const localUrl = new URL('http://127.0.0.1:8080/api/v1/binary/history');
+    const localUrl = new URL('http://localhost:8080/api/v1/binary/history');
     localUrl.searchParams.set('symbol', apiSymbol);
     localUrl.searchParams.set('limit', String(limit));
     if (before) localUrl.searchParams.set('endTime', String(before));
@@ -301,12 +301,12 @@ async function fetchBinanceCandles(symbol, interval, limit, before, signal) {
           }
         }
         if (hasGap) {
-          fetch(`http://127.0.0.1:8080/api/report_corruption?symbol=${apiSymbol}`).catch(() => {});
+          fetch(`http://localhost:8080/api/report_corruption?symbol=${apiSymbol}`).catch(() => { });
         }
         return data.candles.map((c) => normalizeCandleRow(c.time, c.open, c.high, c.low, c.close, 0));
       } else {
         // Empty history returned — trigger Service 11 Rescue Relay to fetch & heal in background
-        fetch(`http://127.0.0.1:8080/api/report_corruption?symbol=${apiSymbol}`).catch(() => {});
+        fetch(`http://localhost:8080/api/report_corruption?symbol=${apiSymbol}`).catch(() => { });
       }
     }
   } catch (_localErr) {
@@ -402,10 +402,10 @@ async function fetchMexcCandles(symbol, interval, limit, before, signal) {
 
 export async function fetchExchangeCandles(exchangeId, symbol, interval, limit = 1000, before = null) {
   const sym = String(symbol).toUpperCase();
-  
+
   const fetchRustCollector = async () => {
-    const rustUrl = import.meta.env.VITE_RUST_SERVER_URL || 'http://127.0.0.1:8080';
-    let url = `${rustUrl}/api/history?symbol=${sym}&limit=${limit}`;
+    const rustUrl = import.meta.env.VITE_RUST_SERVER_URL || 'http://localhost:8080';
+    let url = `${rustUrl}/api/history?symbol=${sym}&limit=${limit}&interval=${interval}`;
     if (before) {
       url += `&endTime=${before}`;
     }
@@ -418,18 +418,18 @@ export async function fetchExchangeCandles(exchangeId, symbol, interval, limit =
     throw new Error('No candles in Rust collector');
   };
 
-  const fetchProxy = async () => {
+  const fetchProxy = async (overrideLimit = limit) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
     try {
       switch (exchangeId) {
-        case 'okx': return await fetchOkxCandles(sym, interval, limit, before, controller.signal);
-        case 'kucoin': return await fetchKucoinCandles(sym, interval, limit, before, controller.signal);
-        case 'bybit': return await fetchBybitCandles(sym, interval, limit, before, controller.signal);
-        case 'kraken': return await fetchKrakenCandles(sym, interval, limit, before, controller.signal);
-        case 'gate': return await fetchGateCandles(sym, interval, limit, before, controller.signal);
-        case 'mexc': return await fetchMexcCandles(sym, interval, limit, before, controller.signal);
-        default: return await fetchBinanceCandles(sym, interval, limit, before, controller.signal);
+        case 'okx': return await fetchOkxCandles(sym, interval, overrideLimit, before, controller.signal);
+        case 'kucoin': return await fetchKucoinCandles(sym, interval, overrideLimit, before, controller.signal);
+        case 'bybit': return await fetchBybitCandles(sym, interval, overrideLimit, before, controller.signal);
+        case 'kraken': return await fetchKrakenCandles(sym, interval, overrideLimit, before, controller.signal);
+        case 'gate': return await fetchGateCandles(sym, interval, overrideLimit, before, controller.signal);
+        case 'mexc': return await fetchMexcCandles(sym, interval, overrideLimit, before, controller.signal);
+        default: return await fetchBinanceCandles(sym, interval, overrideLimit, before, controller.signal);
       }
     } finally {
       clearTimeout(timeout);
@@ -446,22 +446,52 @@ export async function fetchExchangeCandles(exchangeId, symbol, interval, limit =
   };
 
   try {
-    // PRIMARY PROVIDER: Direct Exchange REST API (Max Data, 0ms Latency, Low Rust Server Overhead)
-    const directData = await fetchProxy();
-    // Non-blocking background save to IndexedDB local cache and Rust Collector storage vault
-    saveLocalCandles(exchangeId, sym, interval, directData).catch(console.warn);
-    fetchRustCollector().catch(() => {});
-    return directData;
-  } catch (primaryErr) {
+    // 3-WAY FUSION STEP 1: Get Master History from Rust
+    let rustData = [];
     try {
-      // SECONDARY VAULT: Rust Master Collector (Port 8080 - Gap-free .iqbin binary storage)
-      const rustData = await fetchRustCollector();
-      await saveLocalCandles(exchangeId, sym, interval, rustData).catch(console.warn);
-      return rustData;
-    } catch (secondaryErr) {
-      // Emergency Offline Fallback
-      return await fetchIndexedDB();
+      rustData = await fetchRustCollector();
+    } catch (e) {
+      console.warn("Rust Collector offline or no data. Falling back to API.", e);
     }
+
+    if (rustData.length > 0) {
+      const lastCandle = rustData[rustData.length - 1];
+      const lastTimeMs = lastCandle.time * 1000;
+      
+      let intervalMs = 60000;
+      if (interval.endsWith('m')) intervalMs = parseInt(interval) * 60000;
+      else if (interval.endsWith('h')) intervalMs = parseInt(interval) * 3600000;
+      else if (interval.endsWith('d')) intervalMs = parseInt(interval) * 86400000;
+      
+      const missingTime = Date.now() - lastTimeMs;
+      const missingCandlesCount = Math.floor(missingTime / intervalMs);
+      
+      if (missingCandlesCount > 1 && !before) {
+        console.log(`[3-Way Fusion] Gap detected: ${missingCandlesCount} candles. Fetching API Fallback...`);
+        try {
+          const missingData = await fetchProxy(Math.min(missingCandlesCount + 5, 1000));
+          const newData = missingData.filter(c => c.time > lastCandle.time);
+          if (newData.length > 0) {
+             rustData = [...rustData, ...newData];
+             saveLocalCandles(exchangeId, sym, interval, rustData).catch(console.warn);
+          }
+        } catch (apiErr) {
+          console.warn("[3-Way Fusion] API Fallback failed, returning Rust data as is.", apiErr);
+        }
+      }
+      return rustData;
+    }
+
+    // 3-WAY FUSION STEP 2: Rust data empty, doing FULL API Fetch
+    console.log("[3-Way Fusion] Rust data empty, doing full API fetch...");
+    const directData = await fetchProxy();
+    saveLocalCandles(exchangeId, sym, interval, directData).catch(console.warn);
+    return directData;
+
+  } catch (err) {
+    // 3-WAY FUSION STEP 3: Emergency Offline Fallback
+    console.error("[3-Way Fusion] Online fetch failed, falling back to IndexedDB", err);
+    return await fetchIndexedDB();
   }
 }
 
@@ -531,8 +561,8 @@ export function subscribeExchangeKline(exchangeId, symbol, interval, onCandle, o
       if (exchangeId === 'binance') {
         // MULTI-STREAM EDGE ENGINE: The Latency Race
         const binanceUrl = `wss://stream.binance.com:9443/ws/${sym}@kline_${interval}`;
-        const rustUrl = import.meta.env.VITE_RUST_SERVER_URL?.replace('http', 'ws') || 'ws://127.0.0.1:8080';
-        
+        const rustUrl = import.meta.env.VITE_RUST_SERVER_URL?.replace('http', 'ws') || 'ws://localhost:8080';
+
         const wsBinance = new WebSocket(binanceUrl);
         const wsRust = new WebSocket(`${rustUrl}/api/ws/live`);
         sockets.push(wsBinance, wsRust);
@@ -554,7 +584,7 @@ export function subscribeExchangeKline(exchangeId, symbol, interval, onCandle, o
             const data = JSON.parse(event.data);
             const candle = parseWsKline('binance', data);
             if (candle) handleBinanceRace(candle, Date.now());
-          } catch (_) {}
+          } catch (_) { }
         };
 
         wsRust.onmessage = (event) => {
@@ -572,12 +602,12 @@ export function subscribeExchangeKline(exchangeId, symbol, interval, onCandle, o
               };
               handleBinanceRace(candle, Date.now());
             }
-          } catch (_) {}
+          } catch (_) { }
         };
 
         wsBinance.onerror = () => { if (!disposed) onStatus?.('Reconnecting (Direct)'); };
         wsRust.onerror = () => { /* Rust fallback silent error */ };
-        
+
       } else {
         // Standard single socket logic for other exchanges
         let ws = null;

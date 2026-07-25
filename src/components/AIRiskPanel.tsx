@@ -12,7 +12,7 @@ const AIRiskPanel = ({ symbol, currentPrice, latestIndicatorData }) => {
         setError(null);
         
         try {
-            const response = await fetch('/api/v1/ai/risk-check', {
+            const response = await fetch('http://127.0.0.1:3030/api/v1/ai/risk-check', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

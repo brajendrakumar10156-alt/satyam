@@ -1,8 +1,9 @@
 /** Backtest / AI server — must run: npm run backend (port 8000) */
-export const API_BASE = import.meta.env.VITE_BACKEND_URL ?? `http://${window.location.hostname}:8000`;
+export const API_BASE = import.meta.env.VITE_BACKEND_URL ?? `http://localhost:8000`;
 export const CANDLE_BATCH_SIZE = 1000;
 export const INITIAL_HISTORY_BATCHES = 3;  // load 3k candles on startup for speed
-export const MAX_CANDLES_IN_MEMORY = 100000; // allow more in memory
+const IS_TAURI = typeof window !== 'undefined' && '__TAURI__' in window;
+export const MAX_CANDLES_IN_MEMORY = IS_TAURI ? 1000000 : 100000;
 export const SIX_YEARS_SECONDS = 6 * 365 * 24 * 60 * 60;
 
 // Known interval -> seconds. Anything not listed here is parsed on the fly

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, KeyRound, Lock, Mail, RefreshCw, ShieldCheck, UserPlus } from 'lucide-react';
 import logo from './assets/logo.png';
 
-const API_BASE = import.meta.env.VITE_BACKEND_URL ?? `http://${window.location.hostname}:8000`;
+const API_BASE = import.meta.env.VITE_BACKEND_URL ?? `http://localhost:8000`;
 
 function isGmailAddress(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim());
@@ -22,7 +22,7 @@ function deliveryText(delivery) {
 
 function getFetchFailureMessage(error, endpoint) {
   const message = String(error?.message || error || '');
-  if (/Failed to fetch|NetworkError|ERR|ECONNREFUSED|ECONNRESET/i.test(message)) {
+  if (/Failed to fetch|NetworkError|net::ERR|ECONNREFUSED|ECONNRESET/i.test(message)) {
     return `Backend reachable nahi ho raha. Tried: ${API_BASE}${endpoint}. Run: npm run backend`;
   }
   if (/Unexpected token|JSON/i.test(message)) {

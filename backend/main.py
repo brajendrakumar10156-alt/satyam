@@ -61,6 +61,14 @@ if sys.platform == 'win32':
 # Extreme Speed: Use ORJSON (Rust based) for all JSON serialization
 app = FastAPI(lifespan=lifespan, default_response_class=ORJSONResponse)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:1420", "http://127.0.0.1:5173", "http://127.0.0.1:1420", "http://localhost:8000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # =========================================
 # DEMO AUTH ENDPOINTS (OTP + access token)
 # =========================================
@@ -182,13 +190,7 @@ async def get_me(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     return {"user": user}
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
 
 class PineRequest(BaseModel):
     code: str
@@ -744,6 +746,7 @@ async def get_recent_trades(symbol: str, limit: int = 50):
         return {"error": str(e)}
 
 @app.get("/market/ticker/24hr")
+@app.get("/api/tickers")
 async def get_24hr_ticker(symbol: str = None):
     url = "https://api.binance.com/api/v3/ticker/24hr"
     if symbol:

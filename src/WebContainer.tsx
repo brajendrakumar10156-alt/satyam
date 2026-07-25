@@ -5,12 +5,18 @@ import React, { useEffect, useRef, useState, useCallback, useMemo, Suspense, laz
 import NativeDrawingLayer from './components/NativeDrawingLayer';
 import NativeIndicatorLayer from './components/NativeIndicatorLayer';
 import DrawingAxisLabels from './components/DrawingAxisLabels';
-import WebGLChartEngine from './components/WebGLChartEngine';
-import WebGPUChartEngine from './components/WebGPUChartEngine';
+// Lazy load heavy components
+const WebGLChartEngineLazy = lazy(() => import('./components/WebGLChartEngine'));
+const WebGLChartEngine = (props: any) => <Suspense fallback={<div>Loading WebGL Engine...</div>}><WebGLChartEngineLazy {...props} /></Suspense>;
+
+const WebGPUChartEngineLazy = lazy(() => import('./components/WebGPUChartEngine'));
+const WebGPUChartEngine = (props: any) => <Suspense fallback={<div>Loading WebGPU Engine...</div>}><WebGPUChartEngineLazy {...props} /></Suspense>;
+
+const EditorLazy = lazy(() => import('@monaco-editor/react'));
+const Editor = (props: any) => <Suspense fallback={<div className="p-4 text-center text-gray-500 text-xs">Loading Code Editor...</div>}><EditorLazy {...props} /></Suspense>;
 
 import { captureViewportSnapshot, generateDrawingId } from './utils/drawingStore';
 import { loadDrawingsFromDB, saveDrawingsToDB } from './utils/drawingPersistence';
-import Editor from '@monaco-editor/react';
 import { nativeManager } from './NativeEngineManager';
 import { perfectData } from './PerfectDataSplicer';
 import { pineJitCompiler } from './utils/pineJitCompiler';
@@ -58,84 +64,32 @@ import {
 } from './tradingFeatures';
 import { loadCandleCache, saveCandleCache } from './candleCache';
 import { INDICATOR_REGISTRY } from './indicatorsRegistry';
-import ArbitrageBot from './components/ArbitrageBot';
-import StrategyTester from './components/StrategyTester';
-import Level3DepthTape from './components/Level3DepthTape';
-import AIRiskPanel from './components/AIRiskPanel';
+const ArbitrageBotLazy = lazy(() => import('./components/ArbitrageBot'));
+const ArbitrageBot = (props: any) => <Suspense fallback={<div className="p-4 text-gray-500 text-xs text-center">Loading Arbitrage Matrix...</div>}><ArbitrageBotLazy {...props} /></Suspense>;
+
+const StrategyTesterLazy = lazy(() => import('./components/StrategyTester'));
+const StrategyTester = (props: any) => <Suspense fallback={<div className="p-4 text-gray-500 text-xs text-center">Loading Strategy Engine...</div>}><StrategyTesterLazy {...props} /></Suspense>;
+
+const Level3DepthTapeLazy = lazy(() => import('./components/Level3DepthTape'));
+const Level3DepthTape = (props: any) => <Suspense fallback={<div className="p-4 text-gray-500 text-xs text-center">Loading L3 Depth...</div>}><Level3DepthTapeLazy {...props} /></Suspense>;
+
+const AIRiskPanelLazy = lazy(() => import('./components/AIRiskPanel'));
+const AIRiskPanel = (props: any) => <Suspense fallback={<div className="p-4 text-gray-500 text-xs text-center">Loading AI Risk Panel...</div>}><AIRiskPanelLazy {...props} /></Suspense>;
 import { predictNextCandle } from './utils/predictionEngine';
 import PredictionReportModal from './components/PredictionReportModal';
 import { startAutoDataVerifier } from './utils/autoDataVerifier';
 
 /** Pure helper: convert OHLCV candles to Heikin-Ashi candles */
-function toHeikinAshi(candles) {
-  if (!candles || candles.length === 0) return [];
-  const ha = [];
-  let prevHaOpen = (candles[0].open + candles[0].close) / 2;
-  let prevHaClose = (candles[0].open + candles[0].high + candles[0].low + candles[0].close) / 4;
-  ha.push({ time: candles[0].time, open: prevHaOpen, high: candles[0].high, low: candles[0].low, close: prevHaClose });
-  for (let i = 1; i < candles.length; i++) {
-    const c = candles[i];
-    const haClose = (c.open + c.high + c.low + c.close) / 4;
-    const haOpen = (prevHaOpen + prevHaClose) / 2;
-    const haHigh = Math.max(c.high, haOpen, haClose);
-    const haLow = Math.min(c.low, haOpen, haClose);
-    ha.push({ time: c.time, open: haOpen, high: haHigh, low: haLow, close: haClose });
-    prevHaOpen = haOpen;
-    prevHaClose = haClose;
-  }
-  return ha;
-}
 
 import { API_BASE, CANDLE_BATCH_SIZE, INITIAL_HISTORY_BATCHES, MAX_CANDLES_IN_MEMORY, SIX_YEARS_SECONDS, INTERVAL_SECONDS_MAP, CUSTOM_TIMEFRAME_REGEX, intervalToSeconds, getHistoryCandleCap, QUOTE_ASSETS, parseSymbolParts, getBaseAsset, getQuoteAsset, getFngColor, formatUSD, formatShortNumber, COINGECKO_ID_MAP, getCoinGeckoId, coinIconUrl, handleCoinIconError } from './app_core/AppConfig';
+import { mergeCandles, toHeikinAshi, hexToRGBA, distanceToLineSegment, throttle } from './utils/chartHelpers';
 import { TopNavbar } from './components/layout/TopNavbar';
 
-function mergeCandles(...groups) {
-  const byTime = new Map();
-  groups.flat().forEach(c => {
-    if (c && Number.isFinite(c.time)) byTime.set(c.time, c);
-  });
-  return Array.from(byTime.values()).sort((a, b) => a.time - b.time);
-}
 
 // ─── Helper for eraser hit testing ───
-function distanceToLineSegment(px, py, x1, y1, x2, y2) {
-  const A = px - x1, B = py - y1, C = x2 - x1, D = y2 - y1;
-  const dot = A * C + B * D;
-  const len_sq = C * C + D * D;
-  let param = -1;
-  if (len_sq !== 0) param = dot / len_sq;
-  let xx, yy;
-  if (param < 0) { xx = x1; yy = y1; }
-  else if (param > 1) { xx = x2; yy = y2; }
-  else { xx = x1 + param * C; yy = y1 + param * D; }
-  const dx = px - xx, dy = py - yy;
-  return Math.sqrt(dx * dx + dy * dy);
-}
 
 
-function hexToRGBA(hex, alpha) {
-  try {
-    if (!hex) return `rgba(124, 92, 255, ${alpha})`;
-    const h = hex.replace('#', '');
-    const r = parseInt(h.substring(0, 2), 16);
-    const g = parseInt(h.substring(2, 4), 16);
-    const b = parseInt(h.substring(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  } catch (e) {
-    return `rgba(124, 92, 255, ${alpha})`;
-  }
-}
 
-function throttle(func, limit) {
-  let inThrottle;
-  return function(...args) {
-    if (!inThrottle) {
-      func.apply(this, args);
-      inThrottle = true;
-      setTimeout(() => inThrottle = false, limit);
-    }
-  };
-}
 
 class WebGLErrorBoundary extends React.Component {
   constructor(props) {
@@ -673,7 +627,8 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
   useEffect(() => {
     const fetchWatchlistPrices = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/tickers`);
+        const rustUrl = import.meta.env.VITE_RUST_SERVER_URL || 'http://127.0.0.1:8080';
+        const res = await fetch(`${rustUrl}/api/tickers`);
         const data = await res.json();
         if (Array.isArray(data)) {
           const tickerMap = {};
@@ -2223,6 +2178,7 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
   useEffect(() => {
     if (!chartRef.current || renderEngine !== 'canvas2d') return;
     const chart = createChart(chartRef.current, {
+
       width: chartRef.current.clientWidth,
       height: chartRef.current.clientHeight || 300,
       layout: {
@@ -2629,6 +2585,10 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
       let subChartObj = subChartsMapRef.current[ind.id];
       if (!subChartObj) {
         const chart = createChart(container, {
+        handleScroll: { mouseWheel: true, pressedMouseMove: true },
+        handleScale: { mouseWheel: false, pinch: true, axisPressedMouseMove: true },
+        kinematicScroll: { mouse: true },
+
           layout: {
             background: { type: 'solid', color: darkMode ? '#131722' : '#ffffff' },
             textColor: darkMode ? '#c9d1d9' : '#131722',
@@ -3138,7 +3098,7 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
       <>
         {/* Quick Buy/Sell Buttons */}
         {livePrice > 0 && (
-          <div className={`absolute top-2.5 right-[75px] transition-all duration-300 z-20 flex items-center ${darkMode ? 'bg-[#1c2030]/90 border-[#2a2e39]' : 'bg-white/90 border-gray-200'} border rounded-lg shadow-xl overflow-hidden font-mono text-[11px] pointer-events-none`}>
+          <div className={`hidden md:flex absolute top-2.5 right-[75px] transition-all duration-300 z-20 items-center ${darkMode ? 'bg-[#1c2030]/90 border-[#2a2e39]' : 'bg-white/90 border-gray-200'} border rounded-lg shadow-xl overflow-hidden font-mono text-[11px] pointer-events-none`}>
             <button 
               onClick={() => executeMarketOrder('SELL', quickTradeQty)}
               className="px-2.5 py-1.5 bg-[#F23645] hover:bg-[#ff4d5a] text-white font-extrabold flex flex-col items-center transition-colors cursor-pointer min-w-[65px] pointer-events-auto"
@@ -6873,12 +6833,12 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
                     {/* Positions & Orders Main Area */}
                     <div className={`flex-1 flex flex-col min-w-0 bg-[#0b0e14]`}>
                       {/* Tabs */}
-                      <div className={`flex gap-6 px-4 border-b ${t.border} bg-[#131722] pt-2`}>
+                      <div className={`flex gap-4 md:gap-6 px-4 border-b ${t.border} bg-[#131722] pt-2 overflow-x-auto whitespace-nowrap custom-scrollbar`}>
                         {['Positions', 'Open Orders', 'Order History', 'Trade History', 'Arbitrage Matrix', 'Strategy Tester', 'Level 3 DOM Depth', 'AI Risk Auditor'].map(tab => (
                           <button
                             key={tab}
                             onClick={() => setTradingTab(tab)}
-                            className={`pb-3 text-[13px] font-bold transition-all relative ${tradingTab === tab ? 'text-white' : 'text-[#848e9c] hover:text-white'}`}
+                            className={`pb-3 text-[12px] md:text-[13px] font-bold transition-all relative shrink-0 ${tradingTab === tab ? 'text-white' : 'text-[#848e9c] hover:text-white'}`}
                           >
                             {tab} {tab === 'Positions' && `(${positions.length})`} {tab === 'Open Orders' && `(${paperOrders.filter(o => o.status === 'PENDING').length})`}
                             {tradingTab === tab && <div className="absolute bottom-0 left-0 w-full h-[2px] bg-[#fcd535] rounded-t-full" />}
@@ -7036,7 +6996,7 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
       </div>
 
       {/* Unified Split Right Sidebar Container */}
-      {!focusMode && (isEditorOpen || rightSidebar) && (
+      {!isMobile && !focusMode && (isEditorOpen || rightSidebar) && (
         <div className={`hidden md:flex flex-col h-full shrink-0 z-20 overflow-hidden ${t.bg} border-l ${t.border} w-[360px] md:w-[420px] transition-all duration-300`}>
           {isEditorOpen && rightSidebar ? (
             <div className="flex flex-col h-full divide-y divide-[#2a2e39] min-h-0">
@@ -7088,7 +7048,8 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
       )}
 
       {/* Unified Combined Vertical Right Toolbar */}
-      <div className={`hidden md:flex w-10 shrink-0 border-l ${t.border} ${t.bg} flex-col items-center py-3 gap-2 transition-colors duration-200 z-20`}>
+      {!isMobile && !focusMode && (
+        <div className={`hidden md:flex w-10 shrink-0 border-l ${t.border} ${t.bg} flex-col items-center py-3 gap-2 transition-colors duration-200 z-20`}>
         {/* Editor Toggle Button at the top */}
         <button
           onClick={() => {
@@ -7142,6 +7103,7 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
       </div>
 
       
+      )}
       
       {/* AESTHETIC MOBILE BOTTOM NAVIGATION BAR */}
       {!focusMode && !isEditorOpen && (
@@ -7632,6 +7594,10 @@ function MiniChartWrapper({ coin: propCoin, interval, darkMode }) {
     const container = containerRef.current;
     
     const chart = createChart(container, {
+        handleScroll: { mouseWheel: true, pressedMouseMove: true },
+        handleScale: { mouseWheel: false, pinch: true, axisPressedMouseMove: true },
+        kinematicScroll: { mouse: true },
+
       layout: {
         background: { type: 'solid', color: darkMode ? '#131722' : '#ffffff' },
         textColor: darkMode ? '#c9d1d9' : '#131722',

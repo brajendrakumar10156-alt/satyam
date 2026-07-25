@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, LogOut, RefreshCw, Search, Star, TrendingUp, HelpCircle, ArrowUpRight, ArrowDownRight, Eye } from 'lucide-react';
 import { EXCHANGE_LIST, fetchExchangeSymbols } from './exchanges';
 
-const API_BASE = import.meta.env.VITE_BACKEND_URL ?? `http://${window.location.hostname}:8000`;
+const API_BASE = import.meta.env.VITE_BACKEND_URL ?? `http://localhost:8000`;
 const PAGE_SIZE = 60;
 
 // Helper to read watchlist from local storage by tab number
@@ -61,7 +61,7 @@ function CoinSelectPage({ onOpenChart, onLogout }) {
     let active = true;
     async function loadTickers() {
       try {
-        const res = await fetch(`${API_BASE}/api/tickers`);
+        const res = await fetch(`http://localhost:8080/api/tickers`);
         const data = await res.json();
         if (!active) return;
         const map = {};

@@ -125,7 +125,7 @@ export const TopNavbar = (props: any) => {
       )}
 
       {/* DESKTOP HEADER (Hidden on mobile) */}
-      <div className={`${focusMode ? 'hidden' : 'hidden md:flex'} min-h-11 border-b items-center justify-between px-2 md:px-3 shrink-0 z-30 gap-2 w-full transition-all duration-200 ${darkMode ? 'border-[rgba(255,255,255,0.07)] bg-[#0B0E14]/95 backdrop-blur-md' : 'border-[#e0e3eb] bg-white/95 backdrop-blur-md shadow-sm'}`}>
+      <div className={`${focusMode ? 'hidden' : 'hidden md:flex'} min-h-11 border-b items-center justify-between px-2 md:px-3 shrink-0 z-30 gap-2 w-full transition-all duration-200 overflow-x-auto whitespace-nowrap custom-scrollbar ${darkMode ? 'border-[rgba(255,255,255,0.07)] bg-[#0B0E14]/95 backdrop-blur-md' : 'border-[#e0e3eb] bg-white/95 backdrop-blur-md shadow-sm'}`}>
           <div className="flex items-center gap-1.5 min-w-0 flex-1">
             {onBackToCoins && (
               <button 

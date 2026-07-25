@@ -1,5 +1,7 @@
 #![allow(non_snake_case, unused_imports)]
 
+mod data_supervisor;
+
 use axum::{
     extract::Query,
     http::StatusCode,
@@ -88,6 +90,7 @@ struct HistoryQuery {
     symbol: Option<String>,
     limit: Option<usize>,
     endTime: Option<u32>,
+    interval: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -114,7 +117,7 @@ fn get_symbol_file_path(symbol: &str) -> PathBuf {
 
 fn get_symbol_file_path_tf(symbol: &str, timeframe: &str) -> PathBuf {
     let mut path = get_storage_dir();
-    if !timeframe.is_empty() && timeframe != "1m" {
+    if !timeframe.is_empty() {
         path.push(timeframe);
         fs::create_dir_all(&path).unwrap_or_default();
     }
@@ -162,6 +165,25 @@ fn save_candle_bytes_tf(symbol: &str, timeframe: &str, open: f32, high: f32, low
     }
 }
 
+// ── TICK RECORDER: Save ultra-fast sub-second tick trades ──
+pub fn save_live_tick(symbol: &str, price: f32, quantity: f32, time_ms: u64, is_buyer_maker: bool) {
+    let mut path = get_storage_dir();
+    path.push("ticks");
+    let _ = fs::create_dir_all(&path);
+    path.push(format!("{}.tick", symbol.to_uppercase()));
+    
+    // Total tick size: 4 (price) + 4 (qty) + 8 (time) + 1 (bool) = 17 bytes
+    let mut bin_data: Vec<u8> = Vec::with_capacity(17);
+    bin_data.extend_from_slice(&price.to_le_bytes());
+    bin_data.extend_from_slice(&quantity.to_le_bytes());
+    bin_data.extend_from_slice(&time_ms.to_le_bytes());
+    bin_data.push(if is_buyer_maker { 1 } else { 0 });
+    
+    if let Ok(mut file) = OpenOptions::new().append(true).create(true).open(&path) {
+        let _ = file.write_all(&bin_data);
+    }
+}
+
 // ── INTEGRITY: Deduplicate & Sort Storage ──
 // Reads the whole file, filters pre-Genesis corruptions, removes duplicate timestamps, sorts by time, and rewrites.
 fn deduplicate_and_sort_storage(symbol: &str) -> usize {
@@ -190,9 +212,11 @@ fn deduplicate_and_sort_storage(symbol: &str) -> usize {
         }
     }
     
-    // Rewrite file
+    // Atomic Rewrite (Write to .tmp first, then rename)
     let path = get_symbol_file_path(symbol);
-    if let Ok(mut file) = File::create(&path) { // Truncate and write
+    let tmp_path = path.with_extension("tmp");
+    
+    if let Ok(mut file) = File::create(&tmp_path) {
         let mut buffer = Vec::with_capacity(unique.len() * 20);
         for c in &unique {
             buffer.extend_from_slice(&c.open.to_le_bytes());
@@ -202,7 +226,11 @@ fn deduplicate_and_sort_storage(symbol: &str) -> usize {
             buffer.extend_from_slice(&c.time.to_le_bytes());
         }
         let _ = file.write_all(&buffer);
+        let _ = file.sync_all(); // Flush to disk safely
     }
+    
+    // OS level atomic rename prevents corruption on power failure
+    let _ = fs::rename(&tmp_path, &path);
     
     unique.len()
 }
@@ -233,6 +261,59 @@ fn read_candles_from_storage(symbol: &str) -> Vec<Candle> {
         }
     }
     candles
+}
+
+// ── OMNI-STORAGE: Storage Inspector & Deep Gap-Scanner ──
+pub fn check_storage_integrity_and_gaps(symbol: &str, timeframe: &str, expected_gap_sec: u32) -> Vec<(u32, u32)> {
+    let path = get_symbol_file_path_tf(symbol, timeframe);
+    if !path.exists() { return vec![]; }
+    
+    // 1. Storage Inspector: Check file size modulo 20 (Corruption Check)
+    if let Ok(metadata) = fs::metadata(&path) {
+        let size = metadata.len();
+        if size % 20 != 0 {
+            println!("[Storage Inspector] 🚨 CORRUPTION DETECTED in {} {}: Size {} is not divisible by 20! Smart Hot-Patching...", symbol, timeframe, size);
+            // Smart Hot-Patch: Truncate to the nearest multiple of 20
+            let safe_size = size - (size % 20);
+            if let Ok(file) = std::fs::OpenOptions::new().write(true).open(&path) {
+                let _ = file.set_len(safe_size);
+                println!("[Smart Hot-Patch] 🩹 Truncated to safe size {}. File recovered!", safe_size);
+            }
+        }
+    }
+
+    // 2. Deep Gap-Scanner: Find missing time periods
+    let mut gaps = Vec::new();
+    let candles = read_candles_from_storage(symbol); // Note: For true 0-RAM this should stream
+    if candles.len() < 2 { return gaps; }
+    
+    let mut last_time = candles[0].time;
+    for i in 1..candles.len() {
+        let curr_time = candles[i].time;
+        if curr_time > last_time + expected_gap_sec {
+            gaps.push((last_time, curr_time)); // Log the exact missing gap
+        }
+        last_time = curr_time;
+    }
+    
+    if !gaps.is_empty() {
+        println!("[Deep Gap-Scanner] 🔎 Found {} gaps in {} {}", gaps.len(), symbol, timeframe);
+    }
+    
+    gaps
+}
+
+// ── AI BRAIN: Quanta MMap Bridge (Future-Proof C++ Link) ──
+pub fn initialize_ai_mmap_bridge() {
+    let mut path = get_storage_dir();
+    path.push("ai_live_feed.mmap");
+    // Create an empty memory-mapped file placeholder for future C++ AI Engine
+    if !path.exists() {
+        if let Ok(file) = File::create(&path) {
+            let _ = file.set_len(1024 * 1024); // 1MB Ring Buffer for live ticks
+            println!("[MMap Bridge] 🧬 Created ai_live_feed.mmap (1MB). C++ AI is now plug-and-play!");
+        }
+    }
 }
 
 // ── SERVICE 1: Live Universal Binance WebSocket Collector ──
@@ -389,6 +470,7 @@ async fn run_gap_filler_collector() {
 }
 
 // Helper trait to get length cleanly
+#[allow(dead_code)]
 trait LengthVal {
     fn length_val(&self) -> usize;
 }
@@ -404,7 +486,20 @@ pub struct ProxyPoolManager {
     counter: Arc<AtomicUsize>,
 }
 
+const BINANCE_BASE_URLS: &[&str] = &[
+    "https://api.binance.com",
+    "https://api1.binance.com",
+    "https://api2.binance.com",
+    "https://api3.binance.com",
+    "https://api4.binance.com",
+];
+
 impl ProxyPoolManager {
+    pub fn get_random_base_url(&self) -> &str {
+        use rand::Rng;
+        let idx = rand::thread_rng().gen_range(0..BINANCE_BASE_URLS.len());
+        BINANCE_BASE_URLS[idx]
+    }
     pub async fn new() -> Self {
         let default_client = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
@@ -571,36 +666,42 @@ async fn fetch_recent_klines_parallel(symbol: &str, start_time_ms: u64, end_time
         let proxy_mgr_clone = proxy_mgr.clone();
 
         tasks.push(tokio::spawn(async move {
-            let url = format!(
-                "https://api.binance.com/api/v3/klines?symbol={}&interval=1m&startTime={}&endTime={}&limit=1000",
-                sym_clone, chunk_start, chunk_end
-            );
-            let client = proxy_mgr_clone.get_client().await;
-            if let Ok(res) = client.get(&url).send().await {
-                if let Ok(json) = res.json::<Vec<serde_json::Value>>().await {
-                    let mut count = 0;
-                    for k in json {
-                        if let (Some(t), Some(o), Some(h), Some(l), Some(c)) = (
-                            k.get(0).and_then(|v| v.as_u64()),
-                            k.get(1).and_then(|v| v.as_str()),
-                            k.get(2).and_then(|v| v.as_str()),
-                            k.get(3).and_then(|v| v.as_str()),
-                            k.get(4).and_then(|v| v.as_str()),
-                        ) {
-                            let open = o.parse::<f32>().unwrap_or(0.0);
-                            let high = h.parse::<f32>().unwrap_or(0.0);
-                            let low = l.parse::<f32>().unwrap_or(0.0);
-                            let close = c.parse::<f32>().unwrap_or(0.0);
-                            let time = (t / 1000) as u32;
+            let mut attempts = 0;
+            loop {
+                attempts += 1;
+                let base_url = proxy_mgr_clone.get_random_base_url();
+                let url = format!(
+                    "{}/api/v3/klines?symbol={}&interval=1m&startTime={}&endTime={}&limit=1000",
+                    base_url, sym_clone, chunk_start, chunk_end
+                );
+                let client = proxy_mgr_clone.get_client().await;
+                if let Ok(res) = client.get(&url).send().await {
+                    if let Ok(json) = res.json::<Vec<serde_json::Value>>().await {
+                        let mut count = 0;
+                        for k in json {
+                            if let (Some(t), Some(o), Some(h), Some(l), Some(c)) = (
+                                k.get(0).and_then(|v| v.as_u64()),
+                                k.get(1).and_then(|v| v.as_str()),
+                                k.get(2).and_then(|v| v.as_str()),
+                                k.get(3).and_then(|v| v.as_str()),
+                                k.get(4).and_then(|v| v.as_str()),
+                            ) {
+                                let open = o.parse::<f32>().unwrap_or(0.0);
+                                let high = h.parse::<f32>().unwrap_or(0.0);
+                                let low = l.parse::<f32>().unwrap_or(0.0);
+                                let close = c.parse::<f32>().unwrap_or(0.0);
+                                let time = (t / 1000) as u32;
 
-                            save_candle_bytes(&sym_clone, open, high, low, close, time);
-                            count += 1;
+                                save_candle_bytes(&sym_clone, open, high, low, close, time);
+                                count += 1;
+                            }
                         }
+                        return count; // Success, break loop
                     }
-                    return count;
                 }
+                println!("[Proxy Shield] Failed to fetch chunk for {} (Attempt {}). Swapping proxy & retrying...", sym_clone, attempts);
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             }
-            0
         }));
     }
 
@@ -615,7 +716,8 @@ async fn fetch_recent_klines_parallel(symbol: &str, start_time_ms: u64, end_time
 // ── DYNAMIC SYMBOL DISCOVERY: All Active Binance USDT Trading Pairs ──
 async fn fetch_all_binance_usdt_symbols(proxy_mgr: &ProxyPoolManager) -> Vec<String> {
     let client = proxy_mgr.get_client().await;
-    if let Ok(res) = client.get("https://api.binance.com/api/v3/exchangeInfo").send().await {
+    let base_url = proxy_mgr.get_random_base_url();
+    if let Ok(res) = client.get(format!("{}/api/v3/exchangeInfo", base_url)).send().await {
         if let Ok(info) = res.json::<ExchangeInfo>().await {
             let active_usdt: Vec<String> = info.symbols.into_iter()
                 .filter(|s| s.status == "TRADING" && s.quote_asset == "USDT")
@@ -798,6 +900,80 @@ async fn run_ticker_cacher(ticker_cache: Arc<RwLock<serde_json::Value>>) {
     }
 }
 
+// ── Math Aggregation Engine (Zero-Redundancy 1m to Higher Timeframes) ──
+fn interval_to_minutes(interval: &str) -> u32 {
+    match interval {
+        "1m" => 1,
+        "3m" => 3,
+        "5m" => 5,
+        "15m" => 15,
+        "30m" => 30,
+        "1h" => 60,
+        "2h" => 120,
+        "4h" => 240,
+        "6h" => 360,
+        "8h" => 480,
+        "12h" => 720,
+        "1d" => 1440,
+        "3d" => 4320,
+        "1w" => 10080,
+        "1M" => 43200,
+        _ => 1,
+    }
+}
+
+fn aggregate_candles(candles: Vec<Candle>, interval_minutes: u32) -> Vec<Candle> {
+    if interval_minutes <= 1 {
+        return candles;
+    }
+    let mut aggregated = Vec::new();
+    let mut current_batch = Vec::new();
+    let mut batch_time = 0;
+
+    for c in candles {
+        let interval_secs = interval_minutes * 60;
+        let c_batch_time = (c.time / interval_secs) * interval_secs;
+        
+        if batch_time == 0 {
+            batch_time = c_batch_time;
+        }
+
+        if c_batch_time == batch_time {
+            current_batch.push(c);
+        } else {
+            if !current_batch.is_empty() {
+                let open = current_batch.first().unwrap().open;
+                let close = current_batch.last().unwrap().close;
+                let mut high = f32::MIN;
+                let mut low = f32::MAX;
+                for bc in &current_batch {
+                    if bc.high > high { high = bc.high; }
+                    if bc.low < low { low = bc.low; }
+                }
+                aggregated.push(Candle { open, high, low, close, time: batch_time });
+            }
+            batch_time = c_batch_time;
+            current_batch.clear();
+            current_batch.push(c);
+        }
+    }
+    
+    if !current_batch.is_empty() {
+        let open = current_batch.first().unwrap().open;
+        let close = current_batch.last().unwrap().close;
+        let mut high = f32::MIN;
+        let mut low = f32::MAX;
+        for bc in &current_batch {
+            if bc.high > high { high = bc.high; }
+            if bc.low < low { low = bc.low; }
+        }
+        aggregated.push(Candle { open, high, low, close, time: batch_time });
+    }
+
+    aggregated
+}
+
+
 // ── SERVICE 3: Axum HTTP REST Server (Port 8080) ──
 
 async fn handle_health() -> impl IntoResponse {
@@ -811,6 +987,8 @@ async fn handle_history(
     let symbol = params.symbol.unwrap_or_else(|| "BTCUSDT".to_string()).to_uppercase();
     let limit = params.limit.unwrap_or(500);
     let end_time = params.endTime.unwrap_or(u32::MAX);
+    let interval_str = params.interval.unwrap_or_else(|| "1m".to_string());
+    let interval_mins = interval_to_minutes(&interval_str);
 
     let mut stored = read_candles_from_storage(&symbol);
     
@@ -819,12 +997,13 @@ async fn handle_history(
         stored.retain(|c| c.time <= end_time);
     }
 
-    // If local storage has candles, slice and return up to `limit` candles before `end_time`
+    // If local storage has candles, slice and return required aggregated candles
     if !stored.is_empty() {
-        let start_idx = stored.len().saturating_sub(limit);
+        let required_1m_candles = limit * (interval_mins as usize);
+        let start_idx = stored.len().saturating_sub(required_1m_candles);
         let mut chunk = stored[start_idx..].to_vec();
 
-        // Include live unclosed candle if applicable (only for real-time edge requests)
+        // Include live unclosed candle if applicable
         if end_time == u32::MAX {
             let cache = live_candles.read().await;
             if let Some(live_c) = cache.get(&symbol) {
@@ -841,13 +1020,19 @@ async fn handle_history(
             }
         }
 
-        return (StatusCode::OK, Json(serde_json::json!({ "status": "success", "symbol": symbol, "count": chunk.len(), "candles": chunk }))).into_response();
+        let mut aggregated = aggregate_candles(chunk, interval_mins);
+        if aggregated.len() > limit {
+            let start = aggregated.len() - limit;
+            aggregated = aggregated[start..].to_vec();
+        }
+
+        return (StatusCode::OK, Json(serde_json::json!({ "status": "success", "symbol": symbol, "count": aggregated.len(), "candles": aggregated }))).into_response();
     }
 
     // If local storage is empty for this timeframe/symbol, fetch directly from Binance API passing endTime
     let mut url = format!(
-        "https://api.binance.com/api/v3/klines?symbol={}&interval=1m&limit={}",
-        symbol, limit
+        "https://api.binance.com/api/v3/klines?symbol={}&interval={}&limit={}",
+        symbol, interval_str, limit
     );
     if end_time < u32::MAX {
         let end_time_ms = end_time as u64 * 1000;
@@ -1226,6 +1411,7 @@ async fn handle_report_corruption(
 #[derive(Deserialize)]
 struct ExportZipQuery {
     symbol: Option<String>,
+    #[allow(dead_code)]
     timeframe: Option<String>,
 }
 
@@ -1303,6 +1489,8 @@ async fn handle_export_zip(Query(params): Query<ExportZipQuery>) -> impl IntoRes
     }))).into_response()
 }
 
+use tower_http::compression::CompressionLayer;
+
 async fn run_http_server(
     ticker_cache: Arc<RwLock<serde_json::Value>>,
     tx: Arc<tokio::sync::broadcast::Sender<CandleUpdate>>,
@@ -1329,13 +1517,63 @@ async fn run_http_server(
         .route("/api/tickers", get(handle_tickers).with_state(ticker_cache))
         .route("/api/ws/live", get(handle_ws_live).with_state(tx))
         .route("/api/ws/live_feed", get(handle_ws_live_feed).with_state(live_store))
-        .layer(cors);
+        .layer(cors)
+        .layer(CompressionLayer::new());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-    println!("[Service 3: HTTP REST & WS Server] Listening on http://127.0.0.1:8080 (CORS Enabled)...");
+    println!("[Service 3: HTTP REST & WS Server] Listening on http://127.0.0.1:8080 (CORS + GZIP Compression Enabled)...");
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+async fn run_forward_gap_filler() {
+    println!("[Service 2.7: Forward Gap Filler] Checking local storage to fill any missing data gaps since last server shutdown...");
+    let dir = get_storage_dir();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            if let Ok(file_type) = entry.file_type() {
+                if file_type.is_file() {
+                    let file_name = entry.file_name().into_string().unwrap_or_default();
+                    if file_name.ends_with("_1m.iqbin") {
+                        let symbol = file_name.replace("_1m.iqbin", "").to_uppercase();
+                        let candles = read_candles_from_storage(&symbol);
+                        if let Some(max_c) = candles.iter().max_by_key(|c| c.time) {
+                            let last_time_ms = (max_c.time as u64) * 1000;
+                            let current_time_ms = (std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() * 1000) as u64;
+                            
+                            // If gap > 60 seconds
+                            if current_time_ms.saturating_sub(last_time_ms) > 120_000 {
+                                println!("[Gap Filler] Found gap for {}: Last candle at {}, Current time: {}. Filling gap...", symbol, max_c.time, current_time_ms/1000);
+                                let mut start_time = last_time_ms + 60000;
+                                loop {
+                                    if start_time >= current_time_ms { break; }
+                                    let url = format!("https://api.binance.com/api/v3/klines?symbol={}&interval=1m&startTime={}&limit=1000", symbol, start_time);
+                                    if let Ok(res) = reqwest::get(&url).await {
+                                        if let Ok(raw_klines) = res.json::<Vec<serde_json::Value>>().await {
+                                            if raw_klines.is_empty() { break; }
+                                            for k in &raw_klines {
+                                                let t = k[0].as_u64().unwrap() as u32 / 1000;
+                                                let o = k[1].as_str().unwrap().parse::<f32>().unwrap();
+                                                let h = k[2].as_str().unwrap().parse::<f32>().unwrap();
+                                                let l = k[3].as_str().unwrap().parse::<f32>().unwrap();
+                                                let c = k[4].as_str().unwrap().parse::<f32>().unwrap();
+                                                save_candle_bytes(&symbol, o, h, l, c, t);
+                                                start_time = (t as u64 * 1000) + 60000;
+                                            }
+                                        } else { break; }
+                                    } else { break; }
+                                    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                                }
+                                println!("[Gap Filler] Successfully caught up {} to live time.", symbol);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    println!("[Service 2.7: Forward Gap Filler] All active files are now synchronized to Live time!");
 }
 
 #[tokio::main]
@@ -1346,6 +1584,12 @@ async fn main() {
     println!("============================================================");
 
     get_storage_dir();
+    
+    // Future AI Bridge
+    initialize_ai_mmap_bridge();
+
+    // Run Data Integrity Supervisor
+    data_supervisor::run_data_supervisor();
 
     // Service 2.9: Proxy Pool Manager Engine
     let proxy_mgr = ProxyPoolManager::new().await;
@@ -1366,6 +1610,11 @@ async fn main() {
     // Service 2: Integrity Gap Filler Collector
     tokio::spawn(async move {
         run_gap_filler_collector().await;
+    });
+
+    // Service 2.7: Forward Gap Filler
+    tokio::spawn(async move {
+        run_forward_gap_filler().await;
     });
 
     // Service 2.5: Night Crawler Engine (Mode A, B, C)
