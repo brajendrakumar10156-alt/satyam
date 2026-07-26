@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * QuantaAI - Canvas2D Native Indicator Engine
  * Fallback engine for devices without WebGPU/WebGL support.

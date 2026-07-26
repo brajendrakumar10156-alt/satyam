@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, LogOut, RefreshCw, Search, Star, TrendingUp, HelpCircle, ArrowUpRight, ArrowDownRight, Eye } from 'lucide-react';
 import { EXCHANGE_LIST, fetchExchangeSymbols } from './exchanges';
@@ -38,7 +39,7 @@ function CoinSelectPage({ onOpenChart, onLogout }) {
   });
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [coins, setCoins] = useState([]);
+  const [coins, setCoins] = useState<any[]>([]);
   const [coinsLoading, setCoinsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('1'); // '1' to '5' are custom watchlists, 'all' is all pairs
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);

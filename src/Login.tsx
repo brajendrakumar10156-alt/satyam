@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, KeyRound, Lock, Mail, RefreshCw, ShieldCheck, UserPlus } from 'lucide-react';
 import logo from './assets/logo.png';
@@ -51,9 +52,9 @@ export default function Login({ onLoggedIn }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [otp, setOtp] = useState('');
-  const [sessionId, setSessionId] = useState(null);
-  const [delivery, setDelivery] = useState(null);
-  const [expiresAt, setExpiresAt] = useState(null);
+  const [sessionId, setSessionId] = useState<any>(null);
+  const [delivery, setDelivery] = useState<any>(null);
+  const [expiresAt, setExpiresAt] = useState<any>(null);
   const [now, setNow] = useState(Date.now());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

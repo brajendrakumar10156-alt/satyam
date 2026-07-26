@@ -1,3 +1,4 @@
+import NativeCanvasEngine from './core_render_canvas2d/NativeCanvasEngine';
 // @ts-nocheck
 /// <reference types="vite/client" />
 import OrderBookPanel from './components/OrderBookPanel';
@@ -6,6 +7,8 @@ import html2canvas from 'html2canvas';
 import { RightSidebar } from './components/layout/RightSidebar';
 import { LeftToolbar } from './components/layout/LeftToolbar';
 import React, { useEffect, useRef, useState, useCallback, useMemo, Suspense, lazy } from 'react';
+
+
 import NativeDrawingLayer from './components/NativeDrawingLayer';
 import NativeIndicatorLayer from './components/NativeIndicatorLayer';
 import DrawingAxisLabels from './components/DrawingAxisLabels';
@@ -2119,7 +2122,7 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
         // Non-blocking report to Rust Service 11 Client Rescue Relay
         fetch(`http://127.0.0.1:8080/api/report_corruption?symbol=${selectedCoin}`).catch(() => {});
         try {
-          const fresh = await fetchCandles(selectedExchange, selectedCoin, chartInterval, 1000);
+          const fresh = await fetchCandles(1000);
           if (fresh && fresh.length > 0 && !disposed) {
             // Strict timestamp sorting & deduplication
             const map = new Map<number, typeof fresh[0]>();
@@ -4953,7 +4956,7 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
                           <AppContainer onBackToWeb={() => setRenderEngine('webgpu')} />
                         </div>
                       ) : (
-                        <div ref={chartRef} className="w-full h-full absolute top-0 left-0" />
+                        <NativeCanvasEngine candles={allCandles} darkMode={darkMode} />
                       )}
           <NativeIndicatorLayer preference="webgl" visualIndicators={visualIndicators} indicatorDataMap={indicatorDataMapRef.current} visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)} />
           <NativeDrawingLayer
@@ -4993,7 +4996,7 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
                           cursor: (activeTool && ['dot', 'demonstration', 'magic'].includes(activeTool)) ? 'none' : 'crosshair'
                         }}
                       >
-                        <div ref={chartRef} className="w-full h-full absolute top-0 left-0" />
+                        <NativeCanvasEngine candles={allCandles} darkMode={darkMode} />
           <NativeIndicatorLayer preference="webgl" visualIndicators={visualIndicators} indicatorDataMap={indicatorDataMapRef.current} visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)} />
           <NativeDrawingLayer
             preference="webgl" 
@@ -5034,7 +5037,7 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
                           cursor: (activeTool && ['dot', 'demonstration', 'magic'].includes(activeTool)) ? 'none' : 'crosshair'
                         }}
                       >
-                        <div ref={chartRef} className="w-full h-full absolute top-0 left-0" />
+                        <NativeCanvasEngine candles={allCandles} darkMode={darkMode} />
           <NativeIndicatorLayer preference="webgl" visualIndicators={visualIndicators} indicatorDataMap={indicatorDataMapRef.current} visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)} />
           <NativeDrawingLayer
             preference="webgl" 
@@ -5075,7 +5078,7 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
                           cursor: (activeTool && ['dot', 'demonstration', 'magic'].includes(activeTool)) ? 'none' : 'crosshair'
                         }}
                       >
-                        <div ref={chartRef} className="w-full h-full absolute top-0 left-0" />
+                        <NativeCanvasEngine candles={allCandles} darkMode={darkMode} />
           <NativeIndicatorLayer preference="webgl" visualIndicators={visualIndicators} indicatorDataMap={indicatorDataMapRef.current} visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)} />
           <NativeDrawingLayer
             preference="webgl" 
@@ -6553,6 +6556,7 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
 
 
 // OrderBookPanel extracted/removed
+
 
 
 

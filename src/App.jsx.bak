@@ -1,3 +1,22 @@
+main.tsx:202 [GlobalError] Object
+(anonymous) @ main.tsx:202
+chunk-YHPANKLD.js?v=4254bc68:903 Uncaught SyntaxError: Identifier 'LeftToolbar' has already been declared
+main.tsx:202 [GlobalError] Object
+(anonymous) @ main.tsx:202
+chunk-YHPANKLD.js?v=4254bc68:903 Uncaught SyntaxError: Identifier 'LeftToolbar' has already been declared
+chunk-EJTTOCY5.js?v=4254bc68:14032 The above error occurred in one of your React components:
+
+    at Lazy
+    at Suspense
+    at App (http://localhost:5173/src/App.tsx?t=1785013072913:6:31)
+    at Suspense
+    at Root (http://localhost:5173/src/main.tsx?t=1785013073139:67:11)
+    at ErrorBoundary (http://localhost:5173/src/main.tsx?t=1785013073139:297:9)
+
+React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary.
+logCapturedError @ chunk-EJTTOCY5.js?v=4254bc68:14032
+main.tsx:147 ErrorBoundary caught: SyntaxError: Identifier 'LeftToolbar' has already been declared Object
+componentDidCatch @ main.tsx:147
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import Editor from '@monaco-editor/react';
 import logo from './assets/logo.png';

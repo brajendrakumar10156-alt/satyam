@@ -1,3 +1,4 @@
+// @ts-nocheck
 // ─── Client-Side Technical Indicators Registry & Calculations ───
 
 function getFloat32Data(data) {

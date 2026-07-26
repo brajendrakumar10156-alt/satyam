@@ -746,7 +746,7 @@ async fn fetch_all_binance_usdt_symbols(proxy_mgr: &ProxyPoolManager) -> Vec<Str
 async fn run_slow_historical_scraper(proxy_mgr: ProxyPoolManager) {
     println!("[Service 2.5: Vision ZIP Engine] Starting Accelerated 50-Worker Parallel Bulk Archive Downloader for ALL Timeframes (1m..1d) & 350+ Coins...");
 
-    let timeframes = vec!["1m", "3m", "5m", "15m", "30m", "1h", "4h", "1d"];
+    let timeframes = vec!["1m"];
     let sem = Arc::new(Semaphore::new(50)); // Controlled 50-Worker Concurrency Limit to avoid HTTP 429 Rate Limits
 
     loop {
