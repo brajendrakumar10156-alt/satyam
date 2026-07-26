@@ -88,6 +88,14 @@ import { startAutoDataVerifier } from './utils/autoDataVerifier';
 import { API_BASE, CANDLE_BATCH_SIZE, INITIAL_HISTORY_BATCHES, MAX_CANDLES_IN_MEMORY, SIX_YEARS_SECONDS, INTERVAL_SECONDS_MAP, CUSTOM_TIMEFRAME_REGEX, intervalToSeconds, getHistoryCandleCap, QUOTE_ASSETS, parseSymbolParts, getBaseAsset, getQuoteAsset, getFngColor, formatUSD, formatShortNumber, COINGECKO_ID_MAP, getCoinGeckoId, coinIconUrl, handleCoinIconError } from './app_core/AppConfig';
 import { mergeCandles, toHeikinAshi, hexToRGBA, distanceToLineSegment, throttle } from './utils/chartHelpers';
 import { TopNavbar } from './components/layout/TopNavbar';
+import { IndicatorSearchModal } from './components/layout/IndicatorSearchModal';
+import { AlertSettingsModal } from './components/layout/AlertSettingsModal';
+import { IndicatorParamsModal } from './components/layout/IndicatorParamsModal';
+import { NewsFlashPanel } from './components/layout/NewsFlashPanel';
+import { BarReplayControls } from './components/layout/BarReplayControls';
+import { ChartBottomBar } from './components/layout/ChartBottomBar';
+
+
 
 
 // ─── Helper for eraser hit testing ───
@@ -3221,99 +3229,14 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
 
 
         {/* ── TradingView-style News Flash Button + Panel ── */}
-        <div className="absolute bottom-[28px] right-14 z-40 flex flex-col items-end gap-1.5 pointer-events-none select-none">
-          {/* News Popup Panel */}
-          {showNewsPanel && (
-            <div
-              className="mb-1 w-[320px] bg-[#121626]/90 backdrop-blur-md border border-[#ea39ff]/40 rounded-xl shadow-[0_8px_32px_rgba(234,57,255,0.22)] overflow-hidden animate-fade-in pointer-events-auto origin-bottom-right"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#ea39ff]/25">
-                <div className="flex items-center gap-2">
-                  <span className="text-[#ea39ff] text-[13px]">⚡</span>
-                  <span className="text-white font-extrabold text-[12px] tracking-wide">Latest updates</span>
-                </div>
-                <button
-                  onClick={() => setShowNewsPanel(false)}
-                  className="text-gray-500 hover:text-white transition-colors text-[11px] font-black p-0.5"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* News List */}
-              <div className="max-h-[280px] overflow-y-auto dark-scrollbar">
-                {newsLoading ? (
-                  <div className="flex flex-col items-center py-6 gap-1.5 text-gray-500">
-                    <RefreshCw size={13} className="animate-spin text-[#ea39ff]" />
-                    <span className="text-[10px] font-bold">Loading news...</span>
-                  </div>
-                ) : newsError || newsList.length === 0 ? (
-                  <div className="py-5 text-center text-[11px] text-gray-500">
-                    No news available right now
-                  </div>
-                ) : (
-                  newsList.map((item, i) => {
-                    const timeAgo = item.time || '';
-                    return (
-                      <a
-                        key={item.id || i}
-                        href={item.url || '#'}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex flex-col gap-0.5 px-4 py-2.5 border-b border-[#ea39ff]/10 hover:bg-[#ea39ff]/5 transition-colors cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-1.5 text-[9.5px] text-gray-500 font-semibold">
-                          <span>{timeAgo}</span>
-                          <span>·</span>
-                          <span className="text-[#ea39ff] opacity-80">{item.source}</span>
-                        </div>
-                        <p className="text-white text-[11px] font-semibold leading-snug group-hover:text-[#ea39ff] transition-colors line-clamp-2">
-                          {item.title}
-                        </p>
-                      </a>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* Footer */}
-              <div
-                className="flex items-center justify-center py-2 bg-[#ea39ff]/5 border-t border-[#ea39ff]/20 cursor-pointer hover:bg-[#ea39ff]/10 transition-colors"
-                onClick={() => { setShowNewsPanel(false); setRightSidebar('news'); }}
-              >
-                <span className="text-[10.5px] font-extrabold text-[#ea39ff] hover:text-white transition-colors">
-                  More events →
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Lightning Button */}
-          <button
-            onClick={() => setShowNewsPanel(prev => !prev)}
-            title="Latest News"
-            className={`relative flex items-center justify-center w-[26px] h-[26px] rounded-full transition-all duration-200 shadow-lg border pointer-events-auto ${
-              showNewsPanel
-                ? 'bg-[#ea39ff] border-[#ea39ff] shadow-[0_0_14px_rgba(234,57,255,0.7)]'
-                : 'bg-[#1e222d] border-[#ea39ff]/50 hover:bg-[#ea39ff]/10 hover:border-[#ea39ff] hover:shadow-[0_0_10px_rgba(234,57,255,0.4)]'
-            }`}
-          >
-            <span
-              className={`text-[12px] font-black leading-none transition-colors ${
-                showNewsPanel ? 'text-white' : 'text-[#ea39ff]'
-              }`}
-            >
-              ⚡
-            </span>
-            {/* 6K Badge equivalent when news is available */}
-            {!showNewsPanel && newsList.length > 0 && (
-              <span className="absolute -top-[4px] -right-[6px] flex items-center justify-center min-w-[16px] h-[14px] px-1 bg-[#ea39ff] text-[#1e222d] text-[8.5px] font-black rounded-full border border-[#1e222d] shadow-sm tracking-tighter">
-                {newsList.length > 999 ? '1K+' : newsList.length}
-              </span>
-            )}
-          </button>
-        </div>
+        <NewsFlashPanel
+          showNewsPanel={showNewsPanel}
+          setShowNewsPanel={setShowNewsPanel}
+          newsLoading={newsLoading}
+          newsError={newsError}
+          newsList={newsList}
+          setRightSidebar={setRightSidebar}
+        />
       </>
     );
   };
@@ -4399,357 +4322,49 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
             </div>
             <div className="p-4 overflow-y-auto dark-scrollbar max-h-[70vh]">
               {activeModal.type === 'indicators_search' ? (
-                <div className="flex flex-col h-[70vh] md:h-[500px] min-h-0 min-w-0">
-                  {/* Search bar row */}
-                  <div className="p-3 border-b border-[#2a2e39]/50 flex items-center gap-2">
-                    <Search size={16} className="text-gray-400" />
-                    <input 
-                      type="text" 
-                      placeholder="Search indicators, metrics and strategies..." 
-                      value={indicatorSearchQuery}
-                      onChange={(e) => setIndicatorSearchQuery(e.target.value)}
-                      className="flex-1 bg-transparent text-[13px] text-white outline-none placeholder-gray-500 font-medium"
-                    />
-                  </div>
-
-                  {/* Tabs Selector row */}
-                  <div className="flex items-center gap-1.5 px-4 py-2 border-b border-[#2a2e39]/30 text-[11px] font-bold text-gray-400 select-none shrink-0 overflow-x-auto">
-                    {['Indicators', 'Strategies', 'Profiles', 'Patterns'].map(sub => (
-                      <button 
-                        key={sub} 
-                        onClick={() => setIndicatorCategorySubTab(sub)} 
-                        className={`px-3 py-1 rounded-full transition-all ${indicatorCategorySubTab === sub ? 'bg-white text-black' : 'hover:bg-gray-800 hover:text-white'}`}
-                      >
-                        {sub}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Body grid */}
-                  <div className="flex flex-1 min-h-0 min-w-0">
-                    {/* Left Sidebar */}
-                    <div className="w-[180px] md:w-[220px] border-r border-[#2a2e39]/50 overflow-y-auto p-2 flex flex-col gap-3.5 select-none shrink-0 font-semibold">
-                      <div>
-                        <div className="text-[10px] text-gray-500 uppercase font-extrabold tracking-wider px-2.5 mb-1.5">Personal</div>
-                        {['My scripts', 'Purchased'].map(tab => (
-                          <button 
-                            key={tab} 
-                            onClick={() => setSelectedIndicatorTab(tab)} 
-                            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11.5px] transition-colors ${selectedIndicatorTab === tab ? 'bg-blue-500/10 text-blue-400 font-bold' : `text-gray-400 ${t.hover}`}`}
-                          >
-                            {tab}
-                          </button>
-                        ))}
-                      </div>
-
-                      <div>
-                        <div className="text-[10px] text-gray-500 uppercase font-extrabold tracking-wider px-2.5 mb-1.5">Built-In</div>
-                        {['Technicals', 'Fundamentals'].map(tab => (
-                          <button 
-                            key={tab} 
-                            onClick={() => setSelectedIndicatorTab(tab)} 
-                            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11.5px] transition-colors ${selectedIndicatorTab === tab ? 'bg-blue-500/10 text-blue-400 font-bold' : `text-gray-400 ${t.hover}`}`}
-                          >
-                            {tab}
-                          </button>
-                        ))}
-                      </div>
-
-                      <div>
-                        <div className="text-[10px] text-gray-500 uppercase font-extrabold tracking-wider px-2.5 mb-1.5">Community</div>
-                        {["Editors' picks", 'Top', 'Trending', 'Store'].map(tab => (
-                          <button 
-                            key={tab} 
-                            onClick={() => setSelectedIndicatorTab(tab)} 
-                            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11.5px] transition-colors ${selectedIndicatorTab === tab ? 'bg-blue-500/10 text-blue-400 font-bold' : `text-gray-400 ${t.hover}`}`}
-                          >
-                            {tab}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Right Results list */}
-                    <div className="flex-1 overflow-y-auto dark-scrollbar p-3 space-y-1">
-                      {/* Filter results based on left tab selection and search query */}
-                      {selectedIndicatorTab === 'Technicals' && indicatorCategorySubTab === 'Indicators' && (
-                        <>
-                          <div className="text-[10.5px] text-gray-500 font-extrabold px-1.5 py-1 uppercase tracking-wider select-none">Active Technical Indicators</div>
-                          {visualIndicators
-                            .filter(ind => ind.name.toLowerCase().includes(indicatorSearchQuery.toLowerCase()))
-                            .map(ind => (
-                              <div key={ind.id} className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-gray-800/40 transition-colors group">
-                                <div className="flex items-center gap-2">
-                                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: ind.color }} />
-                                  <span className="font-extrabold text-[12px] text-gray-200">{ind.name}</span>
-                                  <span className="text-[10px] text-gray-500 font-mono">({ind.type.toUpperCase()})</span>
-                                </div>
-                                <button 
-                                  onClick={() => {
-                                    setVisualIndicators(prev => prev.map(p => p.id === ind.id ? { ...p, visible: !p.visible } : p));
-                                    showToast(`${ind.name} ${!ind.visible ? 'enabled' : 'disabled'}`);
-                                  }}
-                                  className={`px-3 py-1 rounded text-[11px] font-bold transition-all ${ind.visible ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
-                                >
-                                  {ind.visible ? 'Active' : 'Add'}
-                                </button>
-                              </div>
-                            ))}
-                        </>
-                      )}
-
-                      {/* Pine strategies */}
-                      {(selectedIndicatorTab !== 'Technicals' || indicatorCategorySubTab === 'Strategies') && (
-                        <>
-                          <div className="text-[10.5px] text-gray-500 font-extrabold px-1.5 py-1 uppercase tracking-wider select-none">Pine Script Strategies ({selectedIndicatorTab})</div>
-                          {INDICATOR_LIBRARY
-                            .filter(ind => ind.name.toLowerCase().includes(indicatorSearchQuery.toLowerCase()))
-                            .map(ind => (
-                              <div key={ind.name} className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-gray-800/40 transition-colors group font-bold">
-                                <div className="flex flex-col">
-                                  <span className="text-[12px] text-gray-200">{ind.name}</span>
-                                  <span className="text-[10px] text-gray-500 font-medium line-clamp-1">{ind.desc}</span>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <button 
-                                    onClick={() => { injectIndicator(ind, 'pine'); closeModal(); }}
-                                    className="px-2.5 py-1 rounded bg-[#7C5CFF]/15 text-[#7C5CFF] hover:bg-[#7C5CFF]/25 text-[11px] font-bold transition-all"
-                                  >
-                                    + Pine
-                                  </button>
-                                  <button 
-                                    onClick={() => { injectIndicator(ind, 'python'); closeModal(); }}
-                                    className="px-2.5 py-1 rounded bg-amber-500/15 text-amber-500 hover:bg-amber-500/25 text-[11px] font-bold transition-all"
-                                  >
-                                    + Python
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <IndicatorSearchModal
+                  indicatorSearchQuery={indicatorSearchQuery}
+                  setIndicatorSearchQuery={setIndicatorSearchQuery}
+                  indicatorCategorySubTab={indicatorCategorySubTab}
+                  setIndicatorCategorySubTab={setIndicatorCategorySubTab}
+                  selectedIndicatorTab={selectedIndicatorTab}
+                  setSelectedIndicatorTab={setSelectedIndicatorTab}
+                  visualIndicators={visualIndicators}
+                  setVisualIndicators={setVisualIndicators}
+                  showToast={showToast}
+                  injectIndicator={injectIndicator}
+                  closeModal={closeModal}
+                  t={t}
+                />
               ) : activeModal.type === 'alert_creation' ? (
-                <div className="space-y-4 text-[12px]">
-                  {/* Condition Ticker Dropdown */}
-                  <div>
-                    <label className="block text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">Condition</label>
-                    <div className="flex items-center gap-2">
-                      <div className={`flex-1 flex items-center gap-2 ${darkMode ? 'bg-[#1e222d] border-[#2a2e39] text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} border rounded px-3 py-2 font-bold select-none`}>
-                        <img 
-                          src={coinIconUrl(selectedCoin)} 
-                          data-tier="0"
-                          onError={(e) => handleCoinIconError(e, selectedCoin)}
-                          alt="coin"
-                          className="w-4 h-4 rounded-full bg-white object-cover shrink-0" 
-                        />
-                        <span>{selectedCoin}</span>
-                      </div>
-                      
-                      <select 
-                        value={alertCondition} 
-                        onChange={(e) => setAlertCondition(e.target.value)}
-                        className={`flex-1 ${darkMode ? 'bg-[#1e222d] border-[#2a2e39] text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} border rounded px-2 py-2 font-semibold outline-none focus:border-blue-500`}
-                      >
-                        <option value="above">Crossing Up</option>
-                        <option value="below">Crossing Down</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Price Level Crossing Value Input */}
-                  <div>
-                    <label className="block text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">Price Level</label>
-                    <input 
-                      type="number" 
-                      step="0.01"
-                      value={alertPrice}
-                      onChange={(e) => setAlertPrice(e.target.value)}
-                      placeholder={`Current: $${livePrice.toFixed(2)}`}
-                      className={`w-full ${darkMode ? 'bg-[#1e222d] border-[#2a2e39] text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} border rounded px-3 py-2 font-mono outline-none focus:border-blue-500`}
-                    />
-                  </div>
-
-                  {/* Expiration date time picker & trigger occurrence settings */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">Trigger</label>
-                      <select 
-                        value={alertTrigger}
-                        onChange={(e) => setAlertTrigger(e.target.value)}
-                        className={`w-full ${darkMode ? 'bg-[#1e222d] border-[#2a2e39] text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} border rounded px-2 py-2 font-semibold outline-none focus:border-blue-500`}
-                      >
-                        <option value="Once only">Once only</option>
-                        <option value="Every time">Every time</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">Expiration</label>
-                      <input 
-                        type="datetime-local" 
-                        value={alertExpiration}
-                        onChange={(e) => setAlertExpiration(e.target.value)}
-                        className={`w-full ${darkMode ? 'bg-[#1e222d] border-[#2a2e39] text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} border rounded px-2 py-2 font-semibold outline-none focus:border-blue-500 font-mono`}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Alert Message Description */}
-                  <div>
-                    <label className="block text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">Message</label>
-                    <textarea 
-                      rows="3"
-                      value={alertMessage}
-                      onChange={(e) => setAlertMessage(e.target.value)}
-                      className={`w-full ${darkMode ? 'bg-[#1e222d] border-[#2a2e39] text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} border rounded px-3 py-2 font-mono outline-none focus:border-blue-500 resize-none`}
-                    />
-                  </div>
-
-                  {/* Alert Notifications list */}
-                  <div>
-                    <label className="block text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">Notifications</label>
-                    <div className="flex items-center gap-4 text-gray-300 font-semibold select-none pt-1">
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input type="checkbox" defaultChecked className="accent-[#7C5CFF]" />
-                        <span>In-App Toasts</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input type="checkbox" defaultChecked className="accent-[#7C5CFF]" />
-                        <span>Show Popups</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Action buttons */}
-                  <div className="flex justify-end gap-2 border-t border-[#2a2e39]/50 pt-3 mt-4">
-                    <button 
-                      onClick={closeModal} 
-                      className="px-4 py-2 rounded bg-gray-800 text-gray-400 hover:text-white font-bold transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      onClick={() => {
-                        addPriceAlert();
-                        closeModal();
-                      }}
-                      className="px-4 py-2 rounded bg-blue-500 text-white font-bold hover:bg-blue-600 transition-colors"
-                    >
-                      Create Alert
-                    </button>
-                  </div>
-                </div>
+                <AlertSettingsModal
+                  alertCondition={alertCondition}
+                  setAlertCondition={setAlertCondition}
+                  alertValue={alertValue}
+                  setAlertValue={setAlertValue}
+                  selectedCoin={selectedCoin}
+                  livePrice={livePrice}
+                  formatUSD={formatUSD}
+                  darkMode={darkMode}
+                  closeModal={closeModal}
+                  t={t}
+                />
               ) : activeModal.type === 'indicator_settings' ? (
-                <div className="space-y-4 text-[12px] font-sans text-white">
-                  {/* Modal Tabs Header */}
-                  <div className="flex border-b border-[#2a2e39]/80 pb-2 mb-4">
-                    <button
-                      onClick={() => setEditingModalTab('inputs')}
-                      className={`flex-1 pb-2 text-[13px] font-bold text-center border-b-2 transition-all ${
-                        editingModalTab === 'inputs' ? 'border-b-2 border-blue-500 text-blue-400' : 'border-transparent text-gray-450 hover:text-white'
-                      }`}
-                    >
-                      Inputs
-                    </button>
-                    <button
-                      onClick={() => setEditingModalTab('style')}
-                      className={`flex-1 pb-2 text-[13px] font-bold text-center border-b-2 transition-all ${
-                        editingModalTab === 'style' ? 'border-b-2 border-blue-500 text-blue-400' : 'border-transparent text-gray-450 hover:text-white'
-                      }`}
-                    >
-                      Style
-                    </button>
-                  </div>
-
-                  {editingModalTab === 'inputs' ? (
-                    <div className="space-y-4 py-2">
-                      {/* Parameter Schema fields */}
-                      {INDICATOR_REGISTRY[activeModal.indicator.type]?.paramSchema.length > 0 ? (
-                        INDICATOR_REGISTRY[activeModal.indicator.type].paramSchema.map(param => (
-                          <div key={param.key} className="flex items-center justify-between gap-4">
-                            <span className="text-[12px] text-gray-300 font-bold uppercase tracking-wider">{param.label}</span>
-                            <input
-                              type="number"
-                              step={param.step || 1}
-                              value={tempIndicatorParams[param.key] ?? ''}
-                              onChange={(e) => {
-                                const val = param.type === 'float' ? parseFloat(e.target.value) : parseInt(e.target.value);
-                                if (!isNaN(val)) {
-                                  setTempIndicatorParams(prev => ({ ...prev, [param.key]: val }));
-                                }
-                              }}
-                              className={`w-24 ${darkMode ? 'bg-[#1e222d] border-[#2a2e39] text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} border rounded px-2.5 py-1.5 font-mono text-[12px] outline-none focus:border-blue-500 text-right`}
-                            />
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-gray-400 text-center py-6">No parameters to configure for this indicator.</div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="space-y-4 py-2">
-                      {/* Color Option */}
-                      <div className="flex items-center justify-between gap-4">
-                        <span className="text-[12px] text-gray-300 font-bold uppercase tracking-wider">Line Color</span>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={tempIndicatorColor}
-                            onChange={(e) => setTempIndicatorColor(e.target.value)}
-                            className="w-8 h-8 rounded bg-transparent border-0 cursor-pointer"
-                          />
-                          <input
-                            type="text"
-                            value={tempIndicatorColor}
-                            onChange={(e) => setTempIndicatorColor(e.target.value)}
-                            className={`w-20 ${darkMode ? 'bg-[#1e222d] border-[#2a2e39] text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} border rounded px-2.5 py-1 font-mono text-[11px] outline-none`}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Thickness Option */}
-                      <div className="flex items-center justify-between gap-4">
-                        <span className="text-[12px] text-gray-300 font-bold uppercase tracking-wider">Line Thickness</span>
-                        <select
-                          value={tempIndicatorWidth}
-                          onChange={(e) => setTempIndicatorWidth(parseInt(e.target.value))}
-                          className={`w-24 ${darkMode ? 'bg-[#1e222d] border-[#2a2e39] text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} border rounded px-2.5 py-1 font-bold outline-none`}
-                        >
-                          <option value="1">1px (Thin)</option>
-                          <option value="2">2px (Normal)</option>
-                          <option value="3">3px (Thick)</option>
-                          <option value="4">4px (Extra Thick)</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Actions buttons */}
-                  <div className="flex justify-end gap-2 border-t border-[#2a2e39]/50 pt-3.5 mt-4">
-                    <button 
-                      onClick={closeModal} 
-                      className="px-4 py-2 rounded bg-gray-800 text-gray-400 hover:text-white font-bold transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      onClick={() => {
-                        setVisualIndicators(prev => prev.map(ind => 
-                          ind.id === activeModal.indicator.id 
-                            ? { ...ind, params: tempIndicatorParams, color: tempIndicatorColor, lineWidth: tempIndicatorWidth } 
-                            : ind
-                        ));
-                        closeModal();
-                        showToast(`Saved settings for ${activeModal.indicator.name}`);
-                      }}
-                      className="px-4 py-2 rounded bg-blue-500 text-white font-bold hover:bg-blue-600 transition-colors"
-                    >
-                      Apply Settings
-                    </button>
-                  </div>
-                </div>
+                <IndicatorParamsModal
+                  editingModalTab={editingModalTab}
+                  setEditingModalTab={setEditingModalTab}
+                  activeModal={activeModal}
+                  tempIndicatorParams={tempIndicatorParams}
+                  setTempIndicatorParams={setTempIndicatorParams}
+                  tempIndicatorColor={tempIndicatorColor}
+                  setTempIndicatorColor={setTempIndicatorColor}
+                  tempIndicatorWidth={tempIndicatorWidth}
+                  setTempIndicatorWidth={setTempIndicatorWidth}
+                  darkMode={darkMode}
+                  closeModal={closeModal}
+                  setVisualIndicators={setVisualIndicators}
+                  showToast={showToast}
+                />
               ) : activeModal.type === 'compare_symbol' ? (
                 <div className="space-y-4 text-[12px] text-white">
                   <div>
@@ -5509,116 +5124,28 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
                   </div>
                 )}
               </div>
-              {replayMode && fullCandlesRef.current.length > 1 && (
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 bg-[#1e222d]/95 border border-[#2a2e39] rounded-xl px-4 py-2.5 flex items-center gap-3 shadow-2xl animate-fade-in text-white min-w-[340px] md:min-w-[480px]">
-                  {/* Title Badge */}
-                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[10px] font-bold uppercase tracking-wider shrink-0">
-                    <History size={11} />
-                    <span>Replay</span>
-                  </div>
-
-                  {/* Play / Pause */}
-                  <button
-                    onClick={() => setIsReplayPlaying(!isReplayPlaying)}
-                    className="p-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors cursor-pointer shrink-0"
-                    title={isReplayPlaying ? "Pause Playback" : "Start Playback"}
-                  >
-                    {isReplayPlaying ? <Minus size={14} className="rotate-90" /> : <Play size={14} />}
-                  </button>
-
-                  {/* Step Forward */}
-                  <button
-                    onClick={() => {
-                      setIsReplayPlaying(false);
-                      setReplayIndex(prev => {
-                        if (prev === null) return 0;
-                        if (prev >= fullCandlesRef.current.length - 1) return prev;
-                        return prev + 1;
-                      });
-                    }}
-                    className="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors cursor-pointer shrink-0"
-                    title="Step Forward (1 Bar)"
-                  >
-                    <ArrowRight size={14} />
-                  </button>
-
-                  {/* Progress Range Slider */}
-                  <input
-                    type="range"
-                    min={10}
-                    max={fullCandlesRef.current.length - 1}
-                    value={replayIndex ?? fullCandlesRef.current.length - 1}
-                    onChange={(e) => {
-                      setIsReplayPlaying(false);
-                      setReplayIndex(Number(e.target.value));
-                    }}
-                    className="flex-1 accent-blue-500 h-1.5 rounded-lg bg-gray-700 appearance-none cursor-pointer"
-                  />
-
-                  {/* Frame index text */}
-                  <span className="text-[10px] font-mono text-gray-400 shrink-0">
-                    {replayIndex ?? 0}/{fullCandlesRef.current.length}
-                  </span>
-
-                  {/* Speed Selector */}
-                  <select
-                    value={replaySpeed}
-                    onChange={(e) => setReplaySpeed(Number(e.target.value))}
-                    className="bg-[#131722] border border-[#2a2e39] text-white text-[10px] font-bold rounded px-1.5 py-1 outline-none cursor-pointer shrink-0"
-                    title="Playback Speed"
-                  >
-                    <option value="2000">0.5s / bar</option>
-                    <option value="1000">1.0s / bar</option>
-                    <option value="500">2.0s / bar</option>
-                    <option value="200">5.0s / bar</option>
-                  </select>
-
-                  {/* Close / Exit Replay */}
-                  <button
-                    onClick={() => {
-                      setIsReplayPlaying(false);
-                      if (fullCandlesRef.current.length) {
-                        allCandlesRef.current = [...fullCandlesRef.current];
-                        setAllCandles([...fullCandlesRef.current]);
-                      }
-                      setReplayMode(false);
-                      showToast('▶️ Replay off');
-                    }}
-                    className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-400 transition-colors cursor-pointer shrink-0 ml-1"
-                    title="Exit Replay"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              )}
+              <BarReplayControls
+                replayMode={replayMode}
+                fullCandlesLength={fullCandlesRef.current.length}
+                isReplayPlaying={isReplayPlaying}
+                setIsReplayPlaying={setIsReplayPlaying}
+                setReplayIndex={setReplayIndex}
+                replayIndex={replayIndex}
+                replaySpeed={replaySpeed}
+                setReplaySpeed={setReplaySpeed}
+                allCandlesRef={allCandlesRef}
+                fullCandlesRef={fullCandlesRef}
+                setAllCandles={setAllCandles}
+                setReplayMode={setReplayMode}
+                showToast={showToast}
+              />
 
             {/* NEW TRADINGVIEW STYLE BOTTOM BAR */}
-            <div className={`shrink-0 w-full flex items-center justify-between px-2 py-0.5 ${darkMode ? 'bg-[#131722]' : 'bg-[#ffffff]'} border-t ${darkMode ? 'border-[#2a2e39]' : 'border-gray-200'} select-none z-20`}>
-              {/* Left: Date Range */}
-              <div className="flex items-center gap-1 text-[10px] font-bold text-[#787b86]">
-                {['1D', '5D', '1M', '3M', '6M', 'YTD', '1Y', '5Y', 'All'].map(range => (
-                  <button 
-                    key={range} 
-                    onClick={() => applyTimeRange(range)} 
-                    className={`px-1.5 py-0.5 rounded transition-colors ${darkMode ? 'hover:bg-[#2a2e39] hover:text-[#d1d4dc]' : 'hover:bg-gray-100 hover:text-black'}`}
-                  >
-                    {range}
-                  </button>
-                ))}
-                <button onClick={() => showToast("Select date range...")} className={`hover:text-black dark:hover:text-[#d1d4dc] transition-colors p-0.5 ml-1`} title="Select custom range">
-                  <Calendar size={11} />
-                </button>
-              </div>
-              
-              {/* Right: Time and Options */}
-              <div className="flex items-center gap-2 text-[10.5px] font-bold text-[#787b86]">
-                <span className="font-mono">{new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })} <span className="opacity-70">UTC</span></span>
-                <span className={`h-3 w-px ${darkMode ? 'bg-[#2a2e39]' : 'bg-gray-300'} mx-1`} />
-                <button className={`px-1.5 py-0.5 rounded transition-colors ${darkMode ? 'hover:bg-[#2a2e39] hover:text-[#d1d4dc]' : 'hover:bg-gray-100 hover:text-black'}`} title="Percentage Scale">%</button>
-                <button className={`px-1.5 py-0.5 rounded transition-colors ${darkMode ? 'hover:bg-[#2a2e39] hover:text-[#d1d4dc]' : 'hover:bg-gray-100 hover:text-black'}`} title="Logarithmic Scale">log</button>
-                <button className={`px-1.5 py-0.5 rounded transition-colors ${darkMode ? 'hover:bg-[#2a2e39] hover:text-[#d1d4dc]' : 'hover:bg-gray-100 hover:text-black'}`} title="Auto Scale">auto</button>
-              </div>
-            </div>
+            <ChartBottomBar
+              darkMode={darkMode}
+              applyTimeRange={applyTimeRange}
+              showToast={showToast}
+            />
             </div>
 
           </div>
