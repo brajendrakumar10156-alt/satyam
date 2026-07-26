@@ -1,0 +1,190 @@
+Found block of 20 lines repeated 4 times:
+Occurs at lines: 4887, 4926, 4967, 5008
+Content preview:
+<NativeIndicatorLayer preference="webgl" visualIndicators={visualIndicators} indicatorDataMap={indicatorDataMapRef.current} visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)} />
+<NativeDrawingLayer
+preference="webgl"
+...
+hoverCoords={hoverCoords}
+magicTrail={magicTrail}
+----------------------------------------
+Found block of 20 lines repeated 3 times:
+Occurs at lines: 4914, 4955, 4996
+Content preview:
+ref={chartContainerRef}
+className="w-full h-full relative border border-blue-500/20 rounded overflow-hidden"
+onPointerDown={handlePointerDown}
+...
+tempShape={tempShape}
+drawStart={drawStart}
+----------------------------------------
+Found block of 20 lines repeated 3 times:
+Occurs at lines: 6373, 6408, 6444
+Content preview:
+].map(tool => {
+const ToolIcon = tool.icon;
+const isSelected = activeTool === tool.id;
+...
+</div>
+{tool.title.includes('(new)') && (
+----------------------------------------
+Found block of 20 lines repeated 2 times:
+Occurs at lines: 4797, 4855
+Content preview:
+onVisibleRangeChange={(range) => {
+if (drawingLayerRef.current) drawingLayerRef.current.draw();
+if (range?.from && range?.to) {
+...
+}
+}}
+----------------------------------------
+Found block of 20 lines repeated 2 times:
+Occurs at lines: 6311, 6342
+Content preview:
+].map(tool => {
+const ToolIcon = tool.icon;
+const isSelected = activeTool === tool.id;
+...
+);
+})}
+----------------------------------------
+Found block of 16 lines repeated 2 times:
+Occurs at lines: 5925, 5948
+Content preview:
+<RightSidebar
+rightSidebar={rightSidebar} setRightSidebar={setRightSidebar} themeConfig={t}
+OrderBookPanel={OrderBookPanel} livePrice={livePrice} selectedCoin={selectedCoin} setSelectedCoin={setSelectedCoin}
+...
+/>
+</div>
+----------------------------------------
+Found block of 12 lines repeated 2 times:
+Occurs at lines: 1481, 1498
+Content preview:
+const intSeconds = intervalToSeconds(chartInterval);
+const newPrediction = predictNextCandle(allCandles, intSeconds);
+if (newPrediction) {
+...
+};
+setPredictionHistory(prev => [...prev, histItem]);
+----------------------------------------
+Found block of 10 lines repeated 3 times:
+Occurs at lines: 1430, 1481, 1498
+Content preview:
+const intSeconds = intervalToSeconds(chartInterval);
+const newPrediction = predictNextCandle(allCandles, intSeconds);
+if (newPrediction) {
+...
+realClose: null,
+isHit: null,
+----------------------------------------
+Found block of 10 lines repeated 2 times:
+Occurs at lines: 3354, 3426
+Content preview:
+const coords = coordinateToTimePrice(x, y);
+if (!coords) return;
+let time = coords.time;
+...
+time = snapped.time;
+price = snapped.price;
+----------------------------------------
+Found block of 8 lines repeated 4 times:
+Occurs at lines: 4754, 4916, 4957, 4998
+Content preview:
+onPointerDown={handlePointerDown}
+onPointerMove={handlePointerMove}
+onPointerUp={handlePointerUp}
+...
+cursor: (activeTool && ['dot', 'demonstration', 'magic'].includes(activeTool)) ? 'none' : 'crosshair'
+}}
+----------------------------------------
+Found block of 8 lines repeated 2 times:
+Occurs at lines: 2392, 2422
+Content preview:
+}
+} catch (e) { console.error(e); }
+finally {
+...
+}, 100);
+}
+----------------------------------------
+Found block of 8 lines repeated 2 times:
+Occurs at lines: 3915, 4029
+Content preview:
+const cached = lastBacktestResultsRef.current[key];
+if (cached) {
+setMetrics(cached.metrics);
+...
+setActiveTab('Overview');
+setSyntaxStatus('Offline fallbacks active');
+----------------------------------------
+Found block of 6 lines repeated 3 times:
+Occurs at lines: 3252, 4801, 4859
+Content preview:
+if (saveRangeTimeoutRef.current) clearTimeout(saveRangeTimeoutRef.current);
+saveRangeTimeoutRef.current = setTimeout(() => {
+localStorage.setItem(visibleRangeStorageKey, JSON.stringify(range));
+...
+
+if (allCandles.length > 0) {
+----------------------------------------
+Found block of 6 lines repeated 3 times:
+Occurs at lines: 5327, 5357, 5472
+Content preview:
+</div>
+</div>
+</div>
+...
+<div className={`h-px w-full ${darkMode ? 'bg-[#2a2e39]/50' : 'bg-gray-200'} mb-8`} />
+
+----------------------------------------
+Found block of 6 lines repeated 2 times:
+Occurs at lines: 864, 888
+Content preview:
+
+const [frData, oiData] = await Promise.all([
+fetchJson(frUrl).catch(() => null),
+...
+]);
+
+----------------------------------------
+Found block of 6 lines repeated 2 times:
+Occurs at lines: 2382, 2410
+Content preview:
+isLoadingMoreRef.current = true;
+setIsLoadingOlderData(true);
+try {
+...
+const olderCandles = await fetchCandles(1000, oldestTime);
+if (myGeneration !== fetchGenerationRef.current) return;
+----------------------------------------
+Found block of 6 lines repeated 2 times:
+Occurs at lines: 2697, 2740
+Content preview:
+try {
+if (candleSeries.current) {
+candleSeries.current.removePriceLine(line);
+...
+} catch (e) {}
+});
+----------------------------------------
+Found block of 6 lines repeated 2 times:
+Occurs at lines: 5326, 5471
+Content preview:
+</div>
+</div>
+</div>
+...
+
+<div className={`h-px w-full ${darkMode ? 'bg-[#2a2e39]/50' : 'bg-gray-200'} mb-8`} />
+----------------------------------------
+Found block of 6 lines repeated 2 times:
+Occurs at lines: 6141, 6295
+Content preview:
+className="text-gray-400 hover:text-white p-0.5"
+>
+<X size={16} />
+...
+</div>
+
+----------------------------------------

@@ -1,0 +1,59 @@
+# WebContainer.tsx Modularization & Native Engine Architecture
+
+This plan outlines the extraction of the massive 6,500-line `WebContainer.tsx` into a modular, high-performance architecture using our Native Hardware Engines (WebGPU / Canvas2D / WASM).
+
+## User Review Required
+> [!IMPORTANT]
+> The current `WebContainer.tsx` is monolithic. It handles chart drawing, indicators, network fetching, strategy execution, order books, and user drawings.
+> We have already implemented `<NativeCanvasEngine>`, but to fully transition, we must pass the viewport's "Visible Range" (what the user is currently looking at) from the base engine up to the Indicator and Drawing layers. 
+> 
+> **Are you okay with routing all mouse events (drag, zoom, click) through `NativeCanvasEngine`, which will then broadcast the visible range to the other layers?**
+
+## Proposed Changes
+
+We will execute this in strict phases. After each phase is confirmed working, the corresponding old code will be completely deleted from `WebContainer.tsx`.
+
+### Phase 1: Native Viewport Synchronization
+- **Goal:** Allow `NativeCanvasEngine` to tell `WebContainer` what part of the chart is currently visible.
+- **Why:** `NativeIndicatorLayer` and `NativeDrawingLayer` need to know the exact `startIndex`, `endIndex`, `minPrice`, and `maxPrice` so they draw exactly on top of the candles.
+- **Action:** Add `onVisibleRangeChange` to `NativeCanvasEngine.tsx`. Store this in `WebContainer` state.
+
+---
+
+### Phase 2: Hybrid Indicator Extraction
+- **Goal:** Move all indicator logic to `<NativeIndicatorLayer>`.
+- **Hybrid Check:** Compare the new `NativeIndicatorLayer.tsx` and `Canvas2DIndicators.ts` against the old `lightweight-charts` `addSeries` logic in `WebContainer.tsx`.
+- **Action:**
+  - Route the outputs of `pineJitCompiler` directly to `NativeIndicatorLayer` via `indicatorDataMap`.
+  - Delete all `lineSeries`, `addHistogramSeries`, and `setData` calls from `WebContainer.tsx`.
+
+---
+
+### Phase 3: Hybrid Drawing Layer Extraction
+- **Goal:** Move all user drawings (Trendlines, Fibonacci) to `<NativeDrawingLayer>`.
+- **Hybrid Check:** We will inspect `NativeDrawingLayer.tsx` and `Canvas2DDrawings.ts` and merge them with the existing drawing state logic (`drawingsRef`, `activeDrawing`) in `WebContainer.tsx`.
+- **Action:** 
+  - Route mouse clicks from `NativeCanvasEngine` to the drawing logic.
+  - Delete old coordinate translation logic (`priceToCoordinate`, `timeToCoordinate`) from `WebContainer`.
+
+---
+
+### Phase 4: Orderbook & Trading UI Extraction
+- **Goal:** Decouple `OrderBookPanel`, `MiniChartWrapper`, and `StrategyTester` from the main thread.
+- **Action:** Ensure these components run independently and do not cause `WebContainer` to re-render the entire screen when the order book ticks at 144Hz.
+
+---
+
+### Phase 5: The Great Cleanup (Delete from WebContainer)
+- **Goal:** Shrink `WebContainer.tsx` from 6,500 lines to under 1,000 lines.
+- **Action:** Delete all dead code, old `createChart` blocks, inline indicator calculations, and duplicated React hooks.
+
+## Verification Plan
+
+### Automated Tests
+- No automated tests needed for UI refactoring, but we will ensure TypeScript compiles without strict errors for the new props.
+
+### Manual Verification
+- Verify that changing the timeframe updates the chart (Phase 1).
+- Verify that applying an EMA/RSI indicator displays correctly over the native candles (Phase 2).
+- Verify that drawing a trendline sticks to the correct prices when scrolling (Phase 3).

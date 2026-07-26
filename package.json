@@ -23,6 +23,7 @@
     "react-dom": "^18.2.0",
     "recharts": "^2.15.4",
     "sonner": "^2.0.7",
+    "ts-morph": "^28.0.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

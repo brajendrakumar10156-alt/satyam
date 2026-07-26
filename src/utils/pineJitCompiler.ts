@@ -245,6 +245,10 @@ export class PineJitCompiler {
     let grossProfit = 0;
     let grossLoss = 0;
     let totalPnlPct = 0;
+    
+    let balance = 100;
+    let peak = 100;
+    let maxDrawdownPct = 0;
 
     trades.forEach(t => {
       totalPnlPct += t.pnlPct;
@@ -253,6 +257,16 @@ export class PineJitCompiler {
         grossProfit += t.pnl;
       } else {
         grossLoss += Math.abs(t.pnl);
+      }
+      
+      // Real Max Drawdown calculation
+      balance = balance * (1 + (t.pnlPct / 100));
+      if (balance > peak) {
+        peak = balance;
+      }
+      const drawdown = ((peak - balance) / peak) * 100;
+      if (drawdown > maxDrawdownPct) {
+        maxDrawdownPct = drawdown;
       }
     });
 
@@ -265,7 +279,7 @@ export class PineJitCompiler {
       winRatePct,
       profitFactor,
       netPnlPct,
-      maxDrawdownPct: 2.5, // Estimated
+      maxDrawdownPct: parseFloat(maxDrawdownPct.toFixed(2)),
     };
   }
 }

@@ -3,10 +3,10 @@ import React from 'react';
 import { X } from 'lucide-react';
 import { RightSidebarWatchlist } from './RightSidebarWatchlist';
 import { RightSidebarDetails } from './RightSidebarDetails';
-
+import OrderBookPanel from '../OrderBookPanel';
 export const RightSidebar = (props) => {
   const { rightSidebar, setRightSidebar } = useUIStore();
-  const { themeConfig: t, OrderBookPanel } = props;
+  const { themeConfig: t } = props;
 
   if (!rightSidebar) return null;
 

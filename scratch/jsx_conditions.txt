@@ -1,0 +1,52 @@
+stealthMode
+activeModal
+activeModal.desc
+toastMsg
+selectedDrawingId !== null && floatingToolbarCoords && (drawings.find(d => d.id === selectedDrawingId) || {})
+isMobile && mobileMenuOpen
+isEditorOpen
+!isMobile
+!isMobile && !focusMode
+!isMobile && !focusMode
+focusMode
+isLegendExpanded
+isLegendExpanded && compareSymbol
+visualIndicators.filter(ind => ind.visible && INDICATOR_REGISTRY[ind.type]?.kind === 'subchart').length > 0
+lowerBoxState === 'hidden'
+(activeTab === tab || (tab === 'Overview' && activeTab === 'Performance Summary'))
+lowerBoxState !== 'minimized'
+backendOfflineNotice
+(activeTab === 'Overview' || activeTab === 'Performance Summary')
+activeTab === 'List of trades'
+metrics.trades
+!metrics.trades?.length
+activeTab === 'Trading Panel'
+(orderType === type || (type === 'LIMIT' && orderType === 'LIMIT' && !useTPSL))
+useTPSL
+tab === 'Positions'
+tab === 'Open Orders'
+tradingTab === tab
+tradingTab === 'Positions'
+tradingTab === 'Positions' && positions.length === 0
+tradingTab === 'Open Orders'
+tradingTab === 'Open Orders' && paperOrders.filter(o => o.status === 'PENDING').length === 0
+(tradingTab === 'Order History' || tradingTab === 'Trade History')
+tradingTab === 'Arbitrage Matrix'
+tradingTab === 'Strategy Tester'
+tradingTab === 'Level 3 DOM Depth'
+!isMobile && !focusMode && (isEditorOpen || rightSidebar)
+!isMobile && !focusMode
+isEditorOpen
+isAutoPredictEnabled
+isActive
+!focusMode && !isEditorOpen
+mobileActiveTab === 'chart'
+(mobileActiveTab === 'tools' || mobileDrawingMenuOpen)
+mobileActiveTab === 'report'
+mobileMenuOpen
+isMobile && mobileDrawingMenuOpen
+isCursorStudioOpen
+isTrendStudioOpen
+tool.title.includes('(new)')
+tool.title.includes('(new)')
+tool.title.includes('(new)')

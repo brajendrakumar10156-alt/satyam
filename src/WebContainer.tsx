@@ -1726,38 +1726,6 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
     }
   };
   const downloadReportScreenshot = () => downloadReportData();
-
-  const normalizeCandle = useCallback((c) => {
-    const rawTime = typeof c.time === 'string'
-      ? Math.floor(new Date(c.time).getTime() / 1000)
-      : Number(c.time);
-    const validTime = rawTime > 10000000000 ? Math.floor(rawTime / 1000) : rawTime;
-
-    return {
-      time: validTime,
-      open: parseFloat(c.open),
-      high: parseFloat(c.high),
-      low: parseFloat(c.low),
-      close: parseFloat(c.close),
-      volume: parseFloat(c.volume || 0),
-    };
-  }, []);
-
-  const toSeriesPoint = useCallback((c) => {
-    if (['Candles', 'Bars', 'Hollow Candles', 'High-Low', 'Volume Candles', 'Histogram'].includes(chartStyle)) return c;
-    if (chartStyle === 'Heikin-Ashi') {
-      // For live HA tick: approximate using the last 2 candles from ref
-      const candles = allCandlesRef.current;
-      const idx = candles.findIndex(ca => ca.time === c.time);
-      if (idx >= 1) {
-        const ha = toHeikinAshi(candles.slice(Math.max(0, idx - 1), idx + 1));
-        return ha[ha.length - 1] || c;
-      }
-      return c;
-    }
-    return { time: c.time, value: c.close };
-  }, [chartStyle]);
-
   const visibleRangeStorageKey = `${selectedExchange}:${selectedCoin}:${chartInterval}:visible-range`;
 
   const isAtRealtimeEdge = useCallback(() => {
@@ -1833,7 +1801,52 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
     }
     
     if (shouldFollowLive) chartInstance.current?.timeScale().scrollToRealTime();
-  }, [isAtRealtimeEdge, toSeriesPoint, chartStyle, replayMode, chartInterval, selectedExchange, selectedCoin]);
+  }, [isAtRealtimeEdge, chartStyle, replayMode, chartInterval, selectedExchange, selectedCoin]);
+
+  const requestDraw = useCallback(() => {
+    // No-op: rendering engines now redraw automatically via React props
+  }, []);
+  
+  // Dummy functions to prevent crashes before the large HTML cleanup
+  const LeftSidePanel = () => null;
+  const AiChatPanel = () => null;
+  const renderBountyPanel = () => null;
+  const renderDiffViewer = () => null;
+  const renderEditorPanel = () => null;
+  const renderOHLCHeader = () => null;
+  const renderIndValues = () => null;
+  const renderChartOverlays = () => null;
+  
+  // Dummy event handlers for the old inline canvas
+  const handlePointerDown = () => {};
+  const handlePointerMove = () => {};
+  const handlePointerUp = () => {};
+  const handleNativeWheel = () => {};
+  
+  // Dummy helper functions to prevent any other ghost crashes
+  const getAltInterval = () => '1h';
+  const updateCrosshairDOM = () => {};
+  const getSnappedPriceAndTime = () => {};
+  const getOHLCDiff = () => {};
+  const getChartCoords = () => {};
+  const findDrawingAtCoords = () => {};
+  const distanceToSegment = () => {};
+
+  const normalizeCandle = useCallback((c) => {
+    const rawTime = typeof c.time === 'string'
+      ? Math.floor(new Date(c.time).getTime() / 1000)
+      : Number(c.time);
+    const validTime = rawTime > 10000000000 ? Math.floor(rawTime / 1000) : rawTime;
+
+    return {
+      time: validTime,
+      open: parseFloat(c.open),
+      high: parseFloat(c.high),
+      low: parseFloat(c.low),
+      close: parseFloat(c.close),
+      volume: parseFloat(c.volume || 0),
+    };
+  }, []);
 
   const fetchCandles = useCallback(async (limit = 1000, before = null) => {
     try {
@@ -2808,70 +2821,6 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
       console.error("Failed to build compare series:", e);
     }
   }, [compareSymbol, compareCandles, chartCreated, darkMode]);
-
-
-  const getSnappedPriceAndTime = (time, price, clientX, clientY) => {
-    if (magnetMode === 'off' || allCandles.length === 0) {
-      return { time, price };
-    }
-
-    const timeVal = typeof time === 'number' ? time : new Date(time).getTime() / 1000;
-
-    let lo = 0, hi = allCandles.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      const midTime = typeof allCandles[mid].time === 'number' ? allCandles[mid].time : new Date(allCandles[mid].time).getTime() / 1000;
-      if (midTime < timeVal) lo = mid + 1;
-      else hi = mid;
-    }
-
-    let closestCandle = allCandles[lo];
-    if (lo > 0) {
-      const c1 = allCandles[lo - 1];
-      const c2 = allCandles[lo];
-      const t1 = typeof c1.time === 'number' ? c1.time : new Date(c1.time).getTime() / 1000;
-      const t2 = typeof c2.time === 'number' ? c2.time : new Date(c2.time).getTime() / 1000;
-      if (Math.abs(t1 - timeVal) < Math.abs(t2 - timeVal)) {
-        closestCandle = c1;
-      }
-    }
-
-    if (!closestCandle) {
-      return { time, price };
-    }
-
-    const { open, high, low, close } = closestCandle;
-    const ohlc = [open, high, low, close];
-    let closestVal = price;
-    let minPriceDiff = Infinity;
-    ohlc.forEach(val => {
-      const diff = Math.abs(val - price);
-      if (diff < minPriceDiff) {
-        minPriceDiff = diff;
-        closestVal = val;
-      }
-    });
-
-    if (magnetMode === 'strong') {
-      return { time: closestCandle.time, price: closestVal };
-    }
-
-    if (magnetMode === 'weak' && candleSeries.current) {
-      const targetY = candleSeries.current.priceToCoordinate(closestVal);
-      const { y: pointerY } = getChartCoords(clientX, clientY);
-      const pixelDiff = Math.abs(targetY - pointerY);
-      if (pixelDiff < 15) {
-        return { time: closestCandle.time, price: closestVal };
-      }
-    }
-
-    return { time, price };
-  };
-
-  const requestDraw = useCallback(() => {
-    if (drawingLayerRef.current) drawingLayerRef.current.draw();
-  }, []);
-
   useEffect(() => {
     return () => {
       if (saveRangeTimeoutRef.current) clearTimeout(saveRangeTimeoutRef.current);
@@ -2906,21 +2855,6 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
     window.addEventListener('resize', resizeCanvas);
     return () => { ro.disconnect(); window.removeEventListener('resize', resizeCanvas); };
   }, [requestDraw]);
-
-  const getAltInterval = (index) => {
-    const list_1m = ['5m', '15m', '1h', '4h'];
-    const list_5m = ['15m', '1h', '4h', '1D'];
-    const list_1h = ['4h', '1D', '1W', '1M'];
-    const list_1D = ['1W', '1M', '4h', '1h'];
-    
-    let base = list_1m;
-    if (chartInterval === '5m' || chartInterval === '15m') base = list_5m;
-    else if (chartInterval === '1h' || chartInterval === '4h') base = list_1h;
-    else if (chartInterval === '1D' || chartInterval === '1W') base = list_1D;
-    
-    return base[index - 1] || '1h';
-  };
-
   const loadCompareCandles = async (coin) => {
     try {
       const data = await fetchExchangeCandles(selectedExchange, coin, chartInterval, 300);
@@ -2942,306 +2876,6 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
     setCompareCandles([]);
     showToast("Cleared symbol comparison");
   };
-
-  const getOHLCDiff = () => {
-    if (!allCandles || allCandles.length === 0) return { change: 0, changePct: 0 };
-    const current = allCandles[allCandles.length - 1];
-    if (!current) return { change: 0, changePct: 0 };
-    
-    const idx = allCandles.findIndex(c => c.time === current.time);
-    if (idx <= 0) return { change: 0, changePct: 0 };
-    
-    const prev = allCandles[idx - 1];
-    const change = current.close - prev.close;
-    const changePct = (change / prev.close) * 100;
-    return { change, changePct };
-  };
-
-  const updateCrosshairDOM = (targetTime) => {
-    if (!allCandlesRef.current || allCandlesRef.current.length === 0) return;
-    
-    const current = targetTime 
-      ? allCandlesRef.current.find(c => c.time === targetTime) 
-      : allCandlesRef.current[allCandlesRef.current.length - 1];
-      
-    if (!current) return;
-    
-    const elOpen = document.getElementById('ohlc-open');
-    if (elOpen) elOpen.innerText = (current.open ?? 0).toFixed(2);
-    const elHigh = document.getElementById('ohlc-high');
-    if (elHigh) elHigh.innerText = (current.high ?? 0).toFixed(2);
-    const elLow = document.getElementById('ohlc-low');
-    if (elLow) elLow.innerText = (current.low ?? 0).toFixed(2);
-    
-    let change = 0, changePct = 0;
-    const idx = allCandlesRef.current.findIndex(c => c.time === current.time);
-    if (idx > 0) {
-      const prev = allCandlesRef.current[idx - 1];
-      change = current.close - prev.close;
-      changePct = (change / prev.close) * 100;
-    }
-    const isUp = change >= 0;
-    const colorClass = isUp ? 'text-[#089981]' : 'text-[#F23645]';
-    
-    const elClose = document.getElementById('ohlc-close');
-    if (elClose) {
-      elClose.innerText = (current.close ?? 0).toFixed(2);
-      elClose.className = colorClass;
-    }
-    const elChange = document.getElementById('ohlc-change');
-    if (elChange) {
-      elChange.innerText = `${isUp ? '+' : ''}${change.toFixed(2)} (${isUp ? '+' : ''}${changePct.toFixed(2)}%)`;
-      elChange.className = `${colorClass} ml-1`;
-    }
-    
-    const currentVisualIndicators = visualIndicatorsRef.current || [];
-    if (currentVisualIndicators.length > 0) {
-      currentVisualIndicators.forEach(ind => {
-        const elInd = document.getElementById(`ind-val-${ind.id}`);
-        if (!elInd) return;
-        const results = indicatorDataMapRef.current[ind.id];
-        const reg = INDICATOR_REGISTRY[ind.type];
-        if (!results || !reg) return;
-        const keys = reg.seriesConfig.map(s => s.key);
-        const valsText = keys.map(k => {
-          const arr = results[k] || [];
-          const pt = arr.find(p => p.time === current.time);
-          const val = pt ? pt.value : null;
-          const label = keys.length > 1 ? `${k.toUpperCase().slice(0, 3)}: ` : '';
-          return `${label}${val !== undefined && val !== null ? (typeof val === 'number' ? val.toFixed(2) : String(val)) : '∅'}`;
-        }).join('  ');
-        elInd.innerText = valsText;
-      });
-    }
-  };
-
-  const renderOHLCHeader = () => {
-    if (!allCandles || allCandles.length === 0) return null;
-    const current = allCandles[allCandles.length - 1];
-    if (!current) return null;
-
-    const { change, changePct } = getOHLCDiff();
-    const isUp = change >= 0;
-    const colorClass = isUp ? 'text-[#089981]' : 'text-[#F23645]';
-
-    return (
-      <div className={`absolute top-2.5 left-2.5 z-25 flex flex-wrap items-center gap-2 text-[11px] font-mono font-bold select-none pointer-events-none drop-shadow-md`}>
-        <span className={`${darkMode ? 'text-white' : 'text-black'} flex items-center gap-1.5 text-[13px] tracking-wide`}>
-          <img 
-            src={coinIconUrl(selectedCoin)} 
-            data-tier="0"
-            onError={(e) => handleCoinIconError(e, selectedCoin)}
-            alt=""
-            className="w-3.5 h-3.5 rounded-full bg-white object-cover shadow-sm" 
-          />
-          {selectedCoin}
-        </span>
-        <span className="text-gray-400 font-semibold">·</span>
-        <span className={`${darkMode ? 'text-gray-400' : 'text-gray-500'} font-semibold`}>{selectedExchange.toUpperCase()}</span>
-        <span className="text-gray-400 font-semibold">·</span>
-        <span className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{chartInterval}</span>
-        
-        <span className={`${darkMode ? 'text-gray-450' : 'text-gray-500'} ml-2`}>O</span>
-        <span id="ohlc-open" className={darkMode ? "text-white" : "text-black"} dangerouslySetInnerHTML={{ __html: (current.open ?? 0).toFixed(2) }} />
-        
-        <span className={darkMode ? 'text-gray-450' : 'text-gray-500'}>H</span>
-        <span id="ohlc-high" className={darkMode ? "text-white" : "text-black"} dangerouslySetInnerHTML={{ __html: (current.high ?? 0).toFixed(2) }} />
-        
-        <span className={darkMode ? 'text-gray-450' : 'text-gray-500'}>L</span>
-        <span id="ohlc-low" className={darkMode ? "text-white" : "text-black"} dangerouslySetInnerHTML={{ __html: (current.low ?? 0).toFixed(2) }} />
-        
-        <span className={darkMode ? 'text-gray-450' : 'text-gray-500'}>C</span>
-        <span id="ohlc-close" className={colorClass} dangerouslySetInnerHTML={{ __html: (current.close ?? 0).toFixed(2) }} />
-        
-        <span id="ohlc-change" className={`${colorClass} ml-1`} dangerouslySetInnerHTML={{ __html: `${isUp ? '+' : ''}${change.toFixed(2)} (${isUp ? '+' : ''}${changePct.toFixed(2)}%)` }} />
-
-        {isPerpetualSymbol(selectedCoin) && (fundingRate !== null || openInterest !== null) && (
-          <>
-            <span className="text-gray-400 font-semibold ml-2">·</span>
-            {fundingRate !== null && (
-              <>
-                <span className="text-gray-450 ml-1">Funding</span>
-                <span style={{ color: fundingRate > 0 ? '#F23645' : fundingRate < 0 ? '#089981' : '#787b86' }} className="font-mono">
-                  {(fundingRate * 100).toFixed(4)}%
-                </span>
-              </>
-            )}
-            {openInterest !== null && (
-              <>
-                <span className="text-gray-450 ml-2">OI</span>
-                <span className="text-white font-mono">{formatShortNumber(openInterest)} {getBaseAsset(selectedCoin)}</span>
-              </>
-            )}
-          </>
-        )}
-      </div>
-    );
-  };
-
-  const formatIndValue = (val) => {
-    if (val === undefined || val === null) return '∅';
-    return typeof val === 'number' ? val.toFixed(2) : String(val);
-  };
-
-  const renderIndValues = (ind) => {
-    const results = indicatorDataMapRef.current[ind.id];
-    if (!results) return null;
-    
-    const reg = INDICATOR_REGISTRY[ind.type];
-    if (!reg) return null;
-
-    const keys = reg.seriesConfig.map(s => s.key);
-    const targetTime = allCandles.length > 0 ? allCandles[allCandles.length - 1].time : null;
-    if (!targetTime) return null;
-
-    const valsText = keys.map(k => {
-      const arr = results[k] || [];
-      const pt = arr.find(p => p.time === targetTime);
-      const val = pt ? pt.value : null;
-      
-      const label = keys.length > 1 ? `${k.toUpperCase().slice(0, 3)}: ` : '';
-      return `${label}${formatIndValue(val)}`;
-    }).join('  ');
-
-    return <span id={`ind-val-${ind.id}`} className="text-[10.5px] font-mono text-gray-300 ml-1 font-bold" dangerouslySetInnerHTML={{ __html: valsText }} />;
-  };
-
-  const renderChartOverlays = () => {
-    return (
-      <>
-        {/* Quick Buy/Sell Buttons */}
-        {livePrice > 0 && (
-          <div className={`hidden md:flex absolute top-2.5 right-[75px] transition-all duration-300 z-20 items-center ${darkMode ? 'bg-[#1c2030]/90 border-[#2a2e39]' : 'bg-white/90 border-gray-200'} border rounded-lg shadow-xl overflow-hidden font-mono text-[11px] pointer-events-none`}>
-            <button 
-              onClick={() => executeMarketOrder('SELL', quickTradeQty)}
-              className="px-2.5 py-1.5 bg-[#F23645] hover:bg-[#ff4d5a] text-white font-extrabold flex flex-col items-center transition-colors cursor-pointer min-w-[65px] pointer-events-auto"
-              title={`Quick Sell ${quickTradeQty} ${getBaseAsset(selectedCoin)}`}
-            >
-              <span className="text-[8.5px] uppercase tracking-wide opacity-80">SELL</span>
-              <span id="quick-sell-price" dangerouslySetInnerHTML={{ __html: (livePrice * 0.9998).toFixed(2) }} />
-            </button>
-            <input 
-              type="number"
-              step="0.001"
-              min="0.001"
-              value={quickTradeQty}
-              onChange={(e) => setQuickTradeQty(parseFloat(e.target.value) || 0.01)}
-              className={`w-12 ${darkMode ? 'bg-[#131722] text-white border-[#2a2e39]' : 'bg-gray-100 text-black border-gray-200'} text-center font-bold border-x py-2 outline-none text-[11px] pointer-events-auto`}
-            />
-            <button 
-              onClick={() => executeMarketOrder('BUY', quickTradeQty)}
-              className="px-2.5 py-1.5 bg-[#2962ff] hover:bg-[#4d7eff] text-white font-extrabold flex flex-col items-center transition-colors cursor-pointer min-w-[65px] pointer-events-auto"
-              title={`Quick Buy ${quickTradeQty} ${getBaseAsset(selectedCoin)}`}
-            >
-              <span className="text-[8.5px] uppercase tracking-wide opacity-80">BUY</span>
-              <span id="quick-buy-price" dangerouslySetInnerHTML={{ __html: (livePrice * 1.0002).toFixed(2) }} />
-            </button>
-          </div>
-        )}
-
-        {/* Historical Data Loading Indicator */}
-        {isLoadingOlderData && (
-          <div className="absolute top-3 left-3 z-30 flex items-center gap-2 bg-[#131722]/90 border border-[#2a2e39] text-[#b2b5be] text-[11px] font-semibold px-3 py-1.5 rounded-full shadow-xl backdrop-blur-sm pointer-events-none">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-            </span>
-            Loading historical data...
-          </div>
-        )}
-
-        {/* Jump to Realtime Button */}
-        {!isAtLiveEdge && (
-          <button
-            onClick={() => {
-              if (renderEngine === 'canvas2d' && chartInstance.current) {
-                chartInstance.current.timeScale().scrollToRealTime();
-              } else if ((renderEngine === 'webgl' || renderEngine === 'webgpu') && webGLEngineRef.current) {
-                webGLEngineRef.current.scrollToRealTime();
-              }
-              setIsAtLiveEdge(true);
-            }}
-            className={`absolute top-1/2 left-6 -translate-y-1/2 z-[60] flex items-center justify-center w-8 h-8 rounded-full ${t.sec} border ${t.border} text-[#787b86] hover:text-black dark:hover:text-white shadow-lg cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors pointer-events-auto group`}
-            title="Jump to Realtime"
-          >
-            <ChevronRight className="text-blue-400 group-hover:scale-110 transition-transform" size={18} />
-          </button>
-        )}
-
-        {/* TradingView-style Price Scale Settings Gear (At 0,0 origin) */}
-        <div className={`absolute bottom-0 right-0 z-[60] p-1 flex items-center justify-center ${darkMode ? 'bg-[#131722]' : 'bg-[#ffffff]'}`}>
-          <button 
-            onClick={() => setIsPriceScaleMenuOpen(!isPriceScaleMenuOpen)}
-            className={`w-[20px] h-[20px] flex items-center justify-center rounded ${isPriceScaleMenuOpen ? 'text-white bg-[#2a2e39]' : `text-gray-500/70 hover:text-white hover:bg-[#2a2e39]`} transition-all`}
-            title="Price Scale Settings"
-          >
-            <Settings size={12} strokeWidth={2.5} />
-          </button>
-
-          {isPriceScaleMenuOpen && (
-            <div className={`absolute bottom-[110%] right-0 mb-1 w-56 ${t.bg} border ${t.border} rounded-lg shadow-2xl py-1 text-[12px] font-medium origin-bottom-right z-[70]`}>
-              <button onClick={() => { setAutoScale(true); setPriceScaleMode(0); setInvertScale(false); setIsPriceScaleMenuOpen(false); }} className={`w-full text-left px-3.5 py-1.5 flex items-center gap-2 text-gray-300 hover:bg-white/5`}>
-                <RotateCcw size={13} className="text-gray-400" />
-                <span>Reset price scale</span>
-              </button>
-              
-              <div className={`border-t ${t.border} my-1`} />
-
-              <button onClick={() => { setAutoScale(!autoScale); setIsPriceScaleMenuOpen(false); }} className={`w-full text-left px-3.5 py-1.5 flex items-center justify-between text-gray-300 hover:bg-white/5`}>
-                <span>Auto (fits data to screen)</span>
-                {autoScale && <Check size={14} className="text-blue-500" />}
-              </button>
-              <button onClick={() => { setInvertScale(!invertScale); setIsPriceScaleMenuOpen(false); }} className={`w-full text-left px-3.5 py-1.5 flex items-center justify-between text-gray-300 hover:bg-white/5`}>
-                <span>Invert scale</span>
-                {invertScale && <Check size={14} className="text-blue-500" />}
-              </button>
-
-              <div className={`border-t ${t.border} my-1`} />
-
-              <button onClick={() => { setPriceScaleMode(0); setIsPriceScaleMenuOpen(false); }} className={`w-full text-left px-3.5 py-1.5 flex items-center justify-between text-gray-300 hover:bg-white/5`}>
-                <span>Regular</span>
-                {priceScaleMode === 0 && <Check size={14} className="text-blue-500" />}
-              </button>
-              <button onClick={() => { setPriceScaleMode(2); setIsPriceScaleMenuOpen(false); }} className={`w-full text-left px-3.5 py-1.5 flex items-center justify-between text-gray-300 hover:bg-white/5`}>
-                <span>Percent</span>
-                {priceScaleMode === 2 && <Check size={14} className="text-blue-500" />}
-              </button>
-              <button onClick={() => { setPriceScaleMode(3); setIsPriceScaleMenuOpen(false); }} className={`w-full text-left px-3.5 py-1.5 flex items-center justify-between text-gray-300 hover:bg-white/5`}>
-                <span>Indexed to 100</span>
-                {priceScaleMode === 3 && <Check size={14} className="text-blue-500" />}
-              </button>
-              <button onClick={() => { setPriceScaleMode(1); setIsPriceScaleMenuOpen(false); }} className={`w-full text-left px-3.5 py-1.5 flex items-center justify-between text-gray-300 hover:bg-white/5`}>
-                <span>Logarithmic</span>
-                {priceScaleMode === 1 && <Check size={14} className="text-blue-500" />}
-              </button>
-
-              <div className={`border-t ${t.border} my-1`} />
-
-              <button 
-                onClick={() => { openModal('Settings', 'Settings', 'settings'); setIsPriceScaleMenuOpen(false); }}
-                className={`w-full text-left px-3.5 py-1.5 flex items-center gap-2 text-gray-300 hover:bg-white/5`}
-              >
-                <Settings size={13} className="text-gray-400" />
-                <span>More settings...</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-
-        {/* ── TradingView-style News Flash Button + Panel ── */}
-        <NewsFlashPanel
-          showNewsPanel={showNewsPanel}
-          setShowNewsPanel={setShowNewsPanel}
-          newsLoading={newsLoading}
-          newsError={newsError}
-          newsList={newsList}
-          setRightSidebar={setRightSidebar}
-        />
-      </>
-    );
-  };
-
   useEffect(() => { requestDraw(); }, [requestDraw, allCandles, drawings, tempShape, renderEngine]);
 
   useEffect(() => {
@@ -3268,180 +2902,6 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
     }
     return () => { if (unsub) unsub(); };
   }, [chartCreated, requestDraw, visibleRangeStorageKey, allCandles]);
-
-  const getChartCoords = (clientX, clientY) => {
-    const el = chartContainerRef.current || chartRef.current;
-    if (!el) return { x: 0, y: 0 };
-    const rect = el.getBoundingClientRect();
-    return { x: clientX - rect.left, y: clientY - rect.top };
-  };
-
-  const findDrawingAtCoords = (x, y) => {
-    if (renderEngine === 'canvas2d' && (!chartInstance.current || !candleSeries.current)) return -1;
-    
-    // getPixel is already available in the component scope, so we use it directly instead of redefining it locally.
-    // Wait, the outer getPixel might not be captured here if we shadow it or if we define this function before getPixel.
-    // Let's rely on the outer getPixel by removing the local definition.
-
-    const distanceToSegment = (px, py, x1, y1, x2, y2) => {
-      const l2 = Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2);
-      if (l2 === 0) return Math.sqrt(Math.pow(px - x1, 2) + Math.pow(py - y1, 2));
-      let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
-      t = Math.max(0, Math.min(1, t));
-      return Math.sqrt(Math.pow(px - (x1 + t * (x2 - x1)), 2) + Math.pow(py - (y1 + t * (y2 - y1)), 2));
-    };
-
-    const hitRadius = 12;
-
-    for (let i = drawings.length - 1; i >= 0; i--) {
-      const d = drawings[i];
-      const p1 = getPixel(d.start.time, d.start.price);
-      const p2 = d.end ? getPixel(d.end.time, d.end.price) : null;
-      if (!p1) continue;
-
-      if (['horizontal_line', 'horizontal_ray'].includes(d.type)) {
-        if (Math.abs(y - p1.y) < hitRadius) return d.id;
-      } else if (d.type === 'vertical_line') {
-        if (Math.abs(x - p1.x) < hitRadius) return d.id;
-      } else if (p2) {
-        if (['trendline', 'ray', 'infoline', 'extendedline', 'parallel_channel', 'regression_trend'].includes(d.type)) {
-          if (distanceToSegment(x, y, p1.x, p1.y, p2.x, p2.y) < hitRadius) return d.id;
-        } else {
-          const dist1 = Math.sqrt(Math.pow(x - p1.x, 2) + Math.pow(y - p1.y, 2));
-          const dist2 = Math.sqrt(Math.pow(x - p2.x, 2) + Math.pow(y - p2.y, 2));
-          if (dist1 < hitRadius || dist2 < hitRadius) return d.id;
-        }
-      } else {
-        const dist = Math.sqrt(Math.pow(x - p1.x, 2) + Math.pow(y - p1.y, 2));
-        if (dist < hitRadius * 1.5) return d.id;
-      }
-    }
-    return null;
-  };
-
-  
-  const handlePointerDown = (e) => {
-    if (renderEngine === 'canvas2d' && (!chartInstance.current || !candleSeries.current)) return;
-
-    if (!activeTool) {
-      const { x, y } = getChartCoords(e.clientX, e.clientY);
-      const hitId = findDrawingAtCoords(x, y);
-      if (hitId) {
-        setSelectedDrawingId(hitId);
-        const hitDrawing = drawings.find(d => d.id === hitId);
-        const rect = chartRef.current.getBoundingClientRect();
-        setFloatingToolbarCoords({
-          time: hitDrawing.start.time,
-          price: hitDrawing.start.price,
-          offsetX: -100,
-          offsetY: -60,
-          x: Math.max(16, Math.min(window.innerWidth - 320, e.clientX - 100)),
-          y: Math.max(80, rect.top + y - 60)
-        });
-        requestDraw();
-      } else {
-        setSelectedDrawingId(null);
-        setFloatingToolbarCoords(null);
-        requestDraw();
-      }
-      return;
-    }
-
-    if (e.pointerType === 'touch') e.preventDefault();
-    if (renderEngine === 'canvas2d' && chartInstance.current) { chartInstance.current.applyOptions({ handleScroll: false, handleScale: false }); }
-
-    const { x, y } = getChartCoords(e.clientX, e.clientY);
-    const coords = coordinateToTimePrice(x, y);
-    if (!coords) return;
-    let time = coords.time;
-    let price = coords.price;
-    if (!time || price === undefined) return;
-
-    // Apply Snapping
-    const snapped = getSnappedPriceAndTime(time, price, e.clientX, e.clientY);
-    time = snapped.time;
-    price = snapped.price;
-
-    if (activeTool === 'eraser') {
-      const hitRadius = 25;
-      const foundId = drawings.find(d => {
-        const pNode = getPixel(d.start.time, d.start.price);
-        if (!pNode) return false;
-        return Math.sqrt(Math.pow(x - pNode.x, 2) + Math.pow(y - pNode.y, 2)) < hitRadius;
-      });
-      if (foundId) setDrawings(prev => prev.filter(d => d.id !== foundId.id));
-      return;
-    }
-
-    if (['text', 'note', 'price_note', 'callout', 'signpost'].includes(activeTool)) {
-      const textVal = prompt(`Enter text for ${activeTool}:`) || 'Text';
-      setDrawings(prev => [...prev, { id: generateDrawingId(), type: activeTool, start: { time, price }, end: { time, price }, text: textVal }]);
-      if (!keepDrawing) {
-        setActiveTool(null);
-      }
-      return;
-    }
-
-    if (activeTool.startsWith('icon_')) {
-      setDrawings(prev => [...prev, { id: generateDrawingId(), type: activeTool, start: { time, price }, end: { time, price } }]);
-      if (!keepDrawing) {
-        setActiveTool(null);
-      }
-      return;
-    }
-
-    if (activeTool === 'brush') {
-      setIsDrawing(true);
-      setBrushPath([{ time, price }]);
-      return;
-    }
-
-    setIsDrawing(true);
-    setDrawStart({ time, price });
-    setTempShape({ time, price });
-  };
-
-  const handlePointerMove = (e) => {
-    if (renderEngine === 'canvas2d' && (!chartInstance.current || !candleSeries.current)) return;
-    const { x, y } = getChartCoords(e.clientX, e.clientY);
-
-    // Track hover coordinates for custom hover cursors
-    const hitId = findDrawingAtCoords(x, y);
-    setIsHoveringDrawing(!!hitId);
-
-    if (activeTool && ['dot', 'demonstration', 'magic'].includes(activeTool)) {
-      setHoverCoords({ x, y });
-      if (activeTool === 'magic') {
-        setMagicTrail(prev => [...prev.slice(-15), { x, y, size: Math.random() * 8 + 4 }]);
-      }
-      requestDraw();
-    } else {
-      if (hoverCoords) {
-        setHoverCoords(null);
-        requestDraw();
-      }
-    }
-
-    if (!isDrawing || !activeTool) return;
-    const coords = coordinateToTimePrice(x, y);
-    if (!coords) return;
-    let time = coords.time;
-    let price = coords.price;
-    if (!time || price === undefined) return;
-
-    // Apply Snapping
-    const snapped = getSnappedPriceAndTime(time, price, e.clientX, e.clientY);
-    time = snapped.time;
-    price = snapped.price;
-
-    if (activeTool === 'brush') {
-      setBrushPath(prev => [...prev, { time, price }]);
-      return;
-    }
-
-    setTempShape({ time, price });
-  };
-
   const getPixel = useCallback((time, price) => {
     if ((renderEngine === 'webgl' || renderEngine === 'webgpu') && webGLEngineRef.current) {
       return webGLEngineRef.current.getPixel(time, price);
@@ -3470,233 +2930,9 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
     
     return { time, price };
   }, [renderEngine]);
-
-  const handlePointerUp = () => {
-    setHoverCoords(null);
-    if (renderEngine === 'canvas2d' && chartInstance.current) {
-      chartInstance.current.applyOptions({ handleScroll: true, handleScale: true });
-    }
-    if (isDrawing) {
-      if (activeTool === 'brush') {
-        if (brushPath.length > 1) {
-          setDrawings(prev => [...prev, { id: generateDrawingId(), type: 'brush', points: brushPath }]);
-        }
-        setBrushPath([]);
-      } else if (drawStart && tempShape && activeTool) {
-        setDrawings(prev => [...prev, { id: generateDrawingId(), type: activeTool, start: drawStart, end: tempShape }]);
-      }
-      setIsDrawing(false);
-      setDrawStart(null);
-      setTempShape(null);
-
-      // Keep active tool if keepDrawing is true
-      if (!keepDrawing) {
-        setActiveTool(null);
-      }
-    }
-  };
-
-
-
   const sideTools = [
     { id: 'ai', icon: Sparkles, title: 'AI Assistant', action: () => openLeftPanel('ai') },
   ];
-
-  const AiChatPanel = () => {
-    const messages = getAiMessages();
-    return (
-      <div className={`flex-1 min-h-0 flex flex-col ${t.bg}`}>
-        <div className={`flex items-center gap-2 px-2 py-1.5 border-b ${t.border} shrink-0 flex-wrap`}>
-          <select
-            value={aiProvider}
-            onChange={(e) => setAiProvider(e.target.value)}
-            className={`text-[11px] font-bold rounded px-2 py-1 border ${t.border} ${t.bg} ${t.text}`}
-          >
-            <option value="groq" disabled={!aiKeysReady.groq}>Groq</option>
-            <option value="gemini" disabled={!aiKeysReady.gemini}>Gemini</option>
-            <option value="jarvis" disabled={!aiKeysReady.jarvis}>Jarvis</option>
-          </select>
-          <button type="button" onClick={() => sendAiMessage('generate', `EMA crossover for ${selectedCoin}`)} disabled={aiLoading} className={`px-2 py-1 rounded text-[10px] font-semibold bg-[#7C5CFF]/10 text-[#7C5CFF]`}>Generate</button>
-          <button type="button" onClick={() => sendAiMessage('fix')} disabled={aiLoading} className={`px-2 py-1 rounded text-[10px] font-semibold ${t.sec} ${t.text}`}>Fix</button>
-          <button type="button" onClick={() => sendAiMessage('explain')} disabled={aiLoading} className={`px-2 py-1 rounded text-[10px] font-semibold ${t.sec} ${t.text}`}>Explain</button>
-          <button type="button" onClick={() => sendAiMessage('optimize')} disabled={aiLoading} className={`px-2 py-1 rounded text-[10px] font-semibold ${t.sec} ${t.text}`}>Optimize</button>
-        </div>
-        <div className="flex-1 min-h-0 overflow-y-auto dark-scrollbar p-2 space-y-2">
-          {messages.length === 0 && (
-            <div className={`text-center py-6 px-3 ${t.muted} text-[11px]`}>
-              <Bot size={28} className="mx-auto mb-2 opacity-50" />
-              <p>AI for {editorMode === 'pine' ? 'Pine Script' : 'Python'}</p>
-              <p className="mt-1">{selectedCoin} · {getExchangeMeta(selectedExchange).name}</p>
-            </div>
-          )}
-          {messages.map((msg, i) => (
-            <div key={i} className={`rounded-lg px-3 py-2 text-[11px] ${msg.role === 'user' ? 'bg-[#7C5CFF]/15 ml-3' : msg.error ? 'bg-red-500/10' : t.sec}`}>
-              <div className={`font-bold text-[10px] mb-1 ${t.muted}`}>{msg.role === 'user' ? 'You' : aiProvider}</div>
-              <pre className={`whitespace-pre-wrap font-sans ${t.text}`}>{msg.content}</pre>
-              {msg.code && (
-                <button type="button" onClick={() => applyAiCode(msg.code)} className="mt-2 px-2 py-1 rounded bg-[#7C5CFF] text-white text-[10px] font-bold">
-                  Apply to {editorMode === 'pine' ? 'Pine' : 'Python'}
-                </button>
-              )}
-            </div>
-          ))}
-          {aiLoading && <div className={`flex items-center gap-2 px-2 ${t.muted}`}><RefreshCw size={12} className="animate-spin" /> Thinking...</div>}
-        </div>
-        <form className={`shrink-0 border-t ${t.border} p-2 flex gap-2 ${t.bg}`} onSubmit={(e) => { e.preventDefault(); sendAiMessage('chat'); }}>
-          <input value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder={`Ask AI (${editorMode})...`} disabled={aiLoading} className={`flex-1 px-2 py-1.5 rounded-lg border ${t.border} ${t.bg} ${t.text} text-[11px] outline-none`} />
-          <button type="submit" disabled={aiLoading || !aiPrompt.trim()} className="px-2 py-1.5 rounded-lg bg-purple-600 text-white disabled:opacity-50"><Send size={14} /></button>
-        </form>
-      </div>
-    );
-  };
-
-  const LeftSidePanel = () => {
-    if (!leftPanel) return null;
-    return (
-      <div className={`hidden md:flex flex-col w-[260px] shrink-0 border-r ${t.border} ${t.bg} z-10`}>
-        <div className={`h-9 border-b ${t.border} flex items-center justify-between px-3 ${t.sec}`}>
-          <span className={`font-bold text-[12px] ${t.text}`}>
-            {leftPanel === 'ai' && 'AI Assistant'}
-            {leftPanel === 'indicators' && 'Indicators'}
-            {leftPanel === 'alerts' && 'Price Alerts'}
-          </span>
-          <button onClick={() => setLeftPanel(null)} className={t.muted}><X size={14} /></button>
-        </div>
-        <div className="flex-1 min-h-0 overflow-y-auto dark-scrollbar p-2">
-          {leftPanel === 'ai' && (
-            <div className="flex flex-col h-full min-h-[200px]">
-              <div className={`flex gap-1 mb-2`}>
-                <button onClick={() => openEditor('pine', 'ai')} className={`flex-1 py-1.5 rounded text-[10px] font-bold ${editorMode === 'pine' ? 'bg-[#7C5CFF]/15 text-[#7C5CFF]' : t.sec}`}>Pine AI</button>
-                <button onClick={() => openEditor('python', 'ai')} className={`flex-1 py-1.5 rounded text-[10px] font-bold ${editorMode === 'python' ? 'bg-purple-500/15 text-purple-400' : t.sec}`}>Python AI</button>
-              </div>
-              <select value={aiProvider} onChange={(e) => setAiProvider(e.target.value)} className={`w-full mb-2 text-[11px] rounded border ${t.border} ${t.bg} ${t.text} p-1.5`}>
-                <option value="groq">Groq</option>
-                <option value="gemini">Gemini</option>
-              </select>
-              <button onClick={() => sendAiMessage('generate', `Build ${editorMode} strategy for ${selectedCoin}`)} className="w-full mb-1 py-2 rounded bg-[#7C5CFF] text-white text-[11px] font-bold">Quick Generate</button>
-              <button onClick={() => { openEditor(editorMode, 'ai'); setLeftPanel(null); }} className={`w-full py-2 rounded border ${t.border} ${t.text} text-[11px] font-bold`}>Open full AI panel →</button>
-            </div>
-          )}
-          {leftPanel === 'indicators' && (
-            <>
-              {INDICATOR_LIBRARY.map((ind) => (
-                <div key={ind.id} className={`mb-1 rounded-lg border ${t.border} overflow-hidden`}>
-                  <div className={`px-3 py-2 ${t.sec}`}>
-                    <div className={`font-bold text-[12px] ${t.text}`}>{ind.name}</div>
-                  </div>
-                  <div className="flex border-t border-inherit">
-                    <button type="button" onClick={() => injectIndicator(ind, 'pine')} className={`flex-1 py-1.5 text-[10px] font-bold text-[#7C5CFF] ${t.hover}`}>Pine</button>
-                    <button type="button" onClick={() => injectIndicator(ind, 'python')} className={`flex-1 py-1.5 text-[10px] font-bold text-purple-400 border-l ${t.border} ${t.hover}`}>Python</button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const targetId = ind.id === 'ema' ? 'ema_9' : ind.id === 'sma' ? 'sma_50' : ind.id === 'bb' ? 'bb_20_2' : null;
-                        if (targetId) {
-                          setVisualIndicators(prev => prev.map(p => p.id === targetId ? { ...p, visible: !p.visible } : p));
-                          const isNowVisible = !visualIndicators.find(p => p.id === targetId)?.visible;
-                          showToast(`${ind.name} is now ${isNowVisible ? 'visible' : 'hidden'} on chart`);
-                        } else {
-                          showToast("Visual chart overlay not supported for this indicator yet");
-                        }
-                      }}
-                      className={`flex-1 py-1.5 text-[10px] font-bold text-blue-400 border-l ${t.border} ${t.hover}`}
-                    >
-                      Chart
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-          {leftPanel === 'alerts' && (
-            <div className="space-y-2">
-              <div className={`text-[11px] ${t.muted} mb-1`}>{selectedCoin} · {getExchangeMeta(selectedExchange).name}</div>
-              <select value={alertCondition} onChange={(e) => setAlertCondition(e.target.value)} className={`w-full rounded border ${t.border} ${t.bg} ${t.text} p-1.5 text-[11px]`}>
-                <option value="above">Price crosses above</option>
-                <option value="below">Price crosses below</option>
-              </select>
-              <input type="number" value={alertPrice} onChange={(e) => setAlertPrice(e.target.value)} placeholder="Alert price" className={`w-full rounded border ${t.border} ${t.bg} ${t.text} p-2 text-[12px]`} />
-              <button onClick={addPriceAlert} className="w-full py-2 rounded bg-amber-500 text-white font-bold text-[11px]">Create Alert</button>
-              <div className={`mt-3 pt-2 border-t ${t.border}`}>
-                {alerts.filter((a) => a.symbol === selectedCoin).map((a) => (
-                  <div key={a.id} className={`flex justify-between items-center py-2 text-[11px] ${t.text}`}>
-                    <span>{a.condition} ${a.price}</span>
-                    <button onClick={() => removeAlert(a.id)} className="text-red-400"><X size={12} /></button>
-                  </div>
-                ))}
-                {!alerts.filter((a) => a.symbol === selectedCoin).length && <p className={t.muted}>No alerts for this pair</p>}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const renderBountyPanel = () => {
-    return (
-      <div className="space-y-4">
-        {!selectedBounty ? (
-          <>
-            <div className={`p-3 rounded-lg border ${t.border} ${t.sec} space-y-2`}>
-              <div className="text-[10px] font-bold text-gray-400">POST NEW BOUNTY</div>
-              <input type="text" value={bountyTitle} onChange={(e) => setBountyTitle(e.target.value)} placeholder="Title (e.g. Need RSI strategy)" className={`w-full rounded border ${t.border} ${t.bg} ${t.text} p-2 text-[11px]`} />
-              <textarea value={bountyDesc} onChange={(e) => setBountyDesc(e.target.value)} placeholder="Description & Requirements..." rows="3" className={`w-full rounded border ${t.border} ${t.bg} ${t.text} p-2 text-[11px]`} />
-              <input type="number" value={bountyReward} onChange={(e) => setBountyReward(e.target.value)} placeholder="Reward (e.g. 50 Credits)" className={`w-full rounded border ${t.border} ${t.bg} ${t.text} p-2 text-[11px] font-mono`} />
-              <button onClick={handlePostBounty} className="w-full py-1.5 rounded bg-blue-500 text-white font-bold text-[11px]">Post Bounty</button>
-            </div>
-            
-            <div className="space-y-2">
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Available Tasks</div>
-              {bounties.map(b => (
-                <div key={b.id} onClick={() => setSelectedBounty(b)} className={`cursor-pointer flex flex-col p-3 rounded-lg border ${t.border} ${t.sec} text-[11px] hover:border-blue-500 transition-colors`}>
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="font-bold text-[12px]">{b.title}</span>
-                    <span className="font-mono text-amber-500 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded">{b.reward}</span>
-                  </div>
-                  <span className="text-gray-400 line-clamp-2">{b.description}</span>
-                  <div className="mt-2 flex justify-between items-center text-[9px] text-gray-500 font-semibold">
-                    <span>By: {b.creator_id}</span>
-                    <span className={`${b.status === 'open' ? 'text-green-500' : 'text-blue-500'}`}>{b.status.toUpperCase()}</span>
-                  </div>
-                </div>
-              ))}
-              {bounties.length === 0 && (
-                <div className="text-[10px] text-gray-500 italic text-center py-4">No active bounties found</div>
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="space-y-3">
-            <button onClick={() => { setSelectedBounty(null); setBountySolutionText(''); }} className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-white">
-              <ArrowLeft size={14} /> Back to list
-            </button>
-            <div className={`p-3 rounded-lg border ${t.border} ${t.sec}`}>
-              <div className="flex justify-between items-start mb-2">
-                <h3 className="font-bold text-[14px]">{selectedBounty.title}</h3>
-                <span className="font-mono text-amber-500 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded">{selectedBounty.reward}</span>
-              </div>
-              <p className="text-[11px] text-gray-300 whitespace-pre-wrap">{selectedBounty.description}</p>
-            </div>
-
-            {selectedBounty.status === 'open' && (
-              <div className={`p-3 rounded-lg border ${t.border} ${t.sec} space-y-2`}>
-                <div className="text-[10px] font-bold text-gray-400">SUBMIT SOLUTION</div>
-                <textarea value={bountySolutionText} onChange={(e) => setBountySolutionText(e.target.value)} placeholder="Paste your code or solution here..." rows="5" className={`w-full rounded border ${t.border} ${t.bg} ${t.text} p-2 text-[11px] font-mono`} />
-                <button onClick={() => handleSubmitSolution(selectedBounty.id)} className="w-full py-1.5 rounded bg-[#089981] text-white font-bold text-[11px]">Submit for Review</button>
-              </div>
-            )}
-            
-            <div className="text-[10px] text-gray-500 italic px-1">Solutions for this bounty are managed on the backend. Creators can approve solutions to release funds.</div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-
-
-
   /* renderRightSidePanel extracted to RightSidebar.tsx */
 
   // LeftToolbar extracted/removed
@@ -4045,31 +3281,6 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
       setLoading(false);
     }
   };
-
-  const renderDiffViewer = () => {
-    try {
-      const safeBase = typeof baseCode === 'string' ? baseCode : '';
-      const targetCode = editorMode === 'pine' ? pineCode : pythonCode;
-      const safeTarget = typeof targetCode === 'string' ? targetCode : '';
-      const oldLines = safeBase.split('\n');
-      const newLines = safeTarget.split('\n');
-      const max = Math.max(oldLines.length, newLines.length);
-      const elements = [];
-      for (let i = 0; i < max; i += 1) {
-        if (oldLines[i] !== newLines[i]) {
-          if (oldLines[i] !== undefined) elements.push(<div key={`old-${i}`} className="bg-red-900/30 text-red-400 px-2 py-0.5 border-l-2 border-red-500 font-mono text-xs whitespace-pre">- {oldLines[i]}</div>);
-          if (newLines[i] !== undefined) elements.push(<div key={`new-${i}`} className="bg-emerald-900/30 text-emerald-400 px-2 py-0.5 border-l-2 border-emerald-500 font-mono text-xs whitespace-pre">+ {newLines[i]}</div>);
-        } else {
-          elements.push(<div key={`same-${i}`} className={`${t.muted} px-2 py-0.5 font-mono text-xs whitespace-pre`}>  {oldLines[i]}</div>);
-        }
-      }
-      return elements;
-    } catch (e) {
-      console.error('renderDiffViewer error', e);
-      return [<div key="diff-error" className={`${t.muted} px-2 py-2 font-mono text-xs`}>Diff render error</div>];
-    }
-  };
-
   const renderTriangleRIcon = () => (
       <div className="relative flex items-center justify-center w-6 h-6">
         <Code2 size={16} />
@@ -4105,32 +3316,6 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
   };
 
   // --- FIXED EDITOR PANEL (No more mouse focus loss) ---
-  const renderEditorPanel = (className = '', onClose = null) => (
-      <PineEditorPanel
-        className={className}
-        onClose={onClose}
-        darkMode={darkMode}
-        themeConfig={t}
-        scripts={scripts}
-        setScripts={setScripts}
-        activeScript={activeScript}
-        setActiveScript={setActiveScript}
-        editorContent={editorContent}
-        setEditorContent={setEditorContent}
-        compileStatus={compileStatus}
-        setCompileStatus={setCompileStatus}
-        isCompiling={isCompiling}
-        setIsCompiling={setIsCompiling}
-        compilerLogs={compilerLogs}
-        setCompilerLogs={setCompilerLogs}
-        monaco={monaco}
-        showAIScriptAssistant={showAIScriptAssistant}
-        setShowAIScriptAssistant={setShowAIScriptAssistant}
-        showStrategyTester={showStrategyTester}
-        setShowStrategyTester={setShowStrategyTester}
-      />
-    );
-  
   const filteredCoins = useMemo(() => {
     const q = coinInput.toUpperCase().trim();
     let list = q

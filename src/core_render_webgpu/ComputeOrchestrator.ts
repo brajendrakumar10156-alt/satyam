@@ -138,7 +138,11 @@ export class ComputeOrchestrator {
                res = wasmFunc.call(wasmMath, prices, period);
              }
              resolve({ source: 'CPU_WASM', data: res });
-           } catch(e) {}
+           } catch(e) {
+             resolve({ source: 'FAILED', data: null });
+           }
+        } else {
+           resolve({ source: 'FAILED', data: null });
         }
       }, this.workStealingTimeoutMs);
     });
@@ -147,6 +151,7 @@ export class ComputeOrchestrator {
       promises.push(wasmFallbackPromise);
       try {
         const winner = await Promise.race(promises);
+        if (winner.source === 'FAILED') throw new Error("Hardware timeout, no WASM fallback");
         console.log(`[Scheduler] ${taskName} executed by ${winner.source}`);
         return winner.data;
       } catch (e) {

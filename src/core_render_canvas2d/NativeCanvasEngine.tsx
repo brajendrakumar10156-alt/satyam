@@ -128,6 +128,28 @@ const NativeCanvasEngine = React.forwardRef(({
         const price = maxPrice - (i / 5) * adjustedRange;
         ctx.fillText(price.toFixed(2), chartWidth + 5, y);
     }
+
+    // Phase 1: Native Viewport Synchronization
+    if (onVisibleRangeChange) {
+        // Debounce or memoize the callback to prevent infinite re-renders
+        const viewportState = {
+            startIndex,
+            endIndex,
+            minPrice,
+            maxPrice,
+            candleWidth,
+            width: chartWidth,
+            height: chartHeight
+        };
+        const stateStr = JSON.stringify(viewportState);
+        if ((canvasRef.current as any)._lastViewportState !== stateStr) {
+            (canvasRef.current as any)._lastViewportState = stateStr;
+            // Use setTimeout to avoid synchronous React state updates during render phase
+            setTimeout(() => {
+                onVisibleRangeChange(viewportState);
+            }, 0);
+        }
+    }
   };
 
   useEffect(() => {
