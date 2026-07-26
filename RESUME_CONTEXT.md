@@ -1,4 +1,4 @@
----
+﻿---
 ## Agent Session - 26-Jul-2026 (04:10 IST to 04:35 IST)
 
 ### Agent Identity
@@ -77,6 +77,8 @@ pm run build passed) and is fully functional. The only remaining large component
 - **Feature Restoration:** The user requested restoring the lightweight-charts design for Canvas 2D. Replaced the custom <NativeCanvasEngine> component in WebContainer.tsx with a standard <div ref={chartRef}> to allow the existing createChart (lightweight-charts) logic to successfully mount and render in the Canvas 2D fallback mode.
 
 **Start Here (Next Agent):**
-- The UI duplicate code cleanup in WebContainer.tsx has been largely completed (file reduced from 8000+ to ~4900 lines).
-- The Canvas 2D mode is back to using lightweight-charts.
-- Verify the WebGL and WebGPU integrations as requested in server_roadmap.md.
+- **CRITICAL MISSION:** The user wants you to extract RightSidebar (starting at line 4358 in WebContainer.tsx) and RightToolbar (starting at line 4410) into their respective files in src/components/layout/.
+- **RULE:** DO NOT write or edit code blindly. Read implementation_plan.md in the artifacts folder first. It contains the exact line numbers and the strategy to avoid ReferenceError crashes.
+- Pass all necessary state variables as props to prevent the app from crashing.
+- After extraction, ensure the app still renders correctly.
+
