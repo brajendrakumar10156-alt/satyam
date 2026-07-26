@@ -18,6 +18,9 @@ export default defineConfig({
   ],
   server: {
     port: 5173,
+    watch: {
+      ignored: ['**/src/chart_engine_rust/target/**', '**/src/core_math_rust/target/**']
+    },
     proxy: {
       // Rust Collector (primary data source)
       '/rust-api': {

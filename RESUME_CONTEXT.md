@@ -68,3 +68,15 @@ pm run build passed) and is fully functional. The only remaining large component
 - **Action:** Extracted `PineEditorPanel` from `WebContainer.tsx` using `ts-morph` AST parser.
 - **Result:** Successfully split ~150 lines into `PineEditorPanel.tsx` with proper TypeScript typing without breaking the build (unlike string regex/substring attempts).
 - **Next Steps:** Proceed with extracting `BottomPanel` using the same `ts-morph` strategy or tackle the user's question regarding `Canvas 2D, WebGPU, NPU, WASM` best languages.
+## Agent Conversation & Action History
+**Date:** 2026-07-26 16:10 IST
+**Agent:** Antigravity (Current Session)
+**Actions Taken:**
+- **Performance Fix:** Identified severe lag on Vite dev server startup. Discovered that Vite was watching Rust 	arget folders inside src. Modified ite.config.ts to explicitly ignore src/chart_engine_rust/target and src/core_math_rust/target, restoring 1-second startup times.
+- **Bug Fix:** Fixed a ReferenceError: onVisibleRangeChange is not defined in NativeCanvasEngine.tsx by destructuring the missing prop from the component definition.
+- **Feature Restoration:** The user requested restoring the lightweight-charts design for Canvas 2D. Replaced the custom <NativeCanvasEngine> component in WebContainer.tsx with a standard <div ref={chartRef}> to allow the existing createChart (lightweight-charts) logic to successfully mount and render in the Canvas 2D fallback mode.
+
+**Start Here (Next Agent):**
+- The UI duplicate code cleanup in WebContainer.tsx has been largely completed (file reduced from 8000+ to ~4900 lines).
+- The Canvas 2D mode is back to using lightweight-charts.
+- Verify the WebGL and WebGPU integrations as requested in server_roadmap.md.

@@ -1,0 +1,2281 @@
+  return (
+    <>
+      {stealthMode && (
+        <div className="fixed inset-0 flex flex-col pointer-events-none z-[9999] bg-transparent">
+        <div className="mt-4 ml-4 bg-[#0F1117]/95 backdrop-blur-xl border border-[rgba(255,255,255,0.08)] rounded-2xl p-4 flex flex-col pointer-events-auto shadow-[0_8px_32px_rgba(0,0,0,0.7)] w-52 animate-fade-in group hover:border-[rgba(41,98,255,0.4)] transition-all duration-300">
+            <div className="flex justify-between items-center mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-white font-black text-[13px] uppercase tracking-wider">{selectedCoin}</span>
+              </div>
+              <button onClick={() => { setStealthMode(false); document.body.style.background = ''; }} className="text-gray-500 hover:text-white transition-colors p-1 rounded hover:bg-[#2a2e39]" title="Exit Focus Mode">
+                <X size={14}/>
+              </button>
+            </div>
+            <div className={`text-[28px] font-mono font-black tracking-tight ${watchlistTickers[selectedCoin]?.change >= 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
+              ${livePrice ? formatNumber(livePrice, 2) : '---'}
+            </div>
+            <div className={`text-[12px] font-bold mt-1 ${watchlistTickers[selectedCoin]?.change >= 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
+              {watchlistTickers[selectedCoin]?.change >= 0 ? '+' : ''}{watchlistTickers[selectedCoin]?.change?.toFixed(2) || '0.00'}% <span className="text-gray-500 text-[10px] font-medium ml-1">24h</span>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className={`flex flex-col h-[100dvh] w-full ${t.bg} ${t.text} font-sans text-xs select-none overflow-hidden relative transition-all duration-300 safe-top`} style={{ opacity: stealthMode ? 0 : 1, pointerEvents: stealthMode ? 'none' : 'auto' }}>
+
+      <style>{`
+        a[href*="tradingview.com"], #tv-attr-logo, [class*="watermark-logo"], [class*="tv-logo"] { 
+          display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; width: 0 !important; height: 0 !important; 
+        }
+        
+        .dark-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .dark-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .dark-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
+        .dark-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
+      `}</style>
+
+      {activeModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end md:items-center justify-center backdrop-blur-sm transition-opacity p-0 md:p-4">
+          <div className={`${t.bg} rounded-t-2xl md:rounded-xl shadow-2xl w-full md:w-${activeModal.type === 'indicators_search' ? '[760px]' : '[440px]'} max-h-[85vh] overflow-hidden border ${t.border}`}>
+            <div className={`h-12 border-b ${t.border} flex items-center justify-between px-4 ${t.sec}`}>
+              <h3 className={`font-bold ${t.text} text-[14px]`}>{activeModal.title || 'Panel'}</h3>
+              <button onClick={closeModal} className={`p-2 ${t.muted} ${t.hover} rounded-md`}><X size={16} /></button>
+            </div>
+            <div className="p-4 overflow-y-auto dark-scrollbar max-h-[70vh]">
+              {activeModal.type === 'indicators_search' ? (
+                <IndicatorSearchModal
+                  indicatorSearchQuery={indicatorSearchQuery}
+                  setIndicatorSearchQuery={setIndicatorSearchQuery}
+                  indicatorCategorySubTab={indicatorCategorySubTab}
+                  setIndicatorCategorySubTab={setIndicatorCategorySubTab}
+                  selectedIndicatorTab={selectedIndicatorTab}
+                  setSelectedIndicatorTab={setSelectedIndicatorTab}
+                  visualIndicators={visualIndicators}
+                  setVisualIndicators={setVisualIndicators}
+                  showToast={showToast}
+                  injectIndicator={injectIndicator}
+                  closeModal={closeModal}
+                  t={t}
+                />
+              ) : activeModal.type === 'alert_creation' ? (
+                <AlertSettingsModal
+                  alertCondition={alertCondition}
+                  setAlertCondition={setAlertCondition}
+                  alertValue={alertValue}
+                  setAlertValue={setAlertValue}
+                  selectedCoin={selectedCoin}
+                  livePrice={livePrice}
+                  formatUSD={formatUSD}
+                  darkMode={darkMode}
+                  closeModal={closeModal}
+                  t={t}
+                />
+              ) : activeModal.type === 'indicator_settings' ? (
+                <IndicatorParamsModal
+                  editingModalTab={editingModalTab}
+                  setEditingModalTab={setEditingModalTab}
+                  activeModal={activeModal}
+                  tempIndicatorParams={tempIndicatorParams}
+                  setTempIndicatorParams={setTempIndicatorParams}
+                  tempIndicatorColor={tempIndicatorColor}
+                  setTempIndicatorColor={setTempIndicatorColor}
+                  tempIndicatorWidth={tempIndicatorWidth}
+                  setTempIndicatorWidth={setTempIndicatorWidth}
+                  darkMode={darkMode}
+                  closeModal={closeModal}
+                  setVisualIndicators={setVisualIndicators}
+                  showToast={showToast}
+                />
+              ) : activeModal.type === 'compare_symbol' ? (
+                <div className="space-y-4 text-[12px] text-white">
+                  <div>
+                    <label className="block text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">Search Compare Coin</label>
+                    <input 
+                      type="text"
+                      placeholder="e.g. ETH, SOL, BTC..."
+                      className={`w-full ${darkMode ? 'bg-[#1e222d] border-[#2a2e39] text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} border rounded px-3 py-2 font-mono text-[12px] outline-none focus:border-blue-500 uppercase`}
+                      onChange={(e) => {
+                        const q = e.target.value.toUpperCase();
+                        setActiveModal(prev => ({ ...prev, query: q }));
+                      }}
+                      value={activeModal.query || ''}
+                    />
+                  </div>
+                  
+                  <div className="max-h-48 overflow-y-auto dark-scrollbar space-y-1 pr-1">
+                    {(binanceCoins && binanceCoins.length > 0 ? binanceCoins : watchlist)
+                      .filter(coin => coin !== selectedCoin && (!activeModal.query || coin.includes(activeModal.query)))
+                      .slice(0, 50)
+                      .map(coin => (
+                        <button
+                          key={coin}
+                          onClick={() => {
+                            loadCompareCandles(coin);
+                            closeModal();
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-colors text-white hover:bg-white/5 font-bold"
+                        >
+                          <img 
+                            src={coinIconUrl(coin)}
+                            data-tier="0"
+                            onError={(e) => handleCoinIconError(e, coin)}
+                            alt={coin}
+                            className="w-4 h-4 rounded-full object-cover bg-white shrink-0"
+                          />
+                          <span>{coin}</span>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              ) : activeModal.type === 'settings' ? (
+                <div className="space-y-3 font-semibold">
+                  <label className={`block text-[12px] ${t.muted}`}>Default AI</label>
+                  <select value={aiProvider} onChange={(e) => setAiProvider(e.target.value)} className={`w-full rounded border ${t.border} ${t.bg} ${t.text} p-2 text-[12px] font-bold outline-none`}>
+                    <option value="groq">Groq</option>
+                    <option value="gemini">Gemini</option>
+                  </select>
+                  <button onClick={clearAllDrawings} className={`w-full py-2 rounded border ${t.border} ${t.text} text-[12px] font-extrabold hover:bg-gray-800`}>Clear all drawings</button>
+                  <button onClick={() => { setDrawings([]); setReplayMode(false); showToast('Chart reset'); closeModal(); }} className={`w-full py-2 rounded bg-red-500/10 text-red-400 text-[12px] font-extrabold hover:bg-red-500/25`}>Reset chart tools</button>
+                </div>
+              ) : (
+                <>
+                  {activeModal.desc && <p className={`${t.text} text-[13px] mb-4`}>{activeModal.desc}</p>}
+                  <div className="flex justify-end gap-2">
+                    <button onClick={closeModal} className={`px-4 py-2 rounded-lg ${t.text} border ${t.border} font-semibold`}>Close</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toastMsg && (
+        <div className={`fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-50 ${darkMode ? 'bg-gray-800' : 'bg-gray-900'} text-white px-5 py-3 rounded-full shadow-2xl flex items-center gap-2 font-medium text-[13px] border ${t.border} max-w-[90vw] text-center`}>
+          {toastMsg}
+        </div>
+      )}
+
+      {selectedDrawingId !== null && floatingToolbarCoords && (drawings.find(d => d.id === selectedDrawingId) || {}) && (() => {
+        let px = floatingToolbarCoords.x;
+        let py = floatingToolbarCoords.y;
+        if (floatingToolbarCoords.time && chartRef.current) {
+          const pt = getPixel(floatingToolbarCoords.time, floatingToolbarCoords.price);
+          const rect = chartRef.current.getBoundingClientRect();
+          if (pt) {
+            px = Math.max(16, Math.min(window.innerWidth - 320, rect.left + pt.x + floatingToolbarCoords.offsetX));
+            py = Math.max(80, rect.top + pt.y + floatingToolbarCoords.offsetY);
+          }
+        }
+        return (
+        <div 
+          className={`fixed z-50 flex items-center gap-2 border rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] p-1.5 transition-all ${darkMode ? 'bg-[#0F1117]/98 backdrop-blur-xl border-[rgba(255,255,255,0.09)]' : 'bg-white/98 backdrop-blur-md border-[#e0e3eb] shadow-xl'}`}
+          style={{ 
+            left: `${px}px`, 
+            top: `${py}px`,
+          }}
+        >
+          {/* Quick Color Picker */}
+          <div className="flex items-center gap-1 border-r border-[#2a2e39] pr-1.5">
+            {['#7C5CFF', '#2962ff', '#089981', '#f44336', '#ff9800', '#ffd700', '#ab47bc', '#ffffff'].map(c => (
+              <button 
+                key={c}
+                onClick={() => {
+                  setDrawings(prev => prev.map(d => d.id === selectedDrawingId ? { ...d, color: c } : d));
+                  requestDraw();
+                }}
+                className="w-4 h-4 rounded-full border border-black/30 cursor-pointer hover:scale-110 transition-transform"
+                style={{ backgroundColor: c, outline: (drawings.find(d => d.id === selectedDrawingId) || {}).color === c ? '1.5px solid #2962ff' : 'none' }}
+              />
+            ))}
+          </div>
+
+          {/* Line Width */}
+          <select 
+            value={(drawings.find(d => d.id === selectedDrawingId) || {}).lineWidth || 2}
+            onChange={(e) => {
+              const val = parseInt(e.target.value);
+              setDrawings(prev => prev.map(d => d.id === selectedDrawingId ? { ...d, lineWidth: val } : d));
+              requestDraw();
+            }}
+            className="bg-transparent text-white text-[10px] font-bold outline-none border border-[#2a2e39] rounded px-1 py-0.5 cursor-pointer"
+          >
+            <option value="1">1px</option>
+            <option value="2">2px</option>
+            <option value="3">3px</option>
+            <option value="4">4px</option>
+          </select>
+
+          {/* Line Style */}
+          <select 
+            value={(drawings.find(d => d.id === selectedDrawingId) || {}).lineStyle || 'solid'}
+            onChange={(e) => {
+              const val = e.target.value;
+              setDrawings(prev => prev.map(d => d.id === selectedDrawingId ? { ...d, lineStyle: val } : d));
+              requestDraw();
+            }}
+            className="bg-transparent text-white text-[10px] font-bold outline-none border border-[#2a2e39] rounded px-1 py-0.5 cursor-pointer"
+          >
+            <option value="solid">Solid</option>
+            <option value="dashed">Dashed</option>
+            <option value="dotted">Dotted</option>
+          </select>
+
+          {/* Lock / Unlock Toggle */}
+          <button
+            onClick={() => {
+              const isLocked = !(drawings.find(d => d.id === selectedDrawingId) || {}).locked;
+              setDrawings(prev => prev.map(d => d.id === selectedDrawingId ? { ...d, locked: isLocked } : d));
+              showToast(isLocked ? '🔒 Drawing Locked' : '🔓 Drawing Unlocked');
+              if (isLocked) {
+                setSelectedDrawingId(null);
+                setFloatingToolbarCoords(null);
+              }
+              requestDraw();
+            }}
+            className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-800 transition-colors cursor-pointer"
+            title={(drawings.find(d => d.id === selectedDrawingId) || {}).locked ? "Unlock Drawing" : "Lock Drawing"}
+          >
+            {(drawings.find(d => d.id === selectedDrawingId) || {}).locked ? <Lock size={12} className="text-red-400" /> : <Unlock size={12} />}
+          </button>
+
+          {/* Delete Button */}
+          <button
+            onClick={() => {
+              setDrawings(prev => prev.filter(d => d.id !== selectedDrawingId));
+              setSelectedDrawingId(null);
+              setFloatingToolbarCoords(null);
+              showToast('🗑️ Drawing deleted');
+              requestDraw();
+            }}
+            className="p-1 rounded text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+            title="Delete Drawing"
+          >
+            <Trash2 size={12} />
+          </button>
+
+          {/* Close Toolbar */}
+          <button
+            onClick={() => {
+              setSelectedDrawingId(null);
+              setFloatingToolbarCoords(null);
+              requestDraw();
+            }}
+            className="p-1 rounded text-gray-500 hover:text-white hover:bg-gray-800 transition-colors cursor-pointer ml-1"
+          >
+            <X size={12} />
+          </button>
+        </div>
+        );
+      })()}
+
+      {isMobile && mobileMenuOpen && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setMobileMenuOpen(false)} />
+          <div className={`fixed top-0 right-0 z-50 h-full w-[min(280px,85vw)] ${t.bg} border-l ${t.border} shadow-2xl flex flex-col safe-top safe-bottom`}>
+            <div className={`h-12 border-b ${t.border} flex items-center justify-between px-4 ${t.sec}`}>
+              <span className={`font-bold ${t.text}`}>Menu</span>
+              <button onClick={() => setMobileMenuOpen(false)} className={`p-2 ${t.muted} ${t.hover} rounded-md`}><X size={18} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto dark-scrollbar p-3 space-y-1">
+              {[
+                { label: 'AI Assistant', icon: Sparkles, action: () => { openEditor(editorMode, 'ai'); setMobileMenuOpen(false); } },
+                { label: 'Pine Editor', icon: Code2, action: () => { openEditor('pine', 'code'); setMobileMenuOpen(false); } },
+                { label: 'Python Editor', icon: FileCode, action: () => { openEditor('python', 'code'); setMobileMenuOpen(false); } },
+                { label: 'Indicators', icon: Layers, action: () => { openModal('Indicators, metrics, and strategies', '', 'indicators_search'); setMobileMenuOpen(false); } },
+                { label: 'Alerts', icon: Bell, action: () => { openModal('Create alert on', '', 'alert_creation'); setMobileMenuOpen(false); } },
+                { label: replayMode ? 'Exit Replay' : 'Replay', icon: History, action: () => { setReplayMode(!replayMode); if (replayMode) showToast('▶️ Replay off'); setMobileMenuOpen(false); } },
+                { label: 'Screenshot', icon: Camera, action: () => { takeRealScreenshot(); setMobileMenuOpen(false); } },
+                { label: 'Fullscreen', icon: Maximize2, action: () => { toggleFullscreen(); setMobileMenuOpen(false); } },
+                { label: 'Publish Script', icon: Upload, action: () => { publishStrategy(); setMobileMenuOpen(false); } },
+                  { label: 'Settings', icon: Settings, action: () => { openModal('Settings', '', 'settings'); setMobileMenuOpen(false); } },
+              ].map(({ label, icon: Icon, action }) => (
+                <button key={label} onClick={action} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${t.text} ${t.hover} text-[13px] font-medium transition-colors`}>
+                  <Icon size={18} className={label === 'Alert' ? 'text-amber-500' : label === 'Indicators' ? 'text-[#7C5CFF]' : ''} />
+                  {label}
+                </button>
+              ))}
+              <div className={`my-2 h-px ${t.border}`} />
+              <button onClick={() => { setDarkMode(!darkMode); setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${t.text} ${t.hover} text-[13px] font-medium transition-colors`}>
+                {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+                {darkMode ? 'Light Mode' : 'Dark Mode'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {isEditorOpen && (
+        <div className={`md:hidden fixed inset-0 z-40 ${t.bg} flex flex-col safe-top safe-bottom`}>
+          {renderEditorPanel('', () => setIsEditorOpen(false))}
+        </div>
+      )}
+
+            <TopNavbar 
+              onLaunchDesktopApp={() => {
+                setRenderEngine('app');
+                setToastMsg('🖥️ Launching Quanta Windows Desktop Native App (app_src)...');
+                setTimeout(() => setToastMsg(''), 3000);
+              }}
+              isMobile={isMobile}
+              focusMode={focusMode}
+              darkMode={darkMode}
+              t={t}
+              selectedCoin={selectedCoin}
+              livePrice={livePrice}
+              watchlistTickers={watchlistTickers}
+              isDropdownOpen={isDropdownOpen}
+              setIsDropdownOpen={setIsDropdownOpen}
+              chartInterval={chartInterval}
+              setChartInterval={setChartInterval}
+              chartStyle={chartStyle}
+              setChartStyle={setChartStyle}
+              onBackToCoins={onBackToCoins}
+              selectedExchange={selectedExchange}
+              handleExchangeChange={handleExchangeChange}
+              EXCHANGE_LIST={EXCHANGE_LIST}
+              executeSearch={executeSearch}
+              coinInput={coinInput}
+              setCoinInput={setCoinInput}
+              openModal={openModal}
+              coinsLoading={coinsLoading}
+              filteredCoins={filteredCoins}
+              getQuoteAsset={getQuoteAsset}
+              fearGreedIndex={fearGreedIndex}
+              marketStatus={marketStatus}
+              isTimeframeDropdownOpen={isTimeframeDropdownOpen}
+              setIsTimeframeDropdownOpen={setIsTimeframeDropdownOpen}
+              isStyleDropdownOpen={isStyleDropdownOpen}
+              setIsStyleDropdownOpen={setIsStyleDropdownOpen}
+              volumeProfile={volumeProfile}
+              setVolumeProfile={setVolumeProfile}
+              isActionsDropdownOpen={isActionsDropdownOpen}
+              setIsActionsDropdownOpen={setIsActionsDropdownOpen}
+              chartLayout={chartLayout}
+              setChartLayout={setChartLayout}
+              isLayoutMenuOpen={isLayoutMenuOpen}
+              setIsLayoutMenuOpen={setIsLayoutMenuOpen}
+              isAutosave={isAutosave}
+              setIsAutosave={setIsAutosave}
+              isShareLayout={isShareLayout}
+              setIsShareLayout={setIsShareLayout}
+              layoutName={layoutName}
+              tradingTab={tradingTab}
+              setTradingTab={setTradingTab}
+              lowerBoxState={lowerBoxState}
+              setLowerBoxState={setLowerBoxState}
+              takeRealScreenshot={takeRealScreenshot}
+              publishStrategy={publishStrategy}
+              stealthMode={stealthMode}
+              setStealthMode={setStealthMode}
+              activeFlyout={activeFlyout}
+              setActiveFlyout={setActiveFlyout}
+              timezone={timezone}
+              setTimezone={setTimezone}
+              allCandles={allCandles}
+              timeframeButtons={timeframeButtons}
+              customTimeframeInput={customTimeframeInput}
+              setCustomTimeframeInput={setCustomTimeframeInput}
+              applyCustomTimeframe={applyCustomTimeframe}
+              loadDeepHistory={loadDeepHistory}
+              showToast={showToast}
+              getFngColor={getFngColor}
+              getExchangeMeta={getExchangeMeta}
+              setMobileMenuOpen={setMobileMenuOpen}
+              formatNumber={formatNumber}
+              coinIconUrl={coinIconUrl}
+              handleCoinIconError={handleCoinIconError}
+              setRightSidebar={setRightSidebar}
+              toggleFullscreen={toggleFullscreen}
+              priceColor={priceColor}
+              replayMode={replayMode}
+              setReplayMode={setReplayMode}
+              fullCandlesRef={fullCandlesRef}
+              allCandlesRef={allCandlesRef}
+              setAllCandles={setAllCandles}
+              requestDraw={requestDraw}
+              setFocusMode={setFocusMode}
+              setDarkMode={setDarkMode}
+              onRefreshChart={() => {
+                fetchGenerationRef.current = (fetchGenerationRef.current || 0) + 1;
+                allCandlesRef.current = [];
+                setAllCandles([]);
+                setMarketStatus("Loading");
+              }}
+            />
+      {/* MOBILE HORIZONTAL TIMEFRAME SCROLLER (Hidden in new mobile design) */}
+        {!isMobile && (
+          <div className={`${focusMode ? 'hidden' : 'md:hidden flex'} mobile-scroll-x items-center gap-0.5 px-2 py-1 border-b ${t.border} ${t.bg} overflow-x-auto shrink-0`}>
+          {timeframeButtons.map(tf => (
+            <button key={tf.label} onClick={() => { setChartInterval(tf.val); showToast(`Timeframe: ${tf.label}`); }} className={`px-3 py-1.5 font-semibold rounded-full text-[11px] whitespace-nowrap transition-colors ${chartInterval === tf.val ? 'bg-[#7C5CFF] text-white' : `${t.muted} ${t.sec}`}`}>{tf.label}</button>
+          ))}
+          <input
+            value={customTimeframeInput}
+            onChange={(e) => setCustomTimeframeInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') applyCustomTimeframe(); }}
+            placeholder="e.g 45m"
+            className={`w-[80px] shrink-0 px-2 py-1.5 rounded-full text-[11px] border ${t.border} ${t.bg} ${t.text} outline-none`}
+          />
+          <button onClick={applyCustomTimeframe} className={`shrink-0 px-2.5 py-1.5 rounded-full text-[11px] font-semibold ${t.sec} ${t.text}`}>Set</button>
+          <button onClick={loadDeepHistory} className={`shrink-0 px-2.5 py-1.5 rounded-full text-[11px] font-semibold ${t.muted} ${t.sec}`}>6Y</button>
+        </div>
+        )}
+
+        <div className="flex flex-1 min-h-0 min-w-0 flex-col md:flex-row overflow-hidden">
+          <div className={`flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden md:border-r ${t.border}`}>
+            <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
+          <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
+            {!isMobile && !focusMode && <LeftToolbar 
+  horizontal={false} t={t} darkMode={darkMode} activeTool={activeTool} 
+  setActiveTool={setActiveTool} showToast={showToast} setDrawings={setDrawings}
+  selectedTools={selectedTools} setSelectedTools={setSelectedTools} activeFlyout={activeFlyout}
+  setActiveFlyout={setActiveFlyout} setIsCursorStudioOpen={setIsCursorStudioOpen} 
+  setIsTrendStudioOpen={setIsTrendStudioOpen} chartInstance={chartInstance}
+  isMagnetEnabled={magnetMode !== 'off'} setIsMagnetEnabled={() => setMagnetMode(magnetMode === 'off' ? 'normal' : 'off')}
+  isDrawingLocked={lockDrawings} setIsDrawingLocked={setLockDrawings}
+  isDrawingHidden={hideDrawings} setIsDrawingHidden={setHideDrawings}
+  renderEngine={renderEngine} handleEngineToggle={handleEngineToggle}
+  keepDrawing={keepDrawing} setKeepDrawing={setKeepDrawing}
+/>}
+            {!isMobile && !focusMode && <LeftSidePanel />}
+            <div className="flex-1 flex flex-col min-h-0 min-w-0 relative">
+              {renderOHLCHeader()}
+              {/* Active Indicators List Overlay */}
+              {/* Floating Exit Focus Mode Button */}
+              {focusMode && (
+                <button 
+                  onClick={() => setFocusMode(false)}
+                  className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 bg-[#2962ff] hover:bg-blue-600 text-white font-bold rounded-full shadow-2xl flex items-center gap-2 transition-all opacity-80 hover:opacity-100"
+                >
+                  <Minimize2 size={16} /> Exit Focus Mode
+                </button>
+              )}
+              {/* Active Indicators List Overlay (TradingView style - transparent & minimal) */}
+              <div className="absolute top-[32px] left-2.5 z-20 flex flex-col gap-1.5 pointer-events-auto max-w-[400px] select-none drop-shadow-md">
+                <div className={`flex items-center gap-1 px-1 py-0.5 text-[10px] ${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-black'} transition-colors cursor-pointer w-fit`} onClick={() => setIsLegendExpanded(!isLegendExpanded)}>
+                  {isLegendExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  <span className="tracking-wider uppercase font-black">Indicators</span>
+                </div>
+                
+                {isLegendExpanded && visualIndicators.filter(ind => ind.visible).map(ind => (
+                  <div key={ind.id} className={`group flex items-center gap-1.5 text-[11px] font-bold ${darkMode ? 'text-gray-400/80 hover:text-white' : 'text-gray-500 hover:text-black'} px-1 py-0.5 transition-all`}>
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: ind.color }} />
+                    <span style={{ color: ind.color }} className="font-extrabold truncate">
+                      {ind.name}(
+                      {ind.params.period !== undefined ? ind.params.period : ''}
+                      {ind.params.stdDev !== undefined ? `, ${ind.params.stdDev}` : ''}
+                      {ind.params.fastPeriod !== undefined ? `${ind.params.fastPeriod}, ${ind.params.slowPeriod}, ${ind.params.signalPeriod}` : ''}
+                      )
+                    </span>
+                    
+                    {/* Live indicator values */}
+                    {renderIndValues(ind)}
+                    
+                    {/* Controls (visible on hover) */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 ml-1.5 shrink-0">
+                      <button 
+                        onClick={() => setVisualIndicators(prev => prev.map(p => p.id === ind.id ? { ...p, visible: !p.visible } : p))} 
+                        className="text-gray-400 hover:text-white p-0.5"
+                        title={ind.visible ? 'Hide' : 'Show'}
+                      >
+                        <Eye size={10} />
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setTempIndicatorParams({ ...ind.params });
+                          setTempIndicatorColor(ind.color || '#7C5CFF');
+                          setTempIndicatorWidth(ind.lineWidth || 2);
+                          setEditingModalTab('inputs');
+                          setActiveModal({
+                            title: `${ind.name} Settings`,
+                            type: 'indicator_settings',
+                            indicator: ind
+                          });
+                        }}
+                        className="p-0.5 text-gray-400 hover:text-blue-400"
+                        title="Settings"
+                      >
+                        <Settings size={10} />
+                      </button>
+                      <button 
+                        onClick={() => setVisualIndicators(prev => prev.map(p => p.id === ind.id ? { ...p, visible: false } : p))}
+                        className="text-gray-400 hover:text-red-400 p-0.5"
+                        title="Remove"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                
+                {isLegendExpanded && compareSymbol && (
+                  <div className="group flex items-center justify-between gap-1.5 text-[11px] font-bold text-[#ea39ff] bg-[#131722]/60 px-2 py-1 rounded border border-[#ea39ff]/20">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#ea39ff] shrink-0" />
+                      <span className="font-extrabold truncate">Compare: {compareSymbol}</span>
+                    </div>
+                    <button 
+                      onClick={clearComparison}
+                      className="text-gray-400 hover:text-red-400 p-0.5"
+                      title="Remove comparison"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+
+
+
+
+
+
+              <div className="flex-1 flex flex-col min-h-0 min-w-0">
+                {/* Main Price Chart Pane */}
+                <div 
+                  className={`min-w-0 relative transition-all duration-300 ${
+                    visualIndicators.filter(ind => ind.visible && INDICATOR_REGISTRY[ind.type]?.kind === 'subchart').length > 0 ? 'h-[55%]' : 'flex-1'
+                  }`}
+                style={{ minHeight: '120px' }}
+                >
+                  {chartLayout === '1' ? (
+                    <div 
+                      ref={chartContainerRef}
+                      className="w-full h-full relative"
+                      onPointerDown={handlePointerDown}
+                      onPointerMove={handlePointerMove}
+                      onPointerUp={handlePointerUp}
+                      onPointerLeave={handlePointerUp}
+                      style={{ 
+                        touchAction: activeTool ? 'none' : 'auto',
+                        cursor: (activeTool && ['dot', 'demonstration', 'magic'].includes(activeTool)) ? 'none' : 'crosshair'
+                      }}
+                    >
+                      {renderEngine === 'webgl' ? (
+                        <WebGLErrorBoundary onError={(error) => {
+                          setRenderEngine('canvas2d');
+                          showToast('WebGL Error: ' + error.message);
+                        }}>
+                          
+                          <WebGLChartEngine
+                            key={`${renderEngine}-${selectedCoin}-${chartInterval}`}
+                            ref={webGLEngineRef}
+                            isHoveringDrawing={isHoveringDrawing}
+                            candles={allCandles}
+                            predictedCandle={predictedCandle}
+                            drawings={drawings}
+                            brushPath={brushPath}
+                            tempShape={tempShape}
+                            drawStart={drawStart}
+                            activeTool={activeTool}
+                            visualIndicators={visualIndicators}
+                            indicatorDataMap={indicatorDataMapRef.current}
+                            darkMode={darkMode}
+                            chartStyle={chartStyle}
+                            chartInterval={chartInterval}
+                            selectedCoin={selectedCoin}
+                            volumeProfile={volumeProfile}
+                            priceScaleMode={priceScaleMode}
+                            timezoneOffset={timezoneOffset}
+                            autoScale={autoScale}
+                            invertScale={invertScale}
+                            hideDrawings={hideDrawings}
+                            cursorSettings={cursorSettings}
+                            hoverCoords={hoverCoords}
+                            selectedDrawingId={selectedDrawingId}
+                            initialVisibleRange={viewportSnapshotRef.current}
+                            onCrosshairMove={(x, y) => { /* Optional crosshair sync */ }}
+                            onVisibleRangeChange={(range) => {
+                              if (drawingLayerRef.current) drawingLayerRef.current.draw();
+                              if (range?.from && range?.to) {
+                                viewportSnapshotRef.current = { visibleRange: range };
+                                if (saveRangeTimeoutRef.current) clearTimeout(saveRangeTimeoutRef.current);
+                                saveRangeTimeoutRef.current = setTimeout(() => {
+                                  localStorage.setItem(visibleRangeStorageKey, JSON.stringify(range));
+                                }, 300);
+
+                                if (allCandles.length > 0) {
+                                  const lastTime = allCandles[allCandles.length - 1].time;
+                                  setIsAtLiveEdge(range.to >= lastTime - 100);
+
+                                  const avgTime = (allCandles[allCandles.length - 1].time - allCandles[0].time) / allCandles.length;
+                                  if (range.from < allCandles[0].time + (avgTime * 100)) {
+                                    loadOlderData();
+                                  }
+                                }
+                              }
+                            }}
+                            onChartReady={() => {
+                              // Preserved viewport
+                            }}
+                          />
+                        
+                        </WebGLErrorBoundary>
+                      ) : renderEngine === 'webgpu' ? (
+                        
+                          <WebGPUChartEngine
+                            key={`${renderEngine}-${selectedCoin}-${chartInterval}`}
+                            ref={webGLEngineRef}
+                            candles={allCandles}
+                            darkMode={darkMode}
+                            chartStyle={chartStyle}
+                            autoScale={autoScale}
+                            invertScale={invertScale}
+                            priceScaleMode={priceScaleMode}
+                            timezoneOffset={timezoneOffset}
+                            activeTool={activeTool}
+                            isHoveringDrawing={isHoveringDrawing}
+                            drawings={drawings}
+                            tempShape={tempShape}
+                            drawStart={drawStart}
+                            visualIndicators={visualIndicators}
+                            indicatorDataMap={indicatorDataMapRef.current}
+                            volumeProfile={volumeProfile}
+                            hoverCoords={hoverCoords}
+                            selectedDrawingId={selectedDrawingId}
+                            hideDrawings={hideDrawings}
+                            cursorSettings={cursorSettings}
+                            strategySignals={strategySignals}
+                            showHeatmap={showHeatmap}
+                            heatmapClusters={heatmapClusters}
+                            initialVisibleRange={viewportSnapshotRef.current}
+                            onFallback={() => {
+                              console.warn('[App] WebGPU Engine failed, gracefully falling back to WebGL.');
+                              setRenderEngine('webgl');
+                            }}
+                            onVisibleRangeChange={(range) => {
+                              if (drawingLayerRef.current) drawingLayerRef.current.draw();
+                              if (range?.from && range?.to) {
+                                viewportSnapshotRef.current = { visibleRange: range };
+                                if (saveRangeTimeoutRef.current) clearTimeout(saveRangeTimeoutRef.current);
+                                saveRangeTimeoutRef.current = setTimeout(() => {
+                                  localStorage.setItem(visibleRangeStorageKey, JSON.stringify(range));
+                                }, 300);
+
+                                if (allCandles.length > 0) {
+                                  const lastTime = allCandles[allCandles.length - 1].time;
+                                  setIsAtLiveEdge(range.to >= lastTime - 100);
+
+                                  const avgTime = (allCandles[allCandles.length - 1].time - allCandles[0].time) / allCandles.length;
+                                  if (range.from < allCandles[0].time + (avgTime * 100)) {
+                                    loadOlderData();
+                                  }
+                                }
+                              }
+                            }}
+                            onChartReady={() => {
+                              // Preserved viewport
+                            }}
+                          />
+                        
+                      ) : renderEngine === 'app' ? (
+                        <div className="w-full h-full absolute inset-0 z-30">
+                          <AppContainer onBackToWeb={() => setRenderEngine('webgpu')} />
+                        </div>
+                      ) : (
+                        <NativeCanvasEngine candles={allCandles} darkMode={darkMode} />
+                      )}
+          <NativeIndicatorLayer preference="webgl" visualIndicators={visualIndicators} indicatorDataMap={indicatorDataMapRef.current} visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)} />
+          <NativeDrawingLayer
+            preference="webgl" 
+            ref={drawingLayerRef}
+            drawings={drawings}
+            brushPath={brushPath}
+            tempShape={tempShape}
+            drawStart={drawStart}
+            activeTool={activeTool}
+            getPixel={getPixel}
+            coordinateToTimePrice={coordinateToTimePrice}
+            allCandles={allCandles}
+            visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)}
+            selectedDrawingId={selectedDrawingId}
+            hideDrawings={hideDrawings}
+            volumeProfile={volumeProfile}
+            darkMode={darkMode}
+            cursorSettings={cursorSettings}
+            hoverCoords={hoverCoords}
+            magicTrail={magicTrail}
+          />
+          <DrawingAxisLabels drawings={drawings} getPixel={getPixel} />
+                      {renderChartOverlays()}
+                    </div>
+                  ) : chartLayout === '2v' ? (
+                    <div className="w-full h-full grid grid-cols-2 gap-2 p-1 bg-black/20">
+                      <div 
+                        ref={chartContainerRef}
+                        className="w-full h-full relative border border-blue-500/20 rounded overflow-hidden"
+                        onPointerDown={handlePointerDown}
+                        onPointerMove={handlePointerMove}
+                        onPointerUp={handlePointerUp}
+                        onPointerLeave={handlePointerUp}
+                        style={{ 
+                          touchAction: activeTool ? 'none' : 'auto',
+                          cursor: (activeTool && ['dot', 'demonstration', 'magic'].includes(activeTool)) ? 'none' : 'crosshair'
+                        }}
+                      >
+                        <NativeCanvasEngine candles={allCandles} darkMode={darkMode} />
+          <NativeIndicatorLayer preference="webgl" visualIndicators={visualIndicators} indicatorDataMap={indicatorDataMapRef.current} visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)} />
+          <NativeDrawingLayer
+            preference="webgl" 
+            ref={drawingLayerRef}
+            drawings={drawings}
+            brushPath={brushPath}
+            tempShape={tempShape}
+            drawStart={drawStart}
+            activeTool={activeTool}
+            getPixel={getPixel}
+            coordinateToTimePrice={coordinateToTimePrice}
+            allCandles={allCandles}
+            visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)}
+            selectedDrawingId={selectedDrawingId}
+            hideDrawings={hideDrawings}
+            volumeProfile={volumeProfile}
+            darkMode={darkMode}
+            cursorSettings={cursorSettings}
+            hoverCoords={hoverCoords}
+            magicTrail={magicTrail}
+          />
+          <DrawingAxisLabels drawings={drawings} getPixel={getPixel} />
+                        {renderChartOverlays()}
+                      </div>
+                      <MiniChartWrapper coin={selectedCoin} interval={getAltInterval(1)} darkMode={darkMode} />
+                    </div>
+                  ) : chartLayout === '2h' ? (
+                    <div className="w-full h-full grid grid-rows-2 gap-2 p-1 bg-black/20">
+                      <div 
+                        ref={chartContainerRef}
+                        className="w-full h-full relative border border-blue-500/20 rounded overflow-hidden"
+                        onPointerDown={handlePointerDown}
+                        onPointerMove={handlePointerMove}
+                        onPointerUp={handlePointerUp}
+                        onPointerLeave={handlePointerUp}
+                        style={{ 
+                          touchAction: activeTool ? 'none' : 'auto',
+                          cursor: (activeTool && ['dot', 'demonstration', 'magic'].includes(activeTool)) ? 'none' : 'crosshair'
+                        }}
+                      >
+                        <NativeCanvasEngine candles={allCandles} darkMode={darkMode} />
+          <NativeIndicatorLayer preference="webgl" visualIndicators={visualIndicators} indicatorDataMap={indicatorDataMapRef.current} visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)} />
+          <NativeDrawingLayer
+            preference="webgl" 
+            ref={drawingLayerRef}
+            drawings={drawings}
+            brushPath={brushPath}
+            tempShape={tempShape}
+            drawStart={drawStart}
+            activeTool={activeTool}
+            getPixel={getPixel}
+            coordinateToTimePrice={coordinateToTimePrice}
+            allCandles={allCandles}
+            visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)}
+            selectedDrawingId={selectedDrawingId}
+            hideDrawings={hideDrawings}
+            volumeProfile={volumeProfile}
+            darkMode={darkMode}
+            cursorSettings={cursorSettings}
+            hoverCoords={hoverCoords}
+            magicTrail={magicTrail}
+          />
+          <DrawingAxisLabels drawings={drawings} getPixel={getPixel} />
+                        {renderChartOverlays()}
+                      </div>
+                      <MiniChartWrapper coin={selectedCoin} interval={getAltInterval(1)} darkMode={darkMode} />
+                    </div>
+                  ) : (
+                    <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-2 p-1 bg-black/20">
+                      <div 
+                        ref={chartContainerRef}
+                        className="w-full h-full relative border border-blue-500/20 rounded overflow-hidden"
+                        onPointerDown={handlePointerDown}
+                        onPointerMove={handlePointerMove}
+                        onPointerUp={handlePointerUp}
+                        onPointerLeave={handlePointerUp}
+                        style={{ 
+                          touchAction: activeTool ? 'none' : 'auto',
+                          cursor: (activeTool && ['dot', 'demonstration', 'magic'].includes(activeTool)) ? 'none' : 'crosshair'
+                        }}
+                      >
+                        <NativeCanvasEngine candles={allCandles} darkMode={darkMode} />
+          <NativeIndicatorLayer preference="webgl" visualIndicators={visualIndicators} indicatorDataMap={indicatorDataMapRef.current} visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)} />
+          <NativeDrawingLayer
+            preference="webgl" 
+            ref={drawingLayerRef}
+            drawings={drawings}
+            brushPath={brushPath}
+            tempShape={tempShape}
+            drawStart={drawStart}
+            activeTool={activeTool}
+            getPixel={getPixel}
+            coordinateToTimePrice={coordinateToTimePrice}
+            allCandles={allCandles}
+            visibleRange={viewportSnapshotRef.current?.visibleRange || (chartInstance.current ? chartInstance.current.timeScale().getVisibleRange() : null)}
+            selectedDrawingId={selectedDrawingId}
+            hideDrawings={hideDrawings}
+            volumeProfile={volumeProfile}
+            darkMode={darkMode}
+            cursorSettings={cursorSettings}
+            hoverCoords={hoverCoords}
+            magicTrail={magicTrail}
+          />
+          <DrawingAxisLabels drawings={drawings} getPixel={getPixel} />
+                        {renderChartOverlays()}
+                      </div>
+                      <MiniChartWrapper coin={selectedCoin} interval={getAltInterval(1)} darkMode={darkMode} />
+                      <MiniChartWrapper coin={selectedCoin} interval={getAltInterval(2)} darkMode={darkMode} />
+                      <MiniChartWrapper coin={selectedCoin} interval={getAltInterval(3)} darkMode={darkMode} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Separate Oscillator Dynamic Sub Panes */}
+                {visualIndicators.filter(ind => ind.visible && INDICATOR_REGISTRY[ind.type]?.kind === 'subchart').length > 0 && (
+                  <div className="flex flex-col shrink-0 border-t border-[#2a2e39]/50 bg-black/10 min-h-0" style={{ height: '45%' }}>
+                    {visualIndicators.filter(ind => ind.visible && INDICATOR_REGISTRY[ind.type]?.kind === 'subchart').map((ind) => (
+                      <div 
+                        key={ind.id} 
+                        id={`subchart-container-${ind.id}`} 
+                        className="flex-1 min-w-0 relative border-b border-[#2a2e39]/30 last:border-0"
+                      >
+                        <div className="absolute top-2.5 left-2.5 z-10 text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#1e222d] border border-[#2a2e39] text-[#787b86] uppercase tracking-wider">
+                          {ind.name} ({INDICATOR_REGISTRY[ind.type]?.paramSchema.map(p => ind.params[p.key]).join(',') || 'Default'}) Pane
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <BarReplayControls
+                replayMode={replayMode}
+                fullCandlesLength={fullCandlesRef.current.length}
+                isReplayPlaying={isReplayPlaying}
+                setIsReplayPlaying={setIsReplayPlaying}
+                setReplayIndex={setReplayIndex}
+                replayIndex={replayIndex}
+                replaySpeed={replaySpeed}
+                setReplaySpeed={setReplaySpeed}
+                allCandlesRef={allCandlesRef}
+                fullCandlesRef={fullCandlesRef}
+                setAllCandles={setAllCandles}
+                setReplayMode={setReplayMode}
+                showToast={showToast}
+              />
+
+            {/* NEW TRADINGVIEW STYLE BOTTOM BAR */}
+            <ChartBottomBar
+              darkMode={darkMode}
+              applyTimeRange={applyTimeRange}
+              showToast={showToast}
+            />
+            </div>
+
+          </div>
+        </div>
+
+        {lowerBoxState === 'hidden' && (
+          <div 
+            className="absolute bottom-0 left-0 w-full h-3 z-50 cursor-pointer"
+            onMouseEnter={() => setLowerBoxState('minimized')}
+            title="Hover to show Report Panel"
+          />
+        )}
+
+        <div 
+          className={`w-full ${t.bg} flex flex-col min-h-0 transition-all duration-300 ${lowerBoxState === 'hidden' ? '' : `border-t ${t.border} shadow-lg`} z-10 ${getLowerBoxHeight()}`}
+          onMouseLeave={() => { 
+            if (!isReportPinned && lowerBoxState === 'minimized') {
+              setLowerBoxState('hidden'); 
+            }
+          }}
+        >
+          {/* Main Top Header */}
+          <div className={`min-h-[42px] flex items-center justify-between px-3 md:px-4 shrink-0 ${t.bg} transition-colors duration-200 gap-2`}>
+            <div className="flex items-center gap-4 md:gap-8 h-full">
+              {/* Strategy Name */}
+              <div className="flex items-center gap-2 font-bold text-[13px] md:text-[14px] shrink-0">
+                <div className={`w-5 h-5 rounded flex items-center justify-center ${darkMode ? 'bg-white/10' : 'bg-black/10'}`}>
+                  <Activity size={13} className={t.text} />
+                </div>
+                <span className={t.text}>Strategy Tester</span>
+                <ChevronDown size={14} className={t.muted} />
+              </div>
+              
+              {/* Main Tabs */}
+              <div className="h-full flex gap-1 md:gap-4 font-semibold text-[12px] md:text-[13px] overflow-x-auto mobile-scroll-x">
+                {['Overview', 'List of trades', 'Trading Panel'].map((tab) => (
+                  <button key={tab} onClick={() => { setActiveTab(tab); if (lowerBoxState === 'minimized') setLowerBoxState(isMobile ? 'maximized' : 'maximized'); }} className={`h-full relative flex items-center shrink-0 transition-colors ${activeTab === tab || (tab === 'Overview' && activeTab === 'Performance Summary') ? t.text : `${t.muted} hover:text-blue-500`}`}>
+                    {(activeTab === tab || (tab === 'Overview' && activeTab === 'Performance Summary')) && <div className={`absolute bottom-0 left-0 w-full h-[2px] bg-blue-500 rounded-t-sm`} />}
+                    <span className="px-1 md:px-2 z-10 whitespace-nowrap">{tab === 'List of trades' && isMobile ? 'Trades' : tab === 'Trading Panel' && isMobile ? 'Trade' : tab}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className={`flex gap-1 ${t.muted} items-center shrink-0`}>
+              <button 
+                onClick={() => setShowPredictionReport(true)} 
+                className={`hidden sm:flex items-center gap-1 px-2 py-1 ${darkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'} rounded text-[11px] font-bold mr-1 transition-colors`}
+              >
+                <BarChartHorizontal size={12} /> Prediction Report
+              </button>
+              <button onClick={downloadReportScreenshot} className="hidden sm:flex items-center gap-1 px-2 py-1 bg-[#7C5CFF]/10 text-[#7C5CFF] hover:bg-[#7C5CFF]/20 rounded text-[11px] font-bold mr-1 transition-colors"><Download size={12} /> Download</button>
+              <button onClick={() => setIsReportPinned(!isReportPinned)} className={`p-2 md:p-1 ${t.hover} rounded transition-colors ${isReportPinned ? 'text-blue-500' : ''}`} title={isReportPinned ? 'Unpin (Auto-hide)' : 'Pin panel'}>
+                {isReportPinned ? <Pin size={14} className="fill-current" /> : <PinOff size={14} />}
+              </button>
+              <button onClick={() => setLowerBoxState(lowerBoxState === 'minimized' ? 'maximized' : 'minimized')} className={`p-2 md:p-1 ${t.hover} rounded transition-colors`} title={lowerBoxState === 'minimized' ? 'Expand' : 'Minimize'}>{lowerBoxState === 'minimized' ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}</button>
+              <button 
+                onClick={() => setLowerBoxState(lowerBoxState === 'maximized' ? 'normal' : 'maximized')} 
+                className={`p-1.5 md:p-1 ${t.hover} rounded transition-colors`} 
+                title={lowerBoxState === 'maximized' ? 'Restore size' : 'Fullscreen / Maximize'}
+              >
+                {lowerBoxState === 'maximized' ? <Minimize2 size={14}/> : <Maximize2 size={14}/>}
+              </button>
+            </div>
+          </div>
+
+          {/* Secondary Sub-header Toolbar */}
+          <div className={`min-h-[36px] border-b ${t.border} flex items-center px-4 shrink-0 bg-transparent transition-colors duration-200 gap-5 text-[11.5px] font-semibold text-[#787b86] overflow-x-auto mobile-scroll-x`}>
+            <div className={`flex items-center gap-1.5 cursor-pointer hover:text-blue-500 transition-colors whitespace-nowrap`}>
+              <Calendar size={13} />
+              <span>Jun 8, 2026 - Jul 18, 2026</span>
+              <ChevronDown size={12} className="opacity-70" />
+            </div>
+            <div className={`flex items-center gap-1.5 cursor-pointer hover:text-blue-500 transition-colors whitespace-nowrap`}>
+              <DollarSign size={13} />
+              <span>10K USDT</span>
+              <ChevronDown size={12} className="opacity-70" />
+            </div>
+            <div className={`flex items-center gap-1.5 cursor-pointer hover:text-blue-500 transition-colors whitespace-nowrap`}>
+              <Filter size={13} />
+              <span>Default detalization</span>
+              <ChevronDown size={12} className="opacity-70" />
+            </div>
+            <div className={`flex items-center gap-1.5 cursor-pointer hover:text-blue-500 transition-colors whitespace-nowrap`}>
+              <Code size={13} />
+              <span>Script execution</span>
+              <Info size={12} className="opacity-70" />
+              <ChevronDown size={12} className="opacity-70" />
+            </div>
+          </div>
+
+
+          {lowerBoxState !== 'minimized' && (
+            <div className={`flex-1 min-h-0 overflow-y-auto dark-scrollbar p-4 md:p-6 ${t.bg} transition-colors duration-200`}>
+              {backendOfflineNotice && (
+                <div className="mb-4 px-3 py-2 bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 rounded-lg text-[11px] font-bold flex items-center gap-1.5 animate-pulse">
+                  <Info size={12} />
+                  <span>{backendOfflineNotice}</span>
+                </div>
+              )}
+              
+              {/* === NEW TRADINGVIEW STRATEGY TESTER LAYOUT === */}
+              {(activeTab === 'Overview' || activeTab === 'Performance Summary') && (
+                <div className="flex flex-col w-full max-w-[1200px] mx-auto pb-10">
+                  
+                  {/* EQUITY CURVE (Top Chart) */}
+                  <div className="w-full mb-8">
+                    <div className="flex items-center justify-between mb-4 px-2">
+                      <div className={`text-[16px] font-bold ${t.text}`}>Strategy Performance</div>
+                      <div className={`text-[11px] ${t.muted} bg-[#2a2e39]/20 px-2 py-1 rounded-md`}>{equityChartData.length} pts</div>
+                    </div>
+                    <div className="h-[200px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={equityChartData} margin={{ top: 8, right: 0, left: -18, bottom: 0 }}>
+                          <XAxis dataKey="trade" tick={{fontSize: 10, fill: '#787b86'}} minTickGap={28} axisLine={false} tickLine={false} />
+                          <YAxis yAxisId="left" domain={['auto', 'auto']} tick={{fontSize: 10, fill: '#787b86'}} axisLine={false} tickLine={false} width={48} />
+                          <Tooltip
+                            contentStyle={{backgroundColor: darkMode ? '#1e222d' : '#f8f9fa', color: darkMode ? '#d1d4dc' : '#131722', borderRadius: '8px', border: `1px solid ${darkMode ? '#2a2e39' : '#e0e3eb'}`, fontSize: '12px'}}
+                            formatter={(value, name) => {
+                              if (name === 'drawdown') return [`${formatNumber(value)}%`, 'Drawdown'];
+                              if (name === 'pnl') return [formatMoney(value, true), 'Trade P&L'];
+                              return [formatMoney(value), 'Equity'];
+                            }}
+                          />
+                          <Area yAxisId="left" type="step" dataKey="equity" stroke="#7C5CFF" fill="url(#colorEquity)" strokeWidth={2} activeDot={{r: 4, fill: '#7C5CFF', stroke: darkMode ? '#131722' : '#ffffff'}} />
+                          <defs>
+                            <linearGradient id="colorEquity" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#7C5CFF" stopOpacity={0.3}/>
+                              <stop offset="95%" stopColor="#7C5CFF" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  <div className={`h-px w-full ${darkMode ? 'bg-[#2a2e39]/50' : 'bg-gray-200'} mb-8`} />
+
+                  {/* 1. RETURN DETAILS */}
+                  <div className="mb-10 px-2">
+                    <div className={`text-[16px] font-bold ${t.text} mb-3`}>Return details</div>
+                    <div className="flex gap-2 mb-6">
+                      {['Overview', 'Returns', 'Benchmarking', 'Risk-adjusted performance'].map(p => (
+                        <button key={p} className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${p === 'Overview' ? (darkMode ? 'bg-white text-black' : 'bg-black text-white') : (darkMode ? 'bg-[#2a2e39]/50 text-gray-400 hover:bg-[#2a2e39]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}`}>
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+                      <div>
+                        <div className={`text-[11px] ${t.muted} mb-1`}>Open PnL</div>
+                        <div className="text-[14px] font-mono font-bold text-[#089981]">+{metrics.summary.netProfitVal > 0 ? (metrics.summary.netProfitVal * 0.05).toFixed(2) : '7.23'} USDT <span className="text-[11px]">+0.08%</span></div>
+                      </div>
+                      <div>
+                        <div className={`text-[11px] ${t.muted} mb-1`}>Expected payoff</div>
+                        <div className={`text-[14px] font-mono font-bold ${t.text}`}>${metrics.advanced.expectancy.toFixed(2)} USDT</div>
+                      </div>
+                      <div>
+                        <div className={`text-[11px] ${t.muted} mb-1`}>Strategy outperformance</div>
+                        <div className="text-[14px] font-mono font-bold text-[#F23645]">-{Math.abs(metrics.summary.netProfitVal - 850).toFixed(2)} USDT <span className="text-[11px]">-6.17%</span></div>
+                      </div>
+                      <div>
+                        <div className={`text-[11px] ${t.muted} mb-1`}>Sharpe ratio</div>
+                        <div className={`text-[14px] font-mono font-bold ${t.text}`}>2.14</div>
+                      </div>
+                    </div>
+
+                    {/* Return Details Charts */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      {/* Profit Structure */}
+                      <div>
+                        <div className={`text-[12px] font-bold ${t.text} mb-4`}>Profit structure</div>
+                        <div className={`h-[180px] w-full border-b ${darkMode ? 'border-[#2a2e39]/50' : 'border-gray-200'} relative flex items-end px-4`}>
+                          <div className="w-1/4 h-[80%] bg-[#089981] relative"></div>
+                          <div className="w-1/4 h-[90%] bg-[#F23645] relative left-4"></div>
+                          <div className="w-1/4 h-[5%] bg-amber-500 relative left-8"></div>
+                          <div className="w-1/4 h-[20%] bg-blue-500 relative left-12"></div>
+                          
+                          {/* Y-axis labels */}
+                          <div className="absolute right-0 top-0 text-[10px] text-[#787b86]">4.50K</div>
+                          <div className="absolute right-0 top-[33%] text-[10px] text-[#787b86]">3.00K</div>
+                          <div className="absolute right-0 top-[66%] text-[10px] text-[#787b86]">1.50K</div>
+                          <div className="absolute right-0 bottom-0 text-[10px] text-[#787b86]">0.00</div>
+                        </div>
+                        <div className="flex gap-4 mt-4 text-[10px] text-[#787b86] justify-center">
+                          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#089981]" /> Total profit</div>
+                          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-cyan-700" /> Open PnL</div>
+                          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#F23645]" /> Total loss</div>
+                          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-500" /> Commission</div>
+                          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500" /> Total PnL</div>
+                        </div>
+                      </div>
+
+                      {/* Benchmarking */}
+                      <div>
+                        <div className={`text-[12px] font-bold ${t.text} mb-4`}>Benchmarking</div>
+                        <div className={`h-[180px] w-full border-b ${darkMode ? 'border-[#2a2e39]/50' : 'border-gray-200'} relative flex items-center justify-center`}>
+                          
+                          <div className="w-full flex items-center justify-between px-10">
+                            {/* Orange side (Buy & Hold) */}
+                            <div className="flex flex-col items-end gap-2 w-1/3">
+                              <div className="flex items-center w-full">
+                                <div className="bg-amber-600 text-white text-[9px] px-1 font-bold z-10 w-[40px] text-center">Max</div>
+                                <div className="bg-amber-500 text-white text-[9px] px-1 text-right w-full font-mono">5.74%</div>
+                              </div>
+                              <div className="flex items-center w-full scale-105">
+                                <div className="bg-amber-600 text-white text-[9px] px-1 font-bold z-10 w-[40px] text-center">Current</div>
+                                <div className="bg-amber-500 text-white text-[9px] px-1 text-right w-full font-mono">1.07%</div>
+                              </div>
+                              <div className="flex items-center w-full">
+                                <div className="bg-amber-600 text-white text-[9px] px-1 font-bold z-10 w-[40px] text-center">Min</div>
+                                <div className="bg-amber-500 text-white text-[9px] px-1 text-right w-full font-mono">-7.69%</div>
+                              </div>
+                            </div>
+
+                            {/* Connecting dashed lines */}
+                            <svg className="absolute left-1/3 w-1/3 h-[180px] z-0" style={{ pointerEvents: 'none' }}>
+                               <path d="M0,60 L130,90" stroke="#787b86" strokeDasharray="2,2" fill="none" />
+                               <path d="M0,90 L130,90" stroke="#787b86" strokeDasharray="2,2" fill="none" />
+                               <path d="M0,120 L130,90" stroke="#787b86" strokeDasharray="2,2" fill="none" />
+                            </svg>
+
+                            {/* Blue side (Strategy) */}
+                            <div className="flex flex-col items-start gap-2 w-1/3">
+                              <div className="flex items-center w-full">
+                                <div className="bg-blue-600 text-white text-[9px] px-1 font-bold z-10 w-[40px] text-center">Max</div>
+                                <div className="bg-blue-500 text-white text-[9px] px-1 text-left w-full font-mono">1.27%</div>
+                              </div>
+                              <div className="flex items-center w-full scale-105">
+                                <div className="bg-blue-600 text-white text-[9px] px-1 font-bold z-10 w-[40px] text-center">Current</div>
+                                <div className="bg-blue-500 text-white text-[9px] px-1 text-left w-full font-mono">-4.99%</div>
+                              </div>
+                              <div className="flex items-center w-full">
+                                <div className="bg-blue-600 text-white text-[9px] px-1 font-bold z-10 w-[40px] text-center">Min</div>
+                                <div className="bg-blue-500 text-white text-[9px] px-1 text-left w-full font-mono">-8.09%</div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Y-axis labels */}
+                          <div className="absolute right-0 top-[20%] text-[10px] text-[#787b86]">10.00%</div>
+                          <div className="absolute right-0 top-[40%] text-[10px] text-[#787b86]">5.00%</div>
+                          <div className="absolute right-0 top-[60%] text-[10px] text-[#787b86]">0.00%</div>
+                          <div className="absolute right-0 top-[80%] text-[10px] text-[#787b86]">-5.00%</div>
+                        </div>
+                        <div className="flex gap-4 mt-4 text-[10px] text-[#787b86] justify-center">
+                          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-500" /> Buy and hold PnL</div>
+                          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500" /> Strategy PnL</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={`h-px w-full ${darkMode ? 'bg-[#2a2e39]/50' : 'bg-gray-200'} mb-8`} />
+
+                  {/* 2. TRADES ANALYSIS */}
+                  <div className="mb-10 px-2">
+                    <div className={`text-[16px] font-bold ${t.text} mb-3`}>Trades analysis</div>
+                    <div className="flex gap-2 mb-6">
+                      <button className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${darkMode ? 'bg-white text-black' : 'bg-black text-white'}`}>Overview</button>
+                      <button className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${darkMode ? 'bg-[#2a2e39]/50 text-gray-400 hover:bg-[#2a2e39]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Trades analysis details</button>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+                      <div>
+                        <div className={`text-[11px] ${t.muted} mb-1`}>Average PnL</div>
+                        <div className={`text-[14px] font-mono font-bold ${t.text}`}>-${Math.abs(metrics.advanced.avgLoss).toFixed(2)} USDT <span className="text-[11px] text-[#787b86]">-0.02%</span></div>
+                      </div>
+                      <div>
+                        <div className={`text-[11px] ${t.muted} mb-1`}>Average bars in trades</div>
+                        <div className={`text-[14px] font-mono font-bold ${t.text}`}>21</div>
+                      </div>
+                      <div>
+                        <div className={`text-[11px] ${t.muted} mb-1`}>Largest profit</div>
+                        <div className={`text-[14px] font-mono font-bold ${t.text}`}>${metrics.advanced.bestTrade.toFixed(2)} USDT</div>
+                      </div>
+                      <div>
+                        <div className={`text-[11px] ${t.muted} mb-1`}>Largest loss</div>
+                        <div className={`text-[14px] font-mono font-bold ${t.text}`}>${metrics.advanced.worstTrade.toFixed(2)} USDT</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={`h-px w-full ${darkMode ? 'bg-[#2a2e39]/50' : 'bg-gray-200'} mb-8`} />
+
+                  {/* 3. EQUITY RUN-UPS AND DRAWDOWNS */}
+                  <div className="mb-10 px-2">
+                    <div className={`text-[16px] font-bold ${t.text} mb-3`}>Equity run-ups and drawdowns</div>
+                    <div className="flex gap-2 mb-6">
+                      <button className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${darkMode ? 'bg-white text-black' : 'bg-black text-white'}`}>Overview</button>
+                      <button className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${darkMode ? 'bg-[#2a2e39]/50 text-gray-400 hover:bg-[#2a2e39]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Run-ups</button>
+                      <button className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${darkMode ? 'bg-[#2a2e39]/50 text-gray-400 hover:bg-[#2a2e39]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Drawdowns</button>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+                      <div>
+                        <div className={`text-[11px] ${t.muted} mb-1`}>Average run-up duration</div>
+                        <div className={`text-[14px] font-bold ${t.text}`}>7 days</div>
+                      </div>
+                      <div>
+                        <div className={`text-[11px] ${t.muted} mb-1`}>Average drawdown duration</div>
+                        <div className={`text-[14px] font-bold ${t.text}`}>5 days</div>
+                      </div>
+                      <div>
+                        <div className={`text-[11px] ${t.muted} mb-1`}>Max drawdown as % of initial capital</div>
+                        <div className={`text-[14px] font-mono font-bold ${t.text}`}>{metrics.summary.maxDrawdownPct}%</div>
+                      </div>
+                      <div>
+                        <div className={`text-[11px] ${t.muted} mb-1`}>Return of max drawdown</div>
+                        <div className={`text-[14px] font-mono font-bold ${t.text}`}>-0.50 USDT</div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      {/* Alternating Growth and Decline */}
+                      <div>
+                        <div className={`text-[12px] font-bold ${t.text} mb-4`}>Alternating growth and decline</div>
+                        <div className={`h-[180px] w-full border-b ${darkMode ? 'border-[#2a2e39]/50' : 'border-gray-200'} relative flex items-end gap-1 px-4`}>
+                          <div className="w-[15%] h-[30%] bg-[#F23645]"></div>
+                          <div className="w-[15%] h-[35%] bg-[#089981]"></div>
+                          <div className="w-[15%] h-[5%] bg-[#F23645]"></div>
+                          <div className="w-[15%] h-[15%] bg-[#089981]"></div>
+                          <div className="w-[15%] h-[80%] bg-[#F23645]"></div>
+                          <div className="w-[15%] h-[25%] bg-[#089981]"></div>
+                          
+                          {/* Y-axis labels */}
+                          <div className="absolute right-0 top-[20%] text-[10px] text-[#787b86]">8.00%</div>
+                          <div className="absolute right-0 top-[40%] text-[10px] text-[#787b86]">6.00%</div>
+                          <div className="absolute right-0 top-[60%] text-[10px] text-[#787b86]">4.00%</div>
+                          <div className="absolute right-0 top-[80%] text-[10px] text-[#787b86]">2.00%</div>
+                          <div className="absolute right-0 bottom-0 text-[10px] text-[#787b86]">0.00%</div>
+                        </div>
+                        <div className="flex gap-4 mt-4 text-[10px] text-[#787b86] justify-center">
+                          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#089981]" /> Run-up</div>
+                          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#F23645]" /> Drawdown</div>
+                          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-cyan-700" /> Current run-up</div>
+                        </div>
+                      </div>
+
+                      {/* Comparison of growth and decline periods */}
+                      <div>
+                        <div className={`text-[12px] font-bold ${t.text} mb-4`}>Comparison of growth and decline periods</div>
+                        <div className="w-full flex flex-col gap-6">
+                          
+                          {/* Run-up Group */}
+                          <div>
+                            <div className="text-[11px] text-[#787b86] mb-2">Run-up</div>
+                            <div className="flex flex-col gap-1.5">
+                              <div className="flex items-center gap-2">
+                                <div className="text-[10px] text-[#787b86] w-16">Maximum</div>
+                                <div className={`flex-1 ${darkMode ? 'bg-[#2a2e39]/30' : 'bg-gray-100'} h-4 relative`}>
+                                  <div className="absolute top-0 left-0 h-full bg-[#089981]" style={{width: '90%'}}></div>
+                                </div>
+                                <div className={`text-[10px] ${t.text} w-10 text-right`}>3.70%</div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="text-[10px] text-[#787b86] w-16">Average</div>
+                                <div className={`flex-1 ${darkMode ? 'bg-[#2a2e39]/30' : 'bg-gray-100'} h-4 relative`}>
+                                  <div className="absolute top-0 left-0 h-full bg-[#089981]" style={{width: '60%'}}></div>
+                                </div>
+                                <div className={`text-[10px] ${t.text} w-10 text-right`}>2.86%</div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="text-[10px] text-[#787b86] w-16">Current</div>
+                                <div className={`flex-1 ${darkMode ? 'bg-[#2a2e39]/30' : 'bg-gray-100'} h-4 relative`}>
+                                  <div className="absolute top-0 left-0 h-full bg-[#089981]" style={{width: '75%'}}></div>
+                                </div>
+                                <div className={`text-[10px] ${t.text} w-10 text-right`}>3.37%</div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Drawdown Group */}
+                          <div>
+                            <div className="text-[11px] text-[#787b86] mb-2">Drawdown</div>
+                            <div className="flex flex-col gap-1.5">
+                              <div className="flex items-center gap-2">
+                                <div className="text-[10px] text-[#787b86] w-16">Maximum</div>
+                                <div className={`flex-1 ${darkMode ? 'bg-[#2a2e39]/30' : 'bg-gray-100'} h-4 relative`}>
+                                  <div className="absolute top-0 left-0 h-full bg-[#F23645]" style={{width: '100%'}}></div>
+                                </div>
+                                <div className={`text-[10px] ${t.text} w-10 text-right`}>9.24%</div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="text-[10px] text-[#787b86] w-16">Average</div>
+                                <div className={`flex-1 ${darkMode ? 'bg-[#2a2e39]/30' : 'bg-gray-100'} h-4 relative`}>
+                                  <div className="absolute top-0 left-0 h-full bg-[#F23645]" style={{width: '45%'}}></div>
+                                </div>
+                                <div className={`text-[10px] ${t.text} w-10 text-right`}>4.44%</div>
+                              </div>
+                            </div>
+                          </div>
+
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={`h-px w-full ${darkMode ? 'bg-[#2a2e39]/50' : 'bg-gray-200'} mb-8`} />
+
+                  {/* 4. CAPITAL EFFICIENCY */}
+                  <div className="mb-4 px-2">
+                    <div className={`text-[16px] font-bold ${t.text} mb-3`}>Capital efficiency</div>
+                    <div className="flex gap-2">
+                      <button className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${darkMode ? 'bg-white text-black' : 'bg-black text-white'}`}>Overview</button>
+                      <button className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${darkMode ? 'bg-[#2a2e39]/50 text-gray-400 hover:bg-[#2a2e39]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Capital usage</button>
+                      <button className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${darkMode ? 'bg-[#2a2e39]/50 text-gray-400 hover:bg-[#2a2e39]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Margin usage</button>
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
+              {/* LIST OF TRADES TAB */}
+              {activeTab === 'List of trades' && (
+                <div className={`w-full overflow-x-auto dark-scrollbar border ${t.border} rounded-xl shadow-sm ${t.sec}`}>
+                  <table className="w-full text-left border-collapse min-w-[480px]">
+                    <thead className={`sticky top-0 ${t.bg} z-10 shadow-sm border-b ${t.border}`}>
+                      <tr>
+                        <th className={`font-semibold ${t.muted} py-3 pl-4 pr-2 text-[11px] uppercase tracking-wider`}>Trade #</th>
+                        <th className={`font-semibold ${t.muted} py-3 pr-2 text-[11px] uppercase tracking-wider`}>Type</th>
+                        <th className={`font-semibold ${t.muted} py-3 pr-2 text-[11px] uppercase tracking-wider`}>Date</th>
+                        <th className={`font-semibold ${t.muted} py-3 text-right text-[11px] uppercase tracking-wider`}>Price</th>
+                        <th className={`font-semibold ${t.muted} py-3 text-right pr-4 text-[11px] uppercase tracking-wider`}>Profit / Loss</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#2a2e39]/30">
+                      {metrics.trades && metrics.trades.map(tData => (
+                        <tr key={tData.id} className={`${darkMode ? 'hover:bg-[#2a2e39]/50' : 'hover:bg-gray-100'} transition-colors`}>
+                          <td className="text-[#7C5CFF] font-medium py-3 pl-4 pr-2 text-[12px]">{tData.id}</td>
+                          <td className={`${t.text} py-3 pr-2 font-medium`}>
+                            <span className={`px-2 py-0.5 rounded text-[10px] ${tData.type.toLowerCase().includes('long') ? 'bg-[#089981]/15 text-[#089981]' : 'bg-[#F23645]/15 text-[#F23645]'}`}>
+                              {tData.type}
+                            </span>
+                          </td>
+                          <td className={`${t.muted} py-3 pr-2 text-[11px]`}>{tData.date}</td>
+                          <td className={`text-right font-mono ${t.text} py-3 text-[12px]`}>{tData.price}</td>
+                          <td className={`text-right font-mono font-medium py-3 pr-4 text-[12px] ${tData.profit > 0 ? 'text-[#089981]' : tData.profit < 0 ? 'text-[#F23645]' : t.muted}`}>
+                            {tData.profit > 0 ? '+' : ''}{tData.profit}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {!metrics.trades?.length && (
+                    <div className={`py-10 flex flex-col items-center gap-2 text-[12px] ${t.muted}`}><ListFilter size={22} className="opacity-40" /> No trades available to display.</div>
+                  )}
+                </div>
+              )}
+
+              {/* TRADING PANEL TAB */}
+              {activeTab === 'Trading Panel' && (
+                <div className="flex flex-col h-full bg-[#0b0e14]">
+                  {/* Account Summary Header - Binance/Bybit Style */}
+                  <div className={`grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-4 p-3 border-b ${t.border} bg-[#131722] shrink-0`}>
+                    <div className="flex flex-col justify-center">
+                      <span className="text-[#848e9c] text-[10px] md:text-[11px] font-semibold mb-0.5">Total Equity (USD)</span>
+                      <span className="text-white text-[13px] md:text-[15px] font-mono font-bold">${(balance + unrealizedPnl).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    </div>
+                    <div className="flex flex-col justify-center">
+                      <span className="text-[#848e9c] text-[10px] md:text-[11px] font-semibold mb-0.5">Available Balance</span>
+                      <span className="text-white text-[13px] md:text-[15px] font-mono font-bold">${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    </div>
+                    <div className="flex flex-col justify-center">
+                      <span className="text-[#848e9c] text-[10px] md:text-[11px] font-semibold mb-0.5">Unrealized PNL</span>
+                      <span className={`text-[13px] md:text-[15px] font-mono font-bold ${unrealizedPnl >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                        {unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                      </span>
+                    </div>
+                    <div className="flex flex-col justify-center">
+                      <span className="text-[#848e9c] text-[10px] md:text-[11px] font-semibold mb-0.5">Margin Usage</span>
+                      <span className="text-white text-[13px] md:text-[15px] font-mono font-bold">
+                        {positions.length > 0 ? ((positions.reduce((acc, p) => acc + p.qty * (p.symbol === selectedCoin ? livePrice : p.entryPrice), 0) / leverage) / (balance + unrealizedPnl) * 100).toFixed(2) : '0.00'}%
+                      </span>
+                    </div>
+                    <div className="flex flex-col justify-center items-end pr-2 hidden md:flex">
+                      <span className="text-[#848e9c] text-[10px] md:text-[11px] font-semibold mb-0.5">Instrument</span>
+                      <span className="text-blue-400 text-[13px] md:text-[15px] font-bold">{selectedCoin}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col lg:flex-row flex-1 min-h-0 bg-[#0b0e14]">
+                    {/* Advanced Order Entry Sidebar */}
+                    <div className={`w-full lg:w-[320px] xl:w-[340px] shrink-0 border-r border-b lg:border-b-0 ${t.border} bg-[#131722] flex flex-col h-auto lg:h-full overflow-y-auto custom-scrollbar`}>
+                      
+                      {/* Margin & Leverage */}
+                      <div className={`flex items-center justify-between p-3 border-b ${t.border}`}>
+                        <div className="flex bg-[#2b3139] rounded overflow-hidden">
+                          <button 
+                            className={`px-3 py-1 text-[11px] font-bold transition-colors ${marginMode === 'Cross' ? 'bg-blue-600 text-white' : 'text-[#848e9c] hover:text-white'}`}
+                            onClick={() => setMarginMode('Cross')}
+                          >Cross</button>
+                          <button 
+                            className={`px-3 py-1 text-[11px] font-bold transition-colors ${marginMode === 'Isolated' ? 'bg-blue-600 text-white' : 'text-[#848e9c] hover:text-white'}`}
+                            onClick={() => setMarginMode('Isolated')}
+                          >Isolated</button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-[#848e9c] font-semibold">{leverage}x</span>
+                          <button 
+                            className="bg-[#2b3139] hover:bg-[#3b414a] text-white px-2 py-1 rounded text-[11px] font-bold transition-colors"
+                            onClick={() => {
+                              const newLev = prompt('Enter Leverage (1-125):', leverage);
+                              if(newLev && !isNaN(newLev)) setLeverage(Math.min(125, Math.max(1, parseInt(newLev))));
+                            }}
+                          >Edit</button>
+                        </div>
+                      </div>
+
+                      <div className="p-4 space-y-5">
+                        {/* Order Type Tabs */}
+                        <div className="flex gap-4 border-b border-[#2b3139]">
+                          {['LIMIT', 'MARKET', 'STOP LIMIT'].map(type => (
+                            <button
+                              key={type}
+                              onClick={() => setOrderType(type === 'STOP LIMIT' ? 'LIMIT' : type)} // Mocking stop limit as limit for paper
+                              className={`pb-2 text-[12px] font-bold transition-all relative ${orderType === type || (type === 'LIMIT' && orderType === 'LIMIT' && !useTPSL) ? 'text-white' : 'text-[#848e9c] hover:text-[#b7bdc6]'}`}
+                            >
+                              {type}
+                              {(orderType === type || (type === 'LIMIT' && orderType === 'LIMIT' && !useTPSL)) && <div className="absolute bottom-0 left-0 w-full h-[2px] bg-blue-500 rounded-t-full" />}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Order Form Elements */}
+                        <div className="space-y-4">
+                          
+                          {/* Price Input */}
+                          <div className={`flex items-center justify-between bg-[#2b3139] rounded-md px-3 py-2 border border-transparent focus-within:border-blue-500 transition-colors ${orderType === 'MARKET' ? 'opacity-50 pointer-events-none' : ''}`}>
+                            <span className="text-[#848e9c] text-[12px]">Price</span>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                placeholder={livePrice ? String(livePrice) : "0.00"}
+                                value={orderType === 'MARKET' ? 'Market' : orderLimitPrice}
+                                onChange={(e) => setOrderLimitPrice(e.target.value)}
+                                className="bg-transparent text-right text-white font-mono text-[13px] outline-none w-24"
+                                disabled={orderType === 'MARKET'}
+                              />
+                              <span className="text-[#848e9c] text-[12px]">USDT</span>
+                            </div>
+                          </div>
+
+                          {/* Size Input */}
+                          <div className="flex items-center justify-between bg-[#2b3139] rounded-md px-3 py-2 border border-transparent focus-within:border-blue-500 transition-colors">
+                            <span className="text-[#848e9c] text-[12px]">Size</span>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                placeholder="0.0"
+                                value={orderQty}
+                                onChange={(e) => setOrderQty(e.target.value)}
+                                className="bg-transparent text-right text-white font-mono text-[13px] outline-none w-24"
+                              />
+                              <span className="text-[#848e9c] text-[12px]">{getBaseAsset(selectedCoin)}</span>
+                            </div>
+                          </div>
+
+                          {/* Slider */}
+                          <div className="pt-2 pb-1 px-1">
+                            <input 
+                              type="range" 
+                              min="0" max="100" 
+                              value={livePrice && orderQty ? Math.min(100, (orderQty * (orderType==='LIMIT' ? parseFloat(orderLimitPrice)||livePrice : livePrice) / (balance * leverage)) * 100) : 0}
+                              onChange={(e) => {
+                                const price = orderType === 'LIMIT' ? parseFloat(orderLimitPrice) || livePrice : livePrice;
+                                if (price > 0) {
+                                  const maxQty = (balance * leverage) / price;
+                                  setOrderQty(String(parseFloat((maxQty * (e.target.value / 100)).toFixed(4))));
+                                }
+                              }}
+                              className="w-full h-1 bg-[#2b3139] rounded-lg appearance-none cursor-pointer accent-blue-500"
+                            />
+                            <div className="flex justify-between mt-2 px-1">
+                              {[0, 25, 50, 75, 100].map(pct => (
+                                <div key={pct} className="relative cursor-pointer group" onClick={() => {
+                                  const price = orderType === 'LIMIT' ? parseFloat(orderLimitPrice) || livePrice : livePrice;
+                                  if (price > 0) {
+                                    const maxQty = (balance * leverage) / price;
+                                    setOrderQty(String(parseFloat((maxQty * (pct / 100)).toFixed(4))));
+                                  }
+                                }}>
+                                  <div className="w-1.5 h-1.5 bg-[#474d57] group-hover:bg-blue-500 rounded-full"></div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Order Value Details */}
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between text-[11px]">
+                              <span className="text-[#848e9c]">Avail</span>
+                              <span className="text-white font-mono">{balance.toLocaleString(undefined, {minimumFractionDigits: 2})} USDT</span>
+                            </div>
+                            <div className="flex justify-between text-[11px]">
+                              <span className="text-[#848e9c]">Max Buy</span>
+                              <span className="text-white font-mono">{livePrice ? ((balance * leverage)/livePrice).toFixed(4) : '0.00'} {getBaseAsset(selectedCoin)}</span>
+                            </div>
+                          </div>
+
+                          {/* TP/SL Toggle */}
+                          <div className="pt-2">
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                              <input type="checkbox" checked={useTPSL} onChange={(e) => setUseTPSL(e.target.checked)} className="accent-blue-500 cursor-pointer w-3.5 h-3.5" />
+                              <span className="text-[12px] text-[#848e9c] group-hover:text-white transition-colors">TP/SL</span>
+                            </label>
+                            
+                            {useTPSL && (
+                              <div className="flex gap-2 mt-3">
+                                <div className="flex-1 bg-[#2b3139] rounded px-2 py-1.5 border border-transparent focus-within:border-[#0ecb81]">
+                                  <div className="text-[#848e9c] text-[9px] uppercase">Take Profit</div>
+                                  <input type="number" placeholder="Price" value={tpPrice} onChange={e=>setTpPrice(e.target.value)} className="w-full bg-transparent text-white font-mono text-[11px] outline-none mt-0.5" />
+                                </div>
+                                <div className="flex-1 bg-[#2b3139] rounded px-2 py-1.5 border border-transparent focus-within:border-[#f6465d]">
+                                  <div className="text-[#848e9c] text-[9px] uppercase">Stop Loss</div>
+                                  <input type="number" placeholder="Price" value={slPrice} onChange={e=>setSlPrice(e.target.value)} className="w-full bg-transparent text-white font-mono text-[11px] outline-none mt-0.5" />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Checkboxes */}
+                          <div className="flex gap-4 pt-1">
+                            <label className="flex items-center gap-1.5 cursor-pointer group">
+                              <input type="checkbox" checked={postOnly} onChange={(e) => setPostOnly(e.target.checked)} className="accent-blue-500 cursor-pointer w-3 h-3" />
+                              <span className="text-[11px] text-[#848e9c] group-hover:text-white transition-colors">Post Only</span>
+                            </label>
+                            <label className="flex items-center gap-1.5 cursor-pointer group">
+                              <input type="checkbox" className="accent-blue-500 cursor-pointer w-3 h-3" />
+                              <span className="text-[11px] text-[#848e9c] group-hover:text-white transition-colors">Reduce Only</span>
+                            </label>
+                          </div>
+
+                          {/* Cost */}
+                          <div className="flex justify-between text-[12px] pt-2 border-t border-[#2b3139]">
+                            <span className="text-[#848e9c]">Cost</span>
+                            <span className="text-white font-mono font-bold">
+                              ${((parseFloat(orderQty) || 0) * (orderType === 'LIMIT' ? parseFloat(orderLimitPrice) || livePrice : livePrice) / leverage).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
+                            </span>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex gap-2 pt-2">
+                            <button
+                              onClick={() => {
+                                const qty = parseFloat(orderQty);
+                                if (!qty || qty <= 0) { showToast("Please enter a valid quantity."); return; }
+                                if (orderType === 'MARKET') executeMarketOrder('BUY', qty);
+                                else placeLimitOrder('BUY', qty, orderLimitPrice);
+                                setOrderQty(''); setOrderLimitPrice('');
+                              }}
+                              className="flex-1 bg-[#0ecb81] hover:bg-[#0b9e65] text-white py-3 rounded-md text-[13px] font-extrabold transition-colors flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-[#0ecb81]/10"
+                            >
+                              <span>Buy / Long</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                const qty = parseFloat(orderQty);
+                                if (!qty || qty <= 0) { showToast("Please enter a valid quantity."); return; }
+                                if (orderType === 'MARKET') executeMarketOrder('SELL', qty);
+                                else placeLimitOrder('SELL', qty, orderLimitPrice);
+                                setOrderQty(''); setOrderLimitPrice('');
+                              }}
+                              className="flex-1 bg-[#f6465d] hover:bg-[#c9384b] text-white py-3 rounded-md text-[13px] font-extrabold transition-colors flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-[#f6465d]/10"
+                            >
+                              <span>Sell / Short</span>
+                            </button>
+                          </div>
+
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Positions & Orders Main Area */}
+                    <div className={`flex-1 flex flex-col min-w-0 bg-[#0b0e14]`}>
+                      {/* Tabs */}
+                      <div className={`flex gap-4 md:gap-6 px-4 border-b ${t.border} bg-[#131722] pt-2 overflow-x-auto whitespace-nowrap custom-scrollbar`}>
+                        {['Positions', 'Open Orders', 'Order History', 'Trade History', 'Arbitrage Matrix', 'Strategy Tester', 'Level 3 DOM Depth', 'AI Risk Auditor'].map(tab => (
+                          <button
+                            key={tab}
+                            onClick={() => setTradingTab(tab)}
+                            className={`pb-3 text-[12px] md:text-[13px] font-bold transition-all relative shrink-0 ${tradingTab === tab ? 'text-white' : 'text-[#848e9c] hover:text-white'}`}
+                          >
+                            {tab} {tab === 'Positions' && `(${positions.length})`} {tab === 'Open Orders' && `(${paperOrders.filter(o => o.status === 'PENDING').length})`}
+                            {tradingTab === tab && <div className="absolute bottom-0 left-0 w-full h-[2px] bg-[#fcd535] rounded-t-full" />}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Content Area */}
+                      <div className="flex-1 overflow-auto custom-scrollbar p-0">
+                        {tradingTab === 'Positions' && (
+                          <table className="w-full text-left border-collapse min-w-[900px]">
+                            <thead className="bg-[#131722] sticky top-0 z-10">
+                              <tr>
+                                <th className="py-2 pl-4 pr-2 font-normal text-[#848e9c] text-[11px]">Symbol</th>
+                                <th className="py-2 pr-2 font-normal text-[#848e9c] text-[11px]">Size</th>
+                                <th className="py-2 pr-2 font-normal text-[#848e9c] text-[11px]">Entry Price</th>
+                                <th className="py-2 pr-2 font-normal text-[#848e9c] text-[11px]">Mark Price</th>
+                                <th className="py-2 pr-2 font-normal text-[#848e9c] text-[11px]">Liq. Price</th>
+                                <th className="py-2 pr-2 font-normal text-[#848e9c] text-[11px]">Margin Ratio</th>
+                                <th className="py-2 pr-2 font-normal text-[#848e9c] text-[11px]">Margin</th>
+                                <th className="py-2 pr-2 font-normal text-[#848e9c] text-[11px] text-right">PNL (ROE%)</th>
+                                <th className="py-2 pr-4 font-normal text-[#848e9c] text-[11px] text-right">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#2b3139]">
+                              {positions.map((pos, idx) => {
+                                const markPrice = pos.symbol === selectedCoin ? livePrice : pos.entryPrice; 
+                                const pnl = pos.type === 'LONG' 
+                                  ? (markPrice - pos.entryPrice) * pos.qty
+                                  : (pos.entryPrice - markPrice) * pos.qty;
+                                const initialMargin = (pos.qty * pos.entryPrice) / leverage;
+                                const roe = (pnl / initialMargin) * 100;
+                                const liqPrice = pos.type === 'LONG' 
+                                  ? pos.entryPrice * (1 - 1/leverage + 0.005) 
+                                  : pos.entryPrice * (1 + 1/leverage - 0.005);
+                                
+                                return (
+                                  <tr key={idx} className="hover:bg-[#2b3139]/30 transition-colors group">
+                                    <td className="py-2.5 pl-4 pr-2">
+                                      <div className="flex items-center gap-1.5">
+                                        <div className={`w-1 h-3.5 rounded-sm ${pos.type === 'LONG' ? 'bg-[#0ecb81]' : 'bg-[#f6465d]'}`}></div>
+                                        <div>
+                                          <div className="text-[12px] font-bold text-white flex items-center gap-1">{pos.symbol} <span className="bg-[#2b3139] text-[#fcd535] px-1 rounded text-[9px] border border-[#fcd535]/30">{leverage}x</span></div>
+                                          <div className={`text-[10px] font-semibold ${pos.type === 'LONG' ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                                            {pos.type}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="py-2.5 pr-2 text-white font-mono text-[12px]">{pos.qty}</td>
+                                    <td className="py-2.5 pr-2 text-white font-mono text-[12px]">{pos.entryPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                    <td className="py-2.5 pr-2 text-white font-mono text-[12px]">{markPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                    <td className="py-2.5 pr-2 text-[#fcd535] font-mono text-[12px]">{liqPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                    <td className="py-2.5 pr-2 text-white font-mono text-[12px]">{(Math.random() * (12 - 4) + 4).toFixed(2)}%</td>
+                                    <td className="py-2.5 pr-2 text-white font-mono text-[12px]">{initialMargin.toFixed(2)}</td>
+                                    <td className="py-2.5 pr-2 text-right">
+                                      <div className={`font-mono text-[12px] font-bold ${pnl >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}
+                                      </div>
+                                      <div className={`font-mono text-[10px] ${pnl >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                                        {pnl >= 0 ? '+' : ''}{roe.toFixed(2)}%
+                                      </div>
+                                    </td>
+                                    <td className="py-2.5 pr-4 text-right">
+                                      <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button className="bg-[#2b3139] hover:bg-[#3b414a] text-white px-3 py-1 rounded text-[11px] font-bold transition-colors">Reverse</button>
+                                        <button onClick={() => closeActivePosition(pos.symbol)} className="bg-[#2b3139] hover:bg-[#f6465d] hover:text-white text-[#f6465d] px-3 py-1 rounded text-[11px] font-bold transition-colors">Close</button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        )}
+                        {tradingTab === 'Positions' && positions.length === 0 && (
+                          <div className="flex flex-col items-center justify-center h-48 text-[#848e9c]">
+                            <Layers size={32} className="mb-2 opacity-30" />
+                            <span className="text-[12px]">No open positions</span>
+                          </div>
+                        )}
+
+                        {tradingTab === 'Open Orders' && (
+                          <table className="w-full text-left border-collapse min-w-[700px]">
+                            <thead className="bg-[#131722] sticky top-0 z-10">
+                              <tr>
+                                <th className="py-2 pl-4 pr-2 font-normal text-[#848e9c] text-[11px]">Time</th>
+                                <th className="py-2 pr-2 font-normal text-[#848e9c] text-[11px]">Symbol</th>
+                                <th className="py-2 pr-2 font-normal text-[#848e9c] text-[11px]">Type</th>
+                                <th className="py-2 pr-2 font-normal text-[#848e9c] text-[11px]">Side</th>
+                                <th className="py-2 pr-2 font-normal text-[#848e9c] text-[11px]">Price</th>
+                                <th className="py-2 pr-2 font-normal text-[#848e9c] text-[11px]">Amount</th>
+                                <th className="py-2 pr-2 font-normal text-[#848e9c] text-[11px]">Filled</th>
+                                <th className="py-2 pr-4 font-normal text-[#848e9c] text-[11px] text-right">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#2b3139]">
+                              {paperOrders.filter(o => o.status === 'PENDING').map((order, idx) => (
+                                <tr key={idx} className="hover:bg-[#2b3139]/30 transition-colors group">
+                                  <td className="py-2.5 pl-4 pr-2 text-[#848e9c] text-[11px]">{new Date().toLocaleString()}</td>
+                                  <td className="py-2.5 pr-2 text-white font-bold text-[12px]">{order.symbol}</td>
+                                  <td className="py-2.5 pr-2 text-white text-[12px]">{order.type}</td>
+                                  <td className={`py-2.5 pr-2 text-[12px] font-bold ${order.side === 'BUY' ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>{order.side}</td>
+                                  <td className="py-2.5 pr-2 text-white font-mono text-[12px]">{order.price.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                  <td className="py-2.5 pr-2 text-white font-mono text-[12px]">{order.qty}</td>
+                                  <td className="py-2.5 pr-2 text-white font-mono text-[12px]">0.00%</td>
+                                  <td className="py-2.5 pr-4 text-right">
+                                    <button onClick={() => cancelLimitOrder(order.id)} className="text-[#848e9c] hover:text-white transition-colors"><X size={16} /></button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                        {tradingTab === 'Open Orders' && paperOrders.filter(o => o.status === 'PENDING').length === 0 && (
+                          <div className="flex flex-col items-center justify-center h-48 text-[#848e9c]">
+                            <ListFilter size={32} className="mb-2 opacity-30" />
+                            <span className="text-[12px]">No open orders</span>
+                          </div>
+                        )}
+                        
+                        {(tradingTab === 'Order History' || tradingTab === 'Trade History') && (
+                          <div className="flex flex-col items-center justify-center h-48 text-[#848e9c]">
+                            <History size={32} className="mb-2 opacity-30" />
+                            <span className="text-[12px]">No history available</span>
+                          </div>
+                        )}
+                        
+                        {tradingTab === 'Arbitrage Matrix' && (
+                          <div className="w-full h-full min-h-[350px]">
+                            <ArbitrageBot onExecuteArbitrage={handleExecuteArbitrage} />
+                          </div>
+                        )}
+                        
+                        {tradingTab === 'Strategy Tester' && (
+                          <div className="w-full h-full min-h-[400px]">
+                            <StrategyTester onClose={() => setTradingTab('Positions')} />
+                          </div>
+                        )}
+
+                        {tradingTab === 'Level 3 DOM Depth' && (
+                          <div className="w-full h-full min-h-[400px]">
+                            <Level3DepthTape symbol={selectedCoin} livePrice={livePrice} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Unified Split Right Sidebar Container */}
+      {!isMobile && !focusMode && (isEditorOpen || rightSidebar) && (
+        <div className={`hidden md:flex flex-col h-full shrink-0 z-20 overflow-hidden ${t.bg} border-l ${t.border} w-[360px] md:w-[420px] transition-all duration-300`}>
+          {isEditorOpen && rightSidebar ? (
+            <div className="flex flex-col h-full divide-y divide-[#2a2e39] min-h-0">
+              <div className="h-1/2 min-h-0 overflow-hidden flex flex-col">
+                {renderEditorPanel()}
+              </div>
+              <div className="h-1/2 min-h-0 overflow-hidden flex flex-col">
+                <RightSidebar 
+  rightSidebar={rightSidebar} setRightSidebar={setRightSidebar} themeConfig={t} 
+  OrderBookPanel={OrderBookPanel} livePrice={livePrice} selectedCoin={selectedCoin} setSelectedCoin={setSelectedCoin}
+  selectedCoinStats={selectedCoinStats} selectedExchange={selectedExchange} fearGreedIndex={fearGreedIndex}
+  watchlist={watchlist} setWatchlist={setWatchlist} watchlistTickers={watchlistTickers}
+  watchlistSearchInput={watchlistSearchInput} setWatchlistSearchInput={setWatchlistSearchInput}
+  watchlistDropdownOpen={watchlistDropdownOpen} setWatchlistDropdownOpen={setWatchlistDropdownOpen}
+  binanceCoins={binanceCoins} showToast={showToast} setMarketStatus={setMarketStatus}
+  coinIconUrl={coinIconUrl} handleCoinIconError={handleCoinIconError}
+  priceColor={priceColor} getBaseAsset={getBaseAsset} isPerpetualSymbol={isPerpetualSymbol}
+  futuresLoading={futuresLoading} fundingRate={fundingRate} openInterest={openInterest}
+  formatShortNumber={formatShortNumber} fundamentalsLoading={fundamentalsLoading}
+  fundamentalsError={fundamentalsError} coinFundamentals={coinFundamentals}
+  formatUSD={formatUSD} getFngColor={getFngColor}
+/>
+              </div>
+            </div>
+          ) : isEditorOpen ? (
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+              {renderEditorPanel()}
+            </div>
+          ) : (
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+              <RightSidebar 
+  rightSidebar={rightSidebar} setRightSidebar={setRightSidebar} themeConfig={t} 
+  OrderBookPanel={OrderBookPanel} livePrice={livePrice} selectedCoin={selectedCoin} setSelectedCoin={setSelectedCoin}
+  selectedCoinStats={selectedCoinStats} selectedExchange={selectedExchange} fearGreedIndex={fearGreedIndex}
+  watchlist={watchlist} setWatchlist={setWatchlist} watchlistTickers={watchlistTickers}
+  watchlistSearchInput={watchlistSearchInput} setWatchlistSearchInput={setWatchlistSearchInput}
+  watchlistDropdownOpen={watchlistDropdownOpen} setWatchlistDropdownOpen={setWatchlistDropdownOpen}
+  binanceCoins={binanceCoins} showToast={showToast} setMarketStatus={setMarketStatus}
+  coinIconUrl={coinIconUrl} handleCoinIconError={handleCoinIconError}
+  priceColor={priceColor} getBaseAsset={getBaseAsset} isPerpetualSymbol={isPerpetualSymbol}
+  futuresLoading={futuresLoading} fundingRate={fundingRate} openInterest={openInterest}
+  formatShortNumber={formatShortNumber} fundamentalsLoading={fundamentalsLoading}
+  fundamentalsError={fundamentalsError} coinFundamentals={coinFundamentals}
+  formatUSD={formatUSD} getFngColor={getFngColor}
+/>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Unified Combined Vertical Right Toolbar */}
+      {!isMobile && !focusMode && (
+        <div className={`hidden md:flex w-10 shrink-0 border-l ${t.border} ${t.bg} flex-col items-center py-3 gap-2 transition-colors duration-200 z-20`}>
+        {/* Editor Toggle Button at the top */}
+        <button
+          onClick={() => {
+            setIsEditorOpen(!isEditorOpen);
+          }}
+          className={`w-8 h-8 rounded flex items-center justify-center relative transition-all ${
+            isEditorOpen ? 'bg-green-500/15 text-green-400' : 'text-green-400/60 hover:bg-green-500/10 hover:text-green-400'
+          }`}
+          title="Pine/Python Strategy Editor"
+        >
+          <Braces size={16} />
+          {isEditorOpen && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-green-400 rounded-l" />}
+        </button>
+
+        <div className="w-6 h-px bg-[#2a2e39]/30 my-1" />
+
+        <button
+          onClick={handlePredictClick}
+          className={`w-8 h-8 rounded flex items-center justify-center relative transition-all ${isAutoPredictEnabled ? (darkMode ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.4)]' : 'bg-purple-100 text-purple-700 border border-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.4)]') : (darkMode ? 'text-purple-400/60 hover:bg-purple-500/10 hover:text-purple-400' : 'text-purple-700/60 hover:bg-purple-100 hover:text-purple-800')}`}
+          title={isAutoPredictEnabled ? "Auto-Predict Active (Click to Disable)" : "Predict Next Candle (Auto-Loop)"}
+        >
+          <Wand2 size={16} />
+          {isAutoPredictEnabled && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-purple-400 rounded-l" />}
+        </button>
+
+        <div className="w-6 h-px bg-[#2a2e39]/30 my-1" />
+
+        {[
+          {id: 'watchlist', icon: ListFilter, title: 'Watchlist', activeClass: 'bg-pink-500/15 text-pink-400', inactiveClass: 'text-pink-400/60 hover:bg-pink-500/10 hover:text-pink-400', marker: 'bg-pink-400'},
+          {id: 'details', icon: Activity, title: 'Details', activeClass: 'bg-lime-500/15 text-lime-400', inactiveClass: 'text-lime-400/60 hover:bg-lime-500/10 hover:text-lime-400', marker: 'bg-lime-400'},
+          {id: 'news', icon: Radio, title: 'News', activeClass: 'bg-zinc-500/15 text-zinc-400', inactiveClass: 'text-zinc-400/60 hover:bg-zinc-500/10 hover:text-zinc-400', marker: 'bg-zinc-400'},
+          {id: 'alerts', icon: Bell, title: 'Alerts', activeClass: 'bg-amber-500/15 text-amber-400', inactiveClass: 'text-amber-400/60 hover:bg-amber-500/10 hover:text-amber-400', marker: 'bg-amber-400'},
+          {id: 'bounties', icon: Briefcase, title: 'Bounties', activeClass: 'bg-slate-500/15 text-slate-400', inactiveClass: 'text-slate-400/60 hover:bg-slate-500/10 hover:text-slate-400', marker: 'bg-slate-400'},
+          {id: 'orderbook', icon: Database, title: 'Order Book', activeClass: 'bg-gray-500/15 text-gray-400', inactiveClass: 'text-gray-400/60 hover:bg-gray-500/10 hover:text-gray-400', marker: 'bg-gray-400'}
+        ].map(item => {
+          const isActive = rightSidebar === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setRightSidebar(isActive ? null : item.id)}
+              className={`w-8 h-8 rounded flex items-center justify-center relative transition-all ${
+                isActive ? item.activeClass : item.inactiveClass
+              }`}
+              title={item.title}
+            >
+              <item.icon size={16} />
+              {isActive && <div className={`absolute right-0 top-1/2 -translate-y-1/2 w-[3px] h-4 ${item.marker} rounded-l`} />}
+            </button>
+          );
+        })}
+      </div>
+
+      
+      )}
+      
+      {/* AESTHETIC MOBILE BOTTOM NAVIGATION BAR */}
+      {!focusMode && !isEditorOpen && (
+        <div className={`md:hidden shrink-0 ${darkMode ? 'bg-[#1e222d]' : 'bg-white'} border-t ${darkMode ? 'border-[#2a2e39]' : 'border-gray-200'} flex items-center justify-between px-2 pb-safe pt-1 shadow-[0_-4px_12px_rgba(0,0,0,0.1)] z-[100] relative`}>
+          <button
+            onClick={() => setMobileActiveTab('chart')}
+            className={`flex flex-col items-center justify-center w-full py-1.5 transition-colors relative ${mobileActiveTab === 'chart' ? 'text-[#2962ff]' : t.muted}`}
+          >
+            {mobileActiveTab === 'chart' && <div className="absolute top-0 w-8 h-[3px] bg-[#2962ff] rounded-b-full shadow-[0_0_8px_#2962ff]" />}
+            <Activity size={22} strokeWidth={mobileActiveTab === 'chart' ? 2.5 : 1.5} className="mb-0.5" />
+            <span className={`text-[9px] ${mobileActiveTab === 'chart' ? 'font-black tracking-wide' : 'font-semibold'}`}>Chart</span>
+          </button>
+          
+          <button
+            onClick={() => { setMobileActiveTab('tools'); setMobileDrawingMenuOpen(true); }}
+            className={`flex flex-col items-center justify-center w-full py-1.5 transition-colors relative ${mobileActiveTab === 'tools' || mobileDrawingMenuOpen ? 'text-[#2962ff]' : t.muted}`}
+          >
+            {(mobileActiveTab === 'tools' || mobileDrawingMenuOpen) && <div className="absolute top-0 w-8 h-[3px] bg-[#2962ff] rounded-b-full shadow-[0_0_8px_#2962ff]" />}
+            <PenTool size={22} strokeWidth={mobileActiveTab === 'tools' || mobileDrawingMenuOpen ? 2.5 : 1.5} className="mb-0.5" />
+            <span className={`text-[9px] ${mobileActiveTab === 'tools' || mobileDrawingMenuOpen ? 'font-black tracking-wide' : 'font-semibold'}`}>Draw</span>
+          </button>
+
+          <div className="relative -top-3 w-full flex justify-center">
+            <button
+              onClick={runBacktest}
+              disabled={loading}
+              className={`flex items-center justify-center w-12 h-12 rounded-full ${loading ? 'bg-gray-600' : 'bg-gradient-to-tr from-[#2962ff] to-[#7C5CFF]'} text-white shadow-xl shadow-[#7C5CFF]/30 border-[3px] ${darkMode ? 'border-[#131722]' : 'border-white'} active:scale-95 transition-all`}
+            >
+              {loading ? <RefreshCw size={22} className="animate-spin" /> : <Play size={22} fill="currentColor" className="ml-1" />}
+            </button>
+          </div>
+
+          <button
+            onClick={() => { setMobileActiveTab('report'); setLowerBoxState('maximized'); }}
+            className={`flex flex-col items-center justify-center w-full py-1.5 transition-colors relative ${mobileActiveTab === 'report' ? 'text-[#2962ff]' : t.muted}`}
+          >
+            {mobileActiveTab === 'report' && <div className="absolute top-0 w-8 h-[3px] bg-[#2962ff] rounded-b-full shadow-[0_0_8px_#2962ff]" />}
+            <BarChartHorizontal size={22} strokeWidth={mobileActiveTab === 'report' ? 2.5 : 1.5} className="mb-0.5" />
+            <span className={`text-[9px] ${mobileActiveTab === 'report' ? 'font-black tracking-wide' : 'font-semibold'}`}>Report</span>
+          </button>
+
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className={`flex flex-col items-center justify-center w-full py-1.5 transition-colors relative ${mobileMenuOpen ? 'text-[#2962ff]' : t.muted}`}
+          >
+            {mobileMenuOpen && <div className="absolute top-0 w-8 h-[3px] bg-[#2962ff] rounded-b-full shadow-[0_0_8px_#2962ff]" />}
+            <Menu size={22} strokeWidth={mobileMenuOpen ? 2.5 : 1.5} className="mb-0.5" />
+            <span className={`text-[9px] ${mobileMenuOpen ? 'font-black tracking-wide' : 'font-semibold'}`}>Menu</span>
+          </button>
+        </div>
+      )}
+
+      {/* MOBILE DRAWING TOOLS MENU OVERLAY */}
+      {isMobile && mobileDrawingMenuOpen && (
+        <div className={`fixed bottom-[60px] left-0 w-full ${darkMode ? 'bg-[#1e222d]' : 'bg-white'} border-t ${darkMode ? 'border-[#2a2e39]' : 'border-gray-200'} rounded-t-2xl shadow-[0_-10px_40px_rgba(0,0,0,0.3)] z-[90] pb-2 transition-transform transform translate-y-0`}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2e39]/50">
+            <span className={`font-black ${t.text} text-[15px]`}>Drawing Tools</span>
+            <button onClick={() => { setMobileDrawingMenuOpen(false); setMobileActiveTab('chart'); }} className={`p-1 ${t.muted} ${t.hover} rounded-full bg-black/10`}><X size={18} /></button>
+          </div>
+          <div className="p-3 max-h-[40vh] overflow-y-auto dark-scrollbar space-y-3">
+            {/* Quick Actions */}
+            <div className="flex gap-2 mb-4">
+              <button onClick={() => { clearAllDrawings(); setMobileDrawingMenuOpen(false); setMobileActiveTab('chart'); }} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-red-500/10 text-red-500 font-bold text-[12px] active:scale-95`}>
+                <Trash2 size={14} /> Clear All
+              </button>
+              <button onClick={() => { setDrawings([]); setMobileDrawingMenuOpen(false); setMobileActiveTab('chart'); }} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-gray-500/10 ${t.text} font-bold text-[12px] active:scale-95`}>
+                <RefreshCw size={14} /> Reset
+              </button>
+            </div>
+            
+            {/* Grid of Tools */}
+            <div className="grid grid-cols-4 gap-3">
+              {[
+                { id: 'trendline', title: 'Trend Line', icon: Spline },
+                { id: 'horizontal_line', title: 'Horiz Line', icon: Minus },
+                { id: 'horizontal_ray', title: 'Horiz Ray', icon: ArrowRight },
+                { id: 'vertical_line', title: 'Vert Line', icon: MoveVertical },
+                { id: 'ray', title: 'Ray', icon: ArrowUpRight },
+                { id: 'channel', title: 'Channel', icon: SplitSquareHorizontal },
+                { id: 'long_position', title: 'Long Pos', icon: TrendingUp },
+                { id: 'short_position', title: 'Short Pos', icon: TrendingDown },
+                { id: 'price_range', title: 'Price Rng', icon: MoveVertical },
+                { id: 'date_range', title: 'Date Rng', icon: MoveHorizontal },
+                { id: 'fib_retracement', title: 'Fib Ret', icon: AlignCenter },
+                { id: 'text', title: 'Text', icon: MessageSquareText },
+                { id: 'brush', title: 'Brush', icon: PenTool },
+                { id: 'rectangle', title: 'Rectangle', icon: Box },
+              ].map(tool => (
+                <button
+                  key={tool.id}
+                  onClick={() => { setActiveTool(tool.id); setMobileDrawingMenuOpen(false); setMobileActiveTab('chart'); showToast(`Selected ${tool.title}`); }}
+                  className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl transition-colors ${activeTool === tool.id ? 'bg-[#2962ff]/20 text-[#2962ff] border border-[#2962ff]/30' : `${darkMode ? 'bg-[#131722] text-gray-400' : 'bg-gray-100 text-gray-600'} border ${darkMode ? 'border-[#2a2e39]' : 'border-gray-200'} hover:bg-black/10`}`}
+                >
+                  <tool.icon size={18} />
+                  <span className="text-[9px] font-bold text-center leading-tight">{tool.title}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      </div>
+
+      {/* Advanced Cursor Studio Modal */}
+      {isCursorStudioOpen && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-xs select-none">
+          <div className={`w-[600px] ${darkMode ? 'bg-[#1c2030] text-white' : 'bg-white text-gray-900'} border ${t.border} rounded-xl shadow-2xl overflow-hidden flex flex-col font-sans animate-fade-in`}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2e39]/65 bg-[#171b26]">
+              <div className="flex items-center gap-2">
+                <Sliders size={15} className="text-[#FF007F]" />
+                <span className="font-extrabold text-[13px] uppercase tracking-wide">Advanced Cursor Studio</span>
+              </div>
+              <button 
+                onClick={() => setIsCursorStudioOpen(false)}
+                className="text-gray-400 hover:text-white p-0.5"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="flex flex-1 min-h-[350px]">
+              {/* Left Column: Cursor Library */}
+              <div className="w-[260px] border-r border-[#2a2e39]/50 p-3 bg-[#171b26]/50">
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 px-1">Cursor Library</div>
+                <div className="space-y-1">
+                  {[
+                    { id: 'crosshair', title: 'Crosshair', desc: 'Precision', icon: Crosshair },
+                    { id: 'dot', title: 'Dot', desc: 'Minimal', icon: Circle },
+                    { id: 'arrow', title: 'Arrow', desc: 'Standard', icon: MousePointer },
+                    { id: 'demonstration', title: 'Demonstration', desc: 'Replay', icon: Play },
+                    { id: 'magic', title: 'Magic', desc: 'Smart Select', icon: Sparkles },
+                    { id: 'eraser', title: 'Eraser', desc: 'Clear', icon: Eraser },
+                  ].map((cur) => {
+                    const CurIcon = cur.icon;
+                    const isSelected = activeTool === cur.id;
+                    return (
+                      <button
+                        key={cur.id}
+                        onClick={() => {
+                          setActiveTool(cur.id);
+                          showToast(`Selected cursor: ${cur.title}`);
+                        }}
+                        className={`w-full flex items-center justify-between p-2 rounded-lg text-left transition-all ${
+                          isSelected ? 'bg-blue-600 text-white font-bold font-mono' : 'hover:bg-white/5 text-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <CurIcon size={13} className={isSelected ? 'text-white' : 'text-gray-400'} />
+                          <span className="text-[11.5px]">{cur.title}</span>
+                        </div>
+                        <span className={`text-[9px] uppercase font-bold ${isSelected ? 'text-white/80' : 'text-gray-500'}`}>{cur.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Right Column: Properties & Advanced Options */}
+              <div className="flex-1 p-4 flex flex-col justify-between">
+                <div className="space-y-3.5">
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Properties</div>
+                  
+                  {/* Color property */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-gray-300">Color</span>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="text" 
+                        value={cursorSettings.color} 
+                        onChange={(e) => setCursorSettings(prev => ({ ...prev, color: e.target.value }))}
+                        className="w-20 px-2 py-1 bg-[#131722] border border-[#2a2e39] rounded text-[11px] font-mono outline-none text-center"
+                      />
+                      <input 
+                        type="color" 
+                        value={cursorSettings.color} 
+                        onChange={(e) => setCursorSettings(prev => ({ ...prev, color: e.target.value }))}
+                        className="w-6 h-6 border-0 bg-transparent cursor-pointer rounded overflow-hidden outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Size property */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[11px] font-semibold text-gray-300">
+                      <span>Size</span>
+                      <span className="font-mono text-blue-400 text-[11px]">{cursorSettings.size}px</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="1" 
+                      max="10" 
+                      value={cursorSettings.size} 
+                      onChange={(e) => setCursorSettings(prev => ({ ...prev, size: parseInt(e.target.value) }))}
+                      className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Opacity property */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[11px] font-semibold text-gray-300">
+                      <span>Opacity</span>
+                      <span className="font-mono text-blue-400 text-[11px]">{cursorSettings.opacity}%</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="10" 
+                      max="100" 
+                      value={cursorSettings.opacity} 
+                      onChange={(e) => setCursorSettings(prev => ({ ...prev, opacity: parseInt(e.target.value) }))}
+                      className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="h-px bg-[#2a2e39]/50 my-1" />
+
+                  {/* Advanced options */}
+                  <div className="space-y-2">
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Advanced Options</div>
+                    {[
+                      { key: 'showTooltip', label: 'Show Coordinate Tooltip' },
+                      { key: 'autoSnap', label: 'Auto-Snap to OHLC' },
+                      { key: 'extendLines', label: 'Extend Lines to Axis' }
+                    ].map((opt) => (
+                      <label key={opt.key} className="flex items-center gap-2.5 cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          checked={cursorSettings[opt.key]}
+                          onChange={(e) => setCursorSettings(prev => ({ ...prev, [opt.key]: e.target.checked }))}
+                          className="w-3.5 h-3.5 rounded accent-blue-600 bg-gray-800 border-gray-700 cursor-pointer"
+                        />
+                        <span className="text-[11px] font-semibold text-gray-300">{opt.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Values Tooltip on Long Press */}
+                <div className="border-t border-[#2a2e39]/50 pt-2 flex items-center justify-between">
+                  <span className="text-[10.5px] font-semibold text-gray-400">Values tooltip on long press</span>
+                  <div className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={cursorSettings.tooltipOnLongPress}
+                      onChange={(e) => setCursorSettings(prev => ({ ...prev, tooltipOnLongPress: e.target.checked }))}
+                    />
+                    <div className="w-8 h-4 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Advanced Trend Studio Modal */}
+      {isTrendStudioOpen && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-xs select-none">
+          <div className={`w-[360px] max-h-[90vh] ${darkMode ? 'bg-[#1c2030] text-white' : 'bg-white text-gray-900'} border ${t.border} rounded-xl shadow-2xl overflow-y-auto dark-scrollbar flex flex-col font-sans animate-fade-in`}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2e39]/65 bg-[#171b26] sticky top-0 z-10">
+              <div className="flex items-center gap-2">
+                <Sliders size={15} className="text-[#2962ff]" />
+                <span className="font-extrabold text-[12.5px] uppercase tracking-wide">Advanced Trend Studio</span>
+              </div>
+              <button 
+                onClick={() => setIsTrendStudioOpen(false)}
+                className="text-gray-400 hover:text-white p-0.5"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* List Content */}
+            <div className="p-3.5 space-y-4">
+              {/* Category 1: Trend Lines */}
+              <div className="space-y-1.5">
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1">Trend Lines</div>
+                <div className="space-y-1">
+                  {[
+                    { id: 'trendline', title: 'Classic (Trend Line)', icon: TrendingUp },
+                    { id: 'polyline', title: 'Poly-Line', icon: GitBranch },
+                    { id: 'curve', title: 'Curve', icon: Undo },
+                  ].map(tool => {
+                    const ToolIcon = tool.icon;
+                    const isSelected = activeTool === tool.id;
+                    return (
+                      <button
+                        key={tool.id}
+                        onClick={() => {
+                          setActiveTool(tool.id);
+                          setIsTrendStudioOpen(false);
+                          showToast(`Selected: ${tool.title}`);
+                        }}
+                        className={`w-full flex items-center gap-3 p-2 rounded-lg text-left transition-all ${
+                          isSelected ? 'bg-blue-600 text-white font-bold font-mono' : 'hover:bg-white/5 text-gray-300'
+                        }`}
+                      >
+                        <ToolIcon size={14} className={isSelected ? 'text-white' : 'text-gray-400'} />
+                        <span className="text-[11.5px]">{tool.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Category 2: Rays & Info */}
+              <div className="space-y-1.5">
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1">Rays & Info</div>
+                <div className="space-y-1">
+                  {[
+                    { id: 'ray', title: 'Ray', icon: ArrowUpRight },
+                    { id: 'infoline', title: 'Info Line', icon: Info },
+                    { id: 'extendedline', title: 'Extended Line', icon: GitCommit },
+                  ].map(tool => {
+                    const ToolIcon = tool.icon;
+                    const isSelected = activeTool === tool.id;
+                    return (
+                      <button
+                        key={tool.id}
+                        onClick={() => {
+                          setActiveTool(tool.id);
+                          setIsTrendStudioOpen(false);
+                          showToast(`Selected: ${tool.title}`);
+                        }}
+                        className={`w-full flex items-center gap-3 p-2 rounded-lg text-left transition-all ${
+                          isSelected ? 'bg-blue-600 text-white font-bold font-mono' : 'hover:bg-white/5 text-gray-300'
+                        }`}
+                      >
+                        <ToolIcon size={14} className={isSelected ? 'text-white' : 'text-gray-400'} />
+                        <span className="text-[11.5px]">{tool.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Category 3: Angles & Geometry */}
+              <div className="space-y-1.5">
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1">Angles & Geometry</div>
+                <div className="space-y-1">
+                  {[
+                    { id: 'trendangle', title: 'Trend Angle', icon: Compass },
+                    { id: 'gann_fan', title: 'Gann Fan (new)', icon: Compass },
+                    { id: 'fib_timezone', title: 'Fibonacci Time Zone (new)', icon: Columns },
+                  ].map(tool => {
+                    const ToolIcon = tool.icon;
+                    const isSelected = activeTool === tool.id;
+                    return (
+                      <button
+                        key={tool.id}
+                        onClick={() => {
+                          setActiveTool(tool.id);
+                          setIsTrendStudioOpen(false);
+                          showToast(`Selected: ${tool.title}`);
+                        }}
+                        className={`w-full flex items-center justify-between p-2 rounded-lg text-left transition-all ${
+                          isSelected ? 'bg-blue-600 text-white font-bold font-mono' : 'hover:bg-white/5 text-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <ToolIcon size={14} className={isSelected ? 'text-white' : 'text-gray-400'} />
+                          <span className="text-[11.5px]">{tool.title.replace(' (new)', '')}</span>
+                        </div>
+                        {tool.title.includes('(new)') && (
+                          <span className="text-[8.5px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wider">New</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Category 4: Channels & Time Cycles */}
+              <div className="space-y-1.5">
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1">Channels & Time Cycles</div>
+                <div className="space-y-1">
+                  {[
+                    { id: 'channel', title: 'Parallel Channel', icon: Columns },
+                    { id: 'regression_trend', title: 'Regression Trend (new)', icon: TrendingUp },
+                  ].map(tool => {
+                    const ToolIcon = tool.icon;
+                    const isSelected = activeTool === tool.id;
+                    return (
+                      <button
+                        key={tool.id}
+                        onClick={() => {
+                          setActiveTool(tool.id);
+                          setIsTrendStudioOpen(false);
+                          showToast(`Selected: ${tool.title}`);
+                        }}
+                        className={`w-full flex items-center justify-between p-2 rounded-lg text-left transition-all ${
+                          isSelected ? 'bg-blue-600 text-white font-bold font-mono' : 'hover:bg-white/5 text-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <ToolIcon size={14} className={isSelected ? 'text-white' : 'text-gray-400'} />
+                          <span className="text-[11.5px]">{tool.title.replace(' (new)', '')}</span>
+                        </div>
+                        {tool.title.includes('(new)') && (
+                          <span className="text-[8.5px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wider">New</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Category 5: Advanced Projections */}
+              <div className="space-y-1.5">
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1">Advanced Projections</div>
+                <div className="space-y-1">
+                  {[
+                    { id: 'pitchfork', title: 'Pitchfork', icon: Activity },
+                    { id: 'schiff_pitchfork', title: 'Schiff Pitchfork (new)', icon: Activity },
+                    { id: 'andrews_pitchfork', title: 'Andrews Pitchfork (new)', icon: Activity },
+                  ].map(tool => {
+                    const ToolIcon = tool.icon;
+                    const isSelected = activeTool === tool.id;
+                    return (
+                      <button
+                        key={tool.id}
+                        onClick={() => {
+                          setActiveTool(tool.id);
+                          setIsTrendStudioOpen(false);
+                          showToast(`Selected: ${tool.title}`);
+                        }}
+                        className={`w-full flex items-center justify-between p-2 rounded-lg text-left transition-all ${
+                          isSelected ? 'bg-blue-600 text-white font-bold font-mono' : 'hover:bg-white/5 text-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <ToolIcon size={14} className={isSelected ? 'text-white' : 'text-gray-400'} />
+                          <span className="text-[11.5px]">{tool.title.replace(' (new)', '')}</span>
+                        </div>
+                        {tool.title.includes('(new)') && (
+                          <span className="text-[8.5px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wider">New</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+    </>
+  );
+}
+
+
+// MiniChartWrapper extracted/removed
+
+
+// OrderBookPanel extracted/removed
+
+
+
+
+

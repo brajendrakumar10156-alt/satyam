@@ -5,7 +5,8 @@ import { Canvas2DRenderer } from './Canvas2DRenderer';
 const NativeCanvasEngine = React.forwardRef(({
   candles = [],
   darkMode = true,
-  onCrosshairMove
+  onCrosshairMove,
+  onVisibleRangeChange
 }: any, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
