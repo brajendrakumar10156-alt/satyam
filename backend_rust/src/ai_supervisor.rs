@@ -39,5 +39,20 @@ impl AiSupervisor {
             symbol = symbol, price = price, indicator = indicator, result = result
         );
 
+        let req_body = OllamaRequest {
+            model: self.model.clone(),
+            prompt,
+            stream: false,
+        };
 
-    qaz
+        let response = self.client
+            .post(&self.ollama_url)
+            .json(&req_body)
+            .send()
+            .await?
+            .json::<OllamaResponse>()
+            .await?;
+
+        Ok(response.response)
+    }
+}

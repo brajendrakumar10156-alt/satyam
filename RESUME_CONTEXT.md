@@ -82,3 +82,26 @@ pm run build passed) and is fully functional. The only remaining large component
 - Pass all necessary state variables as props to prevent the app from crashing.
 - After extraction, ensure the app still renders correctly.
 
+
+### Agent Conversation & Action History
+**Date:** 2026-07-27 20:50:47 IST
+**Agent:** Antigravity
+**Actions Taken:**
+- Extracted redundant inline TradingPanel and PineEditorPanel HTML blocks from WebContainer.tsx and properly implemented the imported components, reducing the file's bloat significantly.
+- Fixed Windows Tauri UI overlap/squish bugs by updating TopNavbar.tsx (removed horizontal overflow to prevent absolute dropdown clipping) and LeftToolbar.tsx (switched from vh calculation to flex-1 min-h-0 to adapt dynamically).
+- Searched for 'src_demo' and cleaned up tsconfig.json by removing its reference.
+- Renamed project in package.json from 'satyam-ai-terminal' to 'quanta-ai'.
+- Successfully passed npm run build check with no module errors.
+**Start Here (Next Agent):**
+- Continue from User's next instructions. No pending cleanup tasks remain in the current phase.
+
+
+## Agent Update
+- **Action**: Extracted RightToolbar.tsx and removed orphaned logics (sendAiMessage, 
+unBacktest) from WebContainer.tsx.
+- **Status**: WebContainer.tsx shrank by another ~450 lines. Fixed broken hooks closing tags which caused Vite build failures.
+- **Verification**: 
+pm run build is clean and successful.
+- **Start Here (Next Agent)**: The WebContainer.tsx is down to around 4150 lines. Check implementation_plan.md and 	ask.md for remaining UI logic extractions (e.g. 
+enderEditorPanel, unified split views). Make sure NOT to create generic layout shells, but surgically extract existing inline JSX chunks. Always run 
+pm run build to verify syntax.

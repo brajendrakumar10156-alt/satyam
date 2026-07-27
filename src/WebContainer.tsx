@@ -4,6 +4,12 @@ import NativeCanvasEngine from './core_render_canvas2d/NativeCanvasEngine';
 import OrderBookPanel from './components/OrderBookPanel';
 import MiniChartWrapper from './components/MiniChartWrapper';
 import html2canvas from 'html2canvas';
+import { useWebContainerBacktest } from './hooks/useWebContainerBacktest';
+import { useWebContainerAI } from './hooks/useWebContainerAI';
+import { useMarketWebsockets } from './hooks/useMarketWebsockets';
+import { useLightweightCharts } from './hooks/useLightweightCharts';
+import { useDrawingOverlays } from './hooks/useDrawingOverlays';
+import { RightToolbar } from './components/layout/RightToolbar';
 import { RightSidebar } from './components/layout/RightSidebar';
 import { LeftToolbar } from './components/layout/LeftToolbar';
 import React, { useEffect, useRef, useState, useCallback, useMemo, Suspense, lazy } from 'react';
@@ -91,6 +97,8 @@ import { startAutoDataVerifier } from './utils/autoDataVerifier';
 import { API_BASE, CANDLE_BATCH_SIZE, INITIAL_HISTORY_BATCHES, MAX_CANDLES_IN_MEMORY, SIX_YEARS_SECONDS, INTERVAL_SECONDS_MAP, CUSTOM_TIMEFRAME_REGEX, intervalToSeconds, getHistoryCandleCap, QUOTE_ASSETS, parseSymbolParts, getBaseAsset, getQuoteAsset, getFngColor, formatUSD, formatShortNumber, COINGECKO_ID_MAP, getCoinGeckoId, coinIconUrl, handleCoinIconError } from './app_core/AppConfig';
 import { mergeCandles, toHeikinAshi, hexToRGBA, distanceToLineSegment, throttle } from './utils/chartHelpers';
 import { TopNavbar } from './components/layout/TopNavbar';
+import TradingPanel from './components/layout/TradingPanel';
+import { PineEditorPanel } from './components/layout/PineEditorPanel';
 import { IndicatorSearchModal } from './components/layout/IndicatorSearchModal';
 import { AlertSettingsModal } from './components/layout/AlertSettingsModal';
 import { IndicatorParamsModal } from './components/layout/IndicatorParamsModal';
@@ -1812,7 +1820,45 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
   const AiChatPanel = () => null;
   const renderBountyPanel = () => null;
   const renderDiffViewer = () => null;
-  const renderEditorPanel = () => null;
+  const renderEditorPanel = () => (
+    <PineEditorPanel 
+      t={t}
+      darkMode={darkMode}
+      loading={loading}
+      runBacktest={runBacktest}
+      editorRef={editorRef}
+      editorContent={editorContent}
+      setEditorContent={setEditorContent}
+      monacoEditorRef={monacoEditorRef}
+      consoleOutput={consoleOutput}
+      compileError={compileError}
+      renderTriangleRIcon={renderTriangleRIcon}
+      setEditorMode={setEditorMode}
+      editorMode={editorMode}
+      pineCode={pineCode}
+      pythonCode={pythonCode}
+      showDiff={showDiff}
+      setShowDiff={setShowDiff}
+      setBaseCode={setBaseCode}
+      setSubView={setSubView}
+      getSubView={getSubView}
+      aiProvider={aiProvider}
+      setAiProvider={setAiProvider}
+      handleUndo={handleUndo}
+      historyIndex={historyIndex}
+      codeHistory={codeHistory}
+      handleRedo={handleRedo}
+      sendAiMessage={sendAiMessage}
+      DEFAULT_PYTHON_STRATEGY={DEFAULT_PYTHON_STRATEGY}
+      handleCodeChange={handleCodeChange}
+      renderDiffViewer={renderDiffViewer}
+      AiChatPanel={AiChatPanel}
+      syntaxStatus={syntaxStatus}
+      checkBackend={checkBackend}
+      showToast={showToast}
+      backendOnline={backendOnline}
+    />
+  );
   const renderOHLCHeader = () => null;
   const renderIndValues = () => null;
   const renderChartOverlays = () => null;
@@ -2047,305 +2093,13 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
     }
   }, [replayIndex, replayMode, chartStyle]);
 
-  useEffect(() => {
-    let disposed = false;
-    let unsubWs = null;
-    let connectTimeout = null;
-    const myGeneration = ++fetchGenerationRef.current;
+  
+  useMarketWebsockets({ selectedCoin, selectedExchange, fetchGenerationRef, handleRawTrade, upsertLiveCandle, setMarketStatus, chartInterval, isBacktesting, backendOnline });
 
-    allCandlesRef.current = [];
-    fullCandlesRef.current = [];
-    setAllCandles([]);
 
-    const fetchChart = async (initialLoad = false) => {
-      try {
-        if (initialLoad) {
-          setMarketStatus('Loading');
-          isFirstLoad.current = true;
-        }
-        const applyProgress = (partial) => {
-          if (disposed || myGeneration !== fetchGenerationRef.current || !partial.length) return;
-          if (!replayMode) fullCandlesRef.current = [...partial];
-          allCandlesRef.current = partial;
-          latestCandleRef.current = { ...partial[partial.length - 1] };
-          setAllCandles(partial);
-          setLivePrice(partial[partial.length - 1]?.close || 0);
-          setMarketStatus('Connected');
-        };
+  
+  useLightweightCharts({ chartRef, renderEngine, chartInstance, candleSeries, t, darkMode, selectedCoin, subChartsMapRef, isDrawing, handleNativeWheel });
 
-        let candles;
-        if (initialLoad) {
-          const cached = loadCandleCache(selectedExchange, selectedCoin, chartInterval)
-            .filter(c => Number.isFinite(c.time) && Number.isFinite(c.close));
-
-          if (cached.length) {
-            applyProgress(cached);
-            const freshBatch = await fetchCandles(CANDLE_BATCH_SIZE);
-            const freshFiltered = freshBatch.filter(c => Number.isFinite(c.time) && Number.isFinite(c.close));
-            candles = mergeCandles(cached, freshFiltered);
-          } else {
-            candles = await fetchInitialHistory((partial) => applyProgress(
-              partial.filter(c => Number.isFinite(c.time) && Number.isFinite(c.close))
-            ));
-          }
-        } else {
-          candles = await fetchCandles(CANDLE_BATCH_SIZE);
-        }
-        candles = candles.filter(c => Number.isFinite(c.time) && Number.isFinite(c.close));
-        
-        if (disposed || myGeneration !== fetchGenerationRef.current) return;
-        const historyCap = getHistoryCandleCap(chartInterval);
-        const nextCandles = initialLoad
-          ? candles.slice(-historyCap)
-          : mergeCandles(allCandlesRef.current, candles).slice(-historyCap);
-
-        if (nextCandles.length > 0) latestCandleRef.current = { ...nextCandles[nextCandles.length - 1] };
-        if (!replayMode) fullCandlesRef.current = [...nextCandles];
-        allCandlesRef.current = nextCandles;
-        setAllCandles(nextCandles);
-        setLivePrice(nextCandles[nextCandles.length - 1]?.close || 0);
-        setMarketStatus('Connected');
-        saveCandleCache(selectedExchange, selectedCoin, chartInterval, nextCandles);
-      } catch (e) { 
-        setMarketStatus('Error');
-        setToastMsg(`⚠️ Failed to load ${selectedCoin} on ${selectedExchange}. Invalid pair or API error.`);
-        setTimeout(() => setToastMsg(''), 4000);
-      }
-    };
-    fetchChart(true);
-
-    const pollMs = chartInterval === '1m' ? 15000 : chartInterval === '5m' ? 30000 : 60000;
-    const pollId = window.setInterval(() => fetchChart(false), pollMs);
-
-    // 30-second Silent Background Data Integrity Re-Checker & Healer
-    const gapCheckId = window.setInterval(async () => {
-      if (disposed || !allCandlesRef.current || allCandlesRef.current.length < 2) return;
-      const candles = allCandlesRef.current;
-      let hasGap = false;
-      for (let i = 1; i < candles.length; i++) {
-        if (candles[i].time - candles[i - 1].time > 90) {
-          hasGap = true;
-          break;
-        }
-      }
-      if (hasGap) {
-        console.log(`[Silent Healer 30s] Gap detected in ${selectedCoin}. Signaling Service 11 Rescue Relay & syncing...`);
-        // Non-blocking report to Rust Service 11 Client Rescue Relay
-        fetch(`http://127.0.0.1:8080/api/report_corruption?symbol=${selectedCoin}`).catch(() => {});
-        try {
-          const fresh = await fetchCandles(1000);
-          if (fresh && fresh.length > 0 && !disposed) {
-            // Strict timestamp sorting & deduplication
-            const map = new Map<number, typeof fresh[0]>();
-            for (const c of [...allCandlesRef.current, ...fresh]) {
-              map.set(c.time, c);
-            }
-            const aligned = Array.from(map.values()).sort((a, b) => a.time - b.time);
-            allCandlesRef.current = aligned;
-            fullCandlesRef.current = aligned;
-            setAllCandles(aligned);
-          }
-        } catch (_) {}
-      }
-    }, 30000);
-
-    connectTimeout = setTimeout(() => {
-      if (disposed) return;
-
-      unsubWs = subscribeExchangeKline(
-        selectedExchange,
-        selectedCoin,
-        chartInterval,
-        (liveCandle) => {
-          if (disposed) return;
-          const newPrice = liveCandle.close;
-          const prev = prevPriceRef.current || newPrice;
-          const color = newPrice >= prev ? '#089981' : '#F23645';
-          prevPriceRef.current = newPrice;
-
-          // DOM Bypass updates for instant 60FPS UI
-          const elPrice = document.getElementById('topbar-live-price');
-          if (elPrice) {
-            elPrice.innerText = '$' + newPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
-            elPrice.style.color = color;
-          }
-          
-          const elSell = document.getElementById('quick-sell-price');
-          if (elSell) elSell.innerText = (newPrice * 0.9998).toFixed(2);
-          
-          const elBuy = document.getElementById('quick-buy-price');
-          if (elBuy) elBuy.innerText = (newPrice * 1.0002).toFixed(2);
-
-          // Throttle React state to 1 update per second
-          const now = Date.now();
-          if (now - lastReactUpdateRef.current > 1000) {
-            lastReactUpdateRef.current = now;
-            setLivePrice(newPrice);
-            setPriceColor(color);
-          }
-
-          upsertLiveCandle(liveCandle);
-        },
-        (status) => {
-          if (!disposed && status) setMarketStatus(status);
-        }
-      );
-    }, 400);
-
-    return () => {
-      disposed = true;
-      window.clearInterval(pollId);
-      window.clearInterval(gapCheckId);
-      if (connectTimeout) clearTimeout(connectTimeout);
-      if (unsubWs) unsubWs();
-    };
-  }, [selectedCoin, chartInterval, selectedExchange, fetchCandles, fetchInitialHistory, upsertLiveCandle]);
-
-  useEffect(() => {
-    if (!chartRef.current || renderEngine !== 'canvas2d') return;
-    const chart = createChart(chartRef.current, {
-
-      width: chartRef.current.clientWidth,
-      height: chartRef.current.clientHeight || 300,
-      layout: {
-        background: { color: darkMode ? '#0d1117' : '#ffffff' },
-        textColor: darkMode ? '#c9d1d9' : '#131722',
-        fontSize: 11,
-        fontFamily: "'Inter', 'SF Pro Display', -apple-system, sans-serif",
-      },
-      localization: {
-        timeFormatter: (businessDayOrTimestamp) => {
-          if (!businessDayOrTimestamp) return '';
-          const d = new Date((businessDayOrTimestamp + timezoneOffset) * 1000);
-          return `${d.getUTCDate()} ${d.toLocaleString('default', { month: 'short', timeZone: 'UTC' })} '${d.getUTCFullYear().toString().substring(2)} ${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}:${d.getUTCSeconds().toString().padStart(2, '0')}`;
-        }
-      },
-      watermark: {
-        visible: false,
-      },
-      grid: {
-        vertLines: { color: darkMode ? 'rgba(42,46,57,0.6)' : '#e0e3eb', style: 1 },
-        horzLines: { color: darkMode ? 'rgba(42,46,57,0.6)' : '#e0e3eb', style: 1 },
-      },
-      crosshair: {
-        mode: 1,
-        vertLine: {
-          color: darkMode ? 'rgba(180,190,210,0.4)' : 'rgba(100,110,130,0.4)',
-          width: 1,
-          style: 3,
-          labelBackgroundColor: darkMode ? '#2a2e39' : '#e0e3eb',
-        },
-        horzLine: {
-          color: darkMode ? 'rgba(180,190,210,0.4)' : 'rgba(100,110,130,0.4)',
-          width: 1,
-          style: 3,
-          labelBackgroundColor: darkMode ? '#2a2e39' : '#e0e3eb',
-        },
-      },
-      timeScale: {
-        borderColor: darkMode ? 'rgba(42,46,57,0.8)' : '#e0e3eb',
-        rightOffset: 20,
-        barSpacing: isMobile ? 5 : 10,
-        minBarSpacing: 2,
-        timeVisible: true,
-        secondsVisible: chartInterval === '1m',
-        tickMarkFormatter: (time, tickMarkType, locale) => {
-          const d = new Date((time + timezoneOffset) * 1000);
-          if (tickMarkType === 1 || tickMarkType === 2) { 
-             return `${d.getUTCDate()} ${d.toLocaleString('default', { month: 'short', timeZone: 'UTC' })}`;
-          }
-          return `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
-        },
-      },
-      rightPriceScale: {
-        borderColor: darkMode ? 'rgba(42,46,57,0.8)' : '#e0e3eb',
-        scaleMargins: { top: 0.08, bottom: 0.12 },
-      },
-      handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
-      handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
-    });
-
-    const volSeries = chart.addHistogramSeries({
-      color: 'rgba(8,153,129,0.35)',
-      priceFormat: { type: 'volume' },
-      priceScaleId: 'volume',
-      lastValueVisible: false,
-      priceLineVisible: false,
-    });
-
-    chart.priceScale('volume').applyOptions({
-      scaleMargins: { top: 0.84, bottom: 0 },
-    });
-
-    chartInstance.current = chart; 
-    volumeSeries.current = volSeries;
-    setChartCreated(true);
-
-    chart.subscribeCrosshairMove((param) => {
-      if (param.time) {
-        updateCrosshairDOM(param.time);
-      } else {
-        updateCrosshairDOM(null);
-      }
-    });
-
-    // Old click handler removed to avoid conflicts
-    const ro = new ResizeObserver(entries => { 
-      if (entries[0] && chartInstance.current) {
-        chartInstance.current.applyOptions({ width: entries[0].contentRect.width, height: entries[0].contentRect.height }); 
-      }
-    });
-    const domElement = chartRef.current;
-    const handleNativeWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      if (!chartInstance.current) return;
-      const ts = chartInstance.current.timeScale();
-      const logicalRange = ts.getVisibleLogicalRange();
-      if (!logicalRange) return;
-
-      const rect = domElement.getBoundingClientRect();
-      const px = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-      const ratio = px / Math.max(1, rect.width);
-      const rangeLen = logicalRange.to - logicalRange.from;
-
-      const isTouchpadPinch = e.ctrlKey;
-      const isHorizontalTrackpadPan = !e.ctrlKey && Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) > 2;
-
-      if (isHorizontalTrackpadPan) {
-        // Laptop Touchpad Two-Finger Horizontal Swipe Panning
-        const shiftCandles = (e.deltaX / Math.max(1, rect.width)) * rangeLen * 0.8;
-        ts.setVisibleLogicalRange({
-          from: logicalRange.from + shiftCandles,
-          to: logicalRange.to + shiftCandles
-        });
-      } else {
-        // Laptop Touchpad Pinch-to-Zoom AND Mouse Wheel Zoom
-        const delta = isTouchpadPinch ? e.deltaY * 6.0 : e.deltaY;
-        const zoomSensitivity = 0.0018;
-        const zoomFactor = Math.exp(delta * zoomSensitivity);
-
-        const pivot = logicalRange.from + (rangeLen * ratio);
-        const newLen = Math.max(5, Math.min(50000, rangeLen * zoomFactor));
-
-        const newFrom = pivot - (newLen * ratio);
-        const newTo = pivot + (newLen * (1 - ratio));
-
-        ts.setVisibleLogicalRange({ from: newFrom, to: newTo });
-      }
-    };
-
-    domElement.addEventListener('wheel', handleNativeWheel, { passive: false });
-
-    return () => {
-      domElement.removeEventListener('wheel', handleNativeWheel);
-      ro.disconnect();
-      chart.remove();
-      chartInstance.current = null;
-      candleSeries.current = null;
-      volumeSeries.current = null;
-      setChartCreated(false);
-    };
-  }, [renderEngine, timezoneOffset]);
 
 
   useEffect(() => {
@@ -2544,132 +2298,9 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
   // ─── Client-Side Indicators Rendering ───
 
   // A. Structural Effect: Handles adding/removing series and oscillator sub-charts dynamically using INDICATOR_REGISTRY
-  useEffect(() => {
-    if (!chartInstance.current || !chartCreated) return;
+  
+  useDrawingOverlays({ chartInstance, chartCreated, visualIndicators, latestCandleRef });
 
-    // Get active indicators categorized by kind
-    const activeOverlays = visualIndicators.filter(ind => ind.visible && INDICATOR_REGISTRY[ind.type]?.kind === 'overlay');
-    const activeOscillators = visualIndicators.filter(ind => ind.visible && INDICATOR_REGISTRY[ind.type]?.kind === 'subchart');
-
-    // 1. Clean up removed indicator series on MAIN chart
-    const activeMainKeys = new Set();
-    activeOverlays.forEach(ind => {
-      const reg = INDICATOR_REGISTRY[ind.type];
-      if (reg) {
-        reg.seriesConfig.forEach(s => {
-          activeMainKeys.add(`${ind.id}_${s.key}`);
-        });
-      }
-    });
-
-    Object.keys(indicatorSeriesRef.current).forEach(key => {
-      if (!activeMainKeys.has(key)) {
-        try {
-          chartInstance.current.removeSeries(indicatorSeriesRef.current[key]);
-        } catch (e) {}
-        delete indicatorSeriesRef.current[key];
-      }
-    });
-
-    // 2. Destroy sub-charts that are no longer active
-    Object.keys(subChartsMapRef.current).forEach(id => {
-      if (!activeOscillators.some(ind => ind.id === id)) {
-        try {
-          subChartsMapRef.current[id].unsubscribeSync?.();
-          subChartsMapRef.current[id].chart.remove();
-        } catch (e) {}
-        delete subChartsMapRef.current[id];
-      }
-    });
-
-    // 3. Create active main-chart overlays
-    activeOverlays.forEach(ind => {
-      const reg = INDICATOR_REGISTRY[ind.type];
-      if (!reg) return;
-      reg.seriesConfig.forEach(s => {
-        const key = `${ind.id}_${s.key}`;
-        if (!indicatorSeriesRef.current[key]) {
-          const options = s.options(ind.params, ind.color);
-          let series;
-          if (s.type === 'histogram') {
-            series = chartInstance.current.addHistogramSeries(options);
-          } else {
-            series = chartInstance.current.addLineSeries(options);
-          }
-          indicatorSeriesRef.current[key] = series;
-        }
-      });
-    });
-
-    // 4. Create active oscillators in sub-panes
-    activeOscillators.forEach(ind => {
-      const reg = INDICATOR_REGISTRY[ind.type];
-      if (!reg) return;
-      const container = document.getElementById(`subchart-container-${ind.id}`);
-      if (!container) return;
-
-      let subChartObj = subChartsMapRef.current[ind.id];
-      if (!subChartObj) {
-        const chart = createChart(container, {
-        handleScroll: { mouseWheel: true, pressedMouseMove: true },
-        handleScale: { mouseWheel: false, pinch: true, axisPressedMouseMove: true },
-        kinematicScroll: { mouse: true },
-
-          layout: {
-            background: { type: 'solid', color: darkMode ? '#131722' : '#ffffff' },
-            textColor: darkMode ? '#c9d1d9' : '#131722',
-          },
-          grid: {
-            vertLines: { color: darkMode ? 'rgba(42,46,57,0.6)' : '#e0e3eb' },
-            horzLines: { color: darkMode ? 'rgba(42,46,57,0.6)' : '#e0e3eb' },
-          },
-          timeScale: {
-            visible: true,
-            borderColor: darkMode ? '#2a2e39' : '#e0e3eb',
-          },
-          rightPriceScale: {
-            borderColor: darkMode ? '#2a2e39' : '#e0e3eb',
-          },
-          width: container.clientWidth,
-          height: container.clientHeight,
-        });
-
-        const seriesList = {};
-        reg.seriesConfig.forEach(s => {
-          const options = s.options(ind.params, ind.color);
-          let series;
-          if (s.type === 'histogram') {
-            series = chart.addHistogramSeries(options);
-          } else {
-            series = chart.addLineSeries(options);
-          }
-          seriesList[s.key] = series;
-        });
-
-        // Bi-directional timescale sync
-        const mainTimeScale = chartInstance.current.timeScale();
-        const subTimeScale = chart.timeScale();
-
-        const syncMainToSub = throttle((range) => { if (range) subTimeScale.setVisibleRange(range); }, 16);
-        const syncSubToMain = throttle((range) => { if (range) mainTimeScale.setVisibleRange(range); }, 16);
-
-        mainTimeScale.subscribeVisibleTimeRangeChange(syncMainToSub);
-        subTimeScale.subscribeVisibleTimeRangeChange(syncSubToMain);
-
-        subChartObj = {
-          chart,
-          seriesList,
-          unsubscribeSync: () => {
-            mainTimeScale.unsubscribeVisibleTimeRangeChange(syncMainToSub);
-            subTimeScale.unsubscribeVisibleTimeRangeChange(syncSubToMain);
-          }
-        };
-        subChartsMapRef.current[ind.id] = subChartObj;
-      }
-    });
-
-    setIndicatorStructureTick(prev => prev + 1);
-  }, [visualIndicators, chartStyle, darkMode, chartCreated]);
 
   const lastVisualIndicatorsRef = useRef(visualIndicators);
 
@@ -3014,7 +2645,7 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
     showToast(`Exchange: ${getExchangeMeta(exchangeId).name}`);
   };
 
-  const executeSearch = (targetCoin) => {
+  const executeSearch = async (targetCoin) => {
     const cu = targetCoin.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!cu) return;
 
@@ -3061,226 +2692,6 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
     showToast('✅ AI code applied to editor');
   };
 
-  const sendAiMessage = async (mode = 'chat', overridePrompt = null) => {
-    const prompt = (overridePrompt ?? aiPrompt).trim();
-    if (!prompt && mode === 'chat') return;
-
-    const provider = aiProvider;
-    if (provider === 'gemini' && !aiKeysReady.gemini) {
-      showToast('❌ Gemini API key missing in backend/.env');
-      return;
-    }
-    if (provider === 'groq' && !aiKeysReady.groq) {
-      showToast('❌ Groq API key missing in backend/.env');
-      return;
-    }
-
-    setAiLoading(true);
-    setSyntaxStatus('AI thinking...');
-    setSubView('ai');
-    setIsEditorOpen(true);
-
-    const userLabel = prompt || { generate: 'Generate strategy', fix: 'Fix my code', explain: 'Explain strategy', optimize: 'Optimize strategy' }[mode] || 'AI request';
-    appendAiMessage({ role: 'user', content: userLabel });
-
-    try {
-      const res = await fetch(`${API_BASE}/ai/assist`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider,
-          prompt,
-          mode,
-          code: editorMode === 'pine' ? pineCode : pythonCode,
-          language: editorMode,
-          ticker: selectedCoin,
-          timeframe: chartInterval,
-          exchange: selectedExchange,
-          context: {
-            selectedCoin,
-            exchange: selectedExchange,
-            timeframe: chartInterval,
-            editorMode,
-            livePrice,
-            marketStatus,
-            priceColor,
-            activeTab,
-            backendOnline,
-          },
-        }),
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-
-      appendAiMessage({ role: 'assistant', content: data.reply, code: data.code });
-      setAiPrompt('');
-      setSyntaxStatus('AI ready.');
-    } catch (e) {
-      console.warn('Backend AI fallback to Client-Side AI Strategy Engine:', e);
-      const clientGeneratedCode = aiStrategyEngine.generateFromPrompt(prompt || 'EMA crossover with RSI', editorMode);
-      appendAiMessage({
-        role: 'assistant',
-        content: `⚡ **Client-Side AI Strategy Engine (Phase 5)**\n\nGenerated strategy for: "${prompt || 'EMA Crossover'}"`,
-        code: clientGeneratedCode
-      });
-      setAiPrompt('');
-      setSyntaxStatus('Client AI Ready.');
-      showToast('⚡ Client AI Strategy Generated ✓');
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const runBacktest = async () => {
-    const code = editorMode === 'pine' ? pineCode : pythonCode;
-    setLastBacktestCode(code);
-    setLastBacktestMode(editorMode);
-    setBackendOfflineNotice('');
-
-    if (editorMode === 'python' && !/def\s+strategy\s*\(/m.test(code)) {
-      showToast('❌ Python: define def strategy(df): ...');
-      setSyntaxStatus('Missing strategy(df) function');
-      return;
-    }
-
-    const key = `${editorMode}_${selectedCoin}_${chartInterval}`;
-
-    if (backendOnline === false) {
-      const ok = await checkBackend();
-      if (!ok) {
-        const cached = lastBacktestResultsRef.current[key];
-        if (cached) {
-          setMetrics(cached.metrics);
-          setBackendOfflineNotice(`Showing cached result from ${cached.timestamp} (Strategy backend offline — check connection)`);
-          showToast('⚠️ Strategy backend offline — Showing cached result');
-          setMarketStatus('Connected (Cached)');
-          setActiveTab('Overview');
-          setSyntaxStatus('Offline fallbacks active');
-          if (lowerBoxState === 'minimized') setLowerBoxState('normal');
-          return;
-        }
-        showToast('❌ API offline — terminal mein: npm run backend');
-        setSyntaxStatus('API offline — npm run backend');
-        setMarketStatus('Offline');
-        setBackendOfflineNotice('Strategy backend unavailable — check connection. Terminal mein `npm run backend` run karein.');
-        return;
-      }
-    }
-
-    setLoading(true);
-    setMarketStatus(editorMode === 'python' ? 'Running Python...' : 'Running WASM Pine JIT...');
-    showToast(editorMode === 'python' ? '🐍 Python backtest...' : '⚡ WASM Pine JIT (< 3ms)...');
-
-    if (editorMode === 'pine') {
-      try {
-        const closes = allCandles.map(c => c.close);
-        const result = await pineJitCompiler.compileAndRun(pineCode, closes, allCandles);
-        setStrategySignals(result.signals || []);
-        if (result.metrics) {
-          setMetrics(result.metrics);
-        }
-        showToast(`⚡ Pine JIT Executed in ${result.executionTimeMs} ms ✓`);
-        setSyntaxStatus(`WASM JIT Ready (${result.executionTimeMs} ms)`);
-        setMarketStatus('Connected (WASM JIT)');
-        setLoading(false);
-        if (lowerBoxState === 'minimized') setLowerBoxState('normal');
-        return;
-      } catch (jitErr) {
-        console.warn('Pine JIT fallback to backend:', jitErr);
-      }
-    }
-
-    const endpoint = editorMode === 'pine' ? '/backtest-pine' : '/backtest-python';
-    try {
-      const res = await fetch(`${API_BASE}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, ticker: selectedCoin, timeframe: chartInterval }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        const err = data.error || data.detail || `HTTP ${res.status}`;
-        showToast('❌ ' + err);
-        setMarketStatus('Error');
-        setSyntaxStatus(String(err).slice(0, 80));
-        return;
-      }
-
-      const adv = data.advanced_stats || {};
-      const trades = data.trades || [];
-      const totalTrades = data.summary?.totalTrades || trades.length || 0;
-      const maxDrawdownPct = adv.maxDrawdownPct ?? parseBacktestNumber(data.summary?.maxDrawdown);
-      const maxDrawdownVal = adv.maxDrawdownVal ?? parseBacktestNumber(data.summary?.maxDrawdownValue);
-      
-      const newMetrics = {
-        summary: {
-          netProfitVal: parseBacktestNumber(data.summary?.totalPnL),
-          netProfitPct: parseBacktestNumber(data.summary?.pct),
-          maxDrawdownVal,
-          maxDrawdownPct,
-          totalTrades,
-          winRate: parseBacktestNumber(data.summary?.profitableTrades),
-          profitFactor: parseBacktestNumber(data.summary?.profitFactor) || data.summary?.profitFactor || 0,
-        },
-        advanced: {
-          grossProfit: adv.grossProfit ?? 0, grossLoss: adv.grossLoss ?? 0, longTotal: adv.longTotal ?? 0,
-          longWins: adv.longWins ?? 0, shortTotal: adv.shortTotal ?? 0, shortWins: adv.shortWins ?? 0,
-          wins: adv.wins ?? 0, losses: adv.losses ?? 0, totalTrades, avgWin: adv.avgWin ?? 0,
-          avgLoss: adv.avgLoss ?? 0, avgTrade: adv.avgTrade ?? 0, bestTrade: adv.bestTrade ?? 0,
-          worstTrade: adv.worstTrade ?? 0, expectancy: adv.expectancy ?? 0, payoffRatio: adv.payoffRatio ?? 0,
-          recoveryFactor: adv.recoveryFactor ?? 0, maxWinStreak: adv.maxWinStreak ?? 0, maxLossStreak: adv.maxLossStreak ?? 0,
-          maxDrawdownPct, maxDrawdownVal,
-        },
-        trades,
-        performance: { equityChart: normalizeEquityCurve(data.equity_curve) },
-      };
-
-      setMetrics(newMetrics);
-      
-      // Save to cache
-      lastBacktestResultsRef.current[key] = {
-        metrics: newMetrics,
-        timestamp: new Date().toLocaleTimeString()
-      };
-      setBackendOfflineNotice('');
-
-      setMarketStatus('Connected');
-      setActiveTab('Overview');
-      if (lowerBoxState === 'minimized') setLowerBoxState(isMobile ? 'maximized' : 'maximized');
-      setSyntaxStatus(
-        data.summary?.totalTrades
-          ? `✅ ${data.summary.totalTrades} trades`
-          : '✅ Done — 0 trades (try 1D timeframe or edit strategy)'
-      );
-      showToast(
-        data.summary?.totalTrades
-          ? `✅ ${editorMode === 'python' ? 'Python' : 'Pine'}: ${data.summary.totalTrades} trades`
-          : '⚠️ No trades — use 1D timeframe or adjust strategy'
-      );
-      if (lowerBoxState === 'minimized') setLowerBoxState('normal');
-    } catch (e) {
-      console.error(e);
-      setBackendOnline(false);
-      
-      const cached = lastBacktestResultsRef.current[key];
-      if (cached) {
-        setMetrics(cached.metrics);
-        setBackendOfflineNotice(`Showing cached result from ${cached.timestamp} (Strategy backend offline — check connection)`);
-        showToast('⚠️ Strategy backend offline — Showing cached result');
-        setMarketStatus('Connected (Cached)');
-        setActiveTab('Overview');
-        setSyntaxStatus('Offline fallbacks active');
-        if (lowerBoxState === 'minimized') setLowerBoxState('normal');
-      } else {
-        showToast('❌ API offline — Terminal mein run karein: npm run backend');
-        setMarketStatus('Offline');
-        setSyntaxStatus('API offline — npm run backend');
-        setBackendOfflineNotice('Strategy backend unavailable — check connection. Terminal mein `npm run backend` run karein.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
   const renderTriangleRIcon = () => (
       <div className="relative flex items-center justify-center w-6 h-6">
         <Code2 size={16} />
@@ -4281,77 +3692,17 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
             }
           }}
         >
-          {/* Main Top Header */}
-          <div className={`min-h-[42px] flex items-center justify-between px-3 md:px-4 shrink-0 ${t.bg} transition-colors duration-200 gap-2`}>
-            <div className="flex items-center gap-4 md:gap-8 h-full">
-              {/* Strategy Name */}
-              <div className="flex items-center gap-2 font-bold text-[13px] md:text-[14px] shrink-0">
-                <div className={`w-5 h-5 rounded flex items-center justify-center ${darkMode ? 'bg-white/10' : 'bg-black/10'}`}>
-                  <Activity size={13} className={t.text} />
-                </div>
-                <span className={t.text}>Strategy Tester</span>
-                <ChevronDown size={14} className={t.muted} />
-              </div>
-              
-              {/* Main Tabs */}
-              <div className="h-full flex gap-1 md:gap-4 font-semibold text-[12px] md:text-[13px] overflow-x-auto mobile-scroll-x">
-                {['Overview', 'List of trades', 'Trading Panel'].map((tab) => (
-                  <button key={tab} onClick={() => { setActiveTab(tab); if (lowerBoxState === 'minimized') setLowerBoxState(isMobile ? 'maximized' : 'maximized'); }} className={`h-full relative flex items-center shrink-0 transition-colors ${activeTab === tab || (tab === 'Overview' && activeTab === 'Performance Summary') ? t.text : `${t.muted} hover:text-blue-500`}`}>
-                    {(activeTab === tab || (tab === 'Overview' && activeTab === 'Performance Summary')) && <div className={`absolute bottom-0 left-0 w-full h-[2px] bg-blue-500 rounded-t-sm`} />}
-                    <span className="px-1 md:px-2 z-10 whitespace-nowrap">{tab === 'List of trades' && isMobile ? 'Trades' : tab === 'Trading Panel' && isMobile ? 'Trade' : tab}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className={`flex gap-1 ${t.muted} items-center shrink-0`}>
-              <button 
-                onClick={() => setShowPredictionReport(true)} 
-                className={`hidden sm:flex items-center gap-1 px-2 py-1 ${darkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'} rounded text-[11px] font-bold mr-1 transition-colors`}
-              >
-                <BarChartHorizontal size={12} /> Prediction Report
-              </button>
-              <button onClick={downloadReportScreenshot} className="hidden sm:flex items-center gap-1 px-2 py-1 bg-[#7C5CFF]/10 text-[#7C5CFF] hover:bg-[#7C5CFF]/20 rounded text-[11px] font-bold mr-1 transition-colors"><Download size={12} /> Download</button>
-              <button onClick={() => setIsReportPinned(!isReportPinned)} className={`p-2 md:p-1 ${t.hover} rounded transition-colors ${isReportPinned ? 'text-blue-500' : ''}`} title={isReportPinned ? 'Unpin (Auto-hide)' : 'Pin panel'}>
-                {isReportPinned ? <Pin size={14} className="fill-current" /> : <PinOff size={14} />}
-              </button>
-              <button onClick={() => setLowerBoxState(lowerBoxState === 'minimized' ? 'maximized' : 'minimized')} className={`p-2 md:p-1 ${t.hover} rounded transition-colors`} title={lowerBoxState === 'minimized' ? 'Expand' : 'Minimize'}>{lowerBoxState === 'minimized' ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}</button>
-              <button 
-                onClick={() => setLowerBoxState(lowerBoxState === 'maximized' ? 'normal' : 'maximized')} 
-                className={`p-1.5 md:p-1 ${t.hover} rounded transition-colors`} 
-                title={lowerBoxState === 'maximized' ? 'Restore size' : 'Fullscreen / Maximize'}
-              >
-                {lowerBoxState === 'maximized' ? <Minimize2 size={14}/> : <Maximize2 size={14}/>}
-              </button>
-            </div>
-          </div>
-
-          {/* Secondary Sub-header Toolbar */}
-          <div className={`min-h-[36px] border-b ${t.border} flex items-center px-4 shrink-0 bg-transparent transition-colors duration-200 gap-5 text-[11.5px] font-semibold text-[#787b86] overflow-x-auto mobile-scroll-x`}>
-            <div className={`flex items-center gap-1.5 cursor-pointer hover:text-blue-500 transition-colors whitespace-nowrap`}>
-              <Calendar size={13} />
-              <span>Jun 8, 2026 - Jul 18, 2026</span>
-              <ChevronDown size={12} className="opacity-70" />
-            </div>
-            <div className={`flex items-center gap-1.5 cursor-pointer hover:text-blue-500 transition-colors whitespace-nowrap`}>
-              <DollarSign size={13} />
-              <span>10K USDT</span>
-              <ChevronDown size={12} className="opacity-70" />
-            </div>
-            <div className={`flex items-center gap-1.5 cursor-pointer hover:text-blue-500 transition-colors whitespace-nowrap`}>
-              <Filter size={13} />
-              <span>Default detalization</span>
-              <ChevronDown size={12} className="opacity-70" />
-            </div>
-            <div className={`flex items-center gap-1.5 cursor-pointer hover:text-blue-500 transition-colors whitespace-nowrap`}>
-              <Code size={13} />
-              <span>Script execution</span>
-              <Info size={12} className="opacity-70" />
-              <ChevronDown size={12} className="opacity-70" />
-            </div>
-          </div>
-
-
-          {/* Strategy Tester and Trading Panel HTML was here (Extracted to TradingPanel.tsx) */}
+          <TradingPanel 
+            positions={positions}
+            paperOrders={paperOrders}
+            selectedCoin={selectedCoin}
+            livePrice={livePrice}
+            leverage={leverage}
+            closeActivePosition={closeActivePosition}
+            cancelLimitOrder={cancelLimitOrder}
+            handleExecuteArbitrage={handleExecuteArbitrage}
+            t={t}
+          />
         </div>
       </div>
 
@@ -4409,60 +3760,11 @@ export default function WebContainer({ onLogout, onBackToCoins }: { onLogout?: (
 
       {/* Unified Combined Vertical Right Toolbar */}
       {!isMobile && !focusMode && (
-        <div className={`hidden md:flex w-10 shrink-0 border-l ${t.border} ${t.bg} flex-col items-center py-3 gap-2 transition-colors duration-200 z-20`}>
-        {/* Editor Toggle Button at the top */}
-        <button
-          onClick={() => {
-            setIsEditorOpen(!isEditorOpen);
-          }}
-          className={`w-8 h-8 rounded flex items-center justify-center relative transition-all ${
-            isEditorOpen ? 'bg-green-500/15 text-green-400' : 'text-green-400/60 hover:bg-green-500/10 hover:text-green-400'
-          }`}
-          title="Pine/Python Strategy Editor"
-        >
-          <Braces size={16} />
-          {isEditorOpen && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-green-400 rounded-l" />}
-        </button>
-
-        <div className="w-6 h-px bg-[#2a2e39]/30 my-1" />
-
-        <button
-          onClick={handlePredictClick}
-          className={`w-8 h-8 rounded flex items-center justify-center relative transition-all ${isAutoPredictEnabled ? (darkMode ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.4)]' : 'bg-purple-100 text-purple-700 border border-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.4)]') : (darkMode ? 'text-purple-400/60 hover:bg-purple-500/10 hover:text-purple-400' : 'text-purple-700/60 hover:bg-purple-100 hover:text-purple-800')}`}
-          title={isAutoPredictEnabled ? "Auto-Predict Active (Click to Disable)" : "Predict Next Candle (Auto-Loop)"}
-        >
-          <Wand2 size={16} />
-          {isAutoPredictEnabled && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-purple-400 rounded-l" />}
-        </button>
-
-        <div className="w-6 h-px bg-[#2a2e39]/30 my-1" />
-
-        {[
-          {id: 'watchlist', icon: ListFilter, title: 'Watchlist', activeClass: 'bg-pink-500/15 text-pink-400', inactiveClass: 'text-pink-400/60 hover:bg-pink-500/10 hover:text-pink-400', marker: 'bg-pink-400'},
-          {id: 'details', icon: Activity, title: 'Details', activeClass: 'bg-lime-500/15 text-lime-400', inactiveClass: 'text-lime-400/60 hover:bg-lime-500/10 hover:text-lime-400', marker: 'bg-lime-400'},
-          {id: 'news', icon: Radio, title: 'News', activeClass: 'bg-zinc-500/15 text-zinc-400', inactiveClass: 'text-zinc-400/60 hover:bg-zinc-500/10 hover:text-zinc-400', marker: 'bg-zinc-400'},
-          {id: 'alerts', icon: Bell, title: 'Alerts', activeClass: 'bg-amber-500/15 text-amber-400', inactiveClass: 'text-amber-400/60 hover:bg-amber-500/10 hover:text-amber-400', marker: 'bg-amber-400'},
-          {id: 'bounties', icon: Briefcase, title: 'Bounties', activeClass: 'bg-slate-500/15 text-slate-400', inactiveClass: 'text-slate-400/60 hover:bg-slate-500/10 hover:text-slate-400', marker: 'bg-slate-400'},
-          {id: 'orderbook', icon: Database, title: 'Order Book', activeClass: 'bg-gray-500/15 text-gray-400', inactiveClass: 'text-gray-400/60 hover:bg-gray-500/10 hover:text-gray-400', marker: 'bg-gray-400'}
-        ].map(item => {
-          const isActive = rightSidebar === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => setRightSidebar(isActive ? null : item.id)}
-              className={`w-8 h-8 rounded flex items-center justify-center relative transition-all ${
-                isActive ? item.activeClass : item.inactiveClass
-              }`}
-              title={item.title}
-            >
-              <item.icon size={16} />
-              {isActive && <div className={`absolute right-0 top-1/2 -translate-y-1/2 w-[3px] h-4 ${item.marker} rounded-l`} />}
-            </button>
-          );
-        })}
-      </div>
-
-      
+        <RightToolbar 
+          isEditorOpen={isEditorOpen} setIsEditorOpen={setIsEditorOpen} 
+          isAutoPredictEnabled={isAutoPredictEnabled} handlePredictClick={handlePredictClick} 
+          darkMode={darkMode} rightSidebar={rightSidebar} setRightSidebar={setRightSidebar} t={t} 
+        />
       )}
       
       {/* AESTHETIC MOBILE BOTTOM NAVIGATION BAR */}

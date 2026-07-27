@@ -22,11 +22,16 @@ export default defineConfig({
       ignored: ['**/src/chart_engine_rust/target/**', '**/src/core_math_rust/target/**']
     },
     proxy: {
-      // Rust Collector (primary data source)
+      // Rust Backend Engine (primary data source) - runs on :3030
       '/rust-api': {
-        target: 'http://127.0.0.1:8080',
+        target: 'http://127.0.0.1:3030',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/rust-api/, '/api'),
+      },
+      // Direct /api routes → Rust Backend :3030
+      '/api': {
+        target: 'http://127.0.0.1:3030',
+        changeOrigin: true,
       },
       // Python backend (symbols list)
       '/backend-api': {

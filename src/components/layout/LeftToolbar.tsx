@@ -238,7 +238,7 @@ export const LeftToolbar = ({
       {/* Auto-Adjusting Scrollable Tools Container */}
       <div 
         ref={scrollRef}
-        className={`flex ${horizontal ? 'flex-row overflow-x-auto max-w-[calc(100vw-140px)]' : 'flex-col overflow-y-auto max-h-[calc(100vh-140px)]'} scrollbar-none items-center gap-1.5 px-0.5`}
+        className={`flex ${horizontal ? 'flex-row overflow-x-auto flex-1 min-w-0' : 'flex-col overflow-y-auto flex-1 min-h-0'} scrollbar-none items-center gap-1.5 px-0.5`}
       >
         {categories.map((cat) => {
           const activeSubToolId = selectedTools ? selectedTools[cat.id] : cat.items[0].id;

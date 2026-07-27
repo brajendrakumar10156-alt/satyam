@@ -90,7 +90,7 @@ export const TopNavbar = (props: any) => {
     <>
       {/* MOBILE NEW TOP HEADER */}
       {isMobile && !focusMode && (
-        <div className={`flex min-h-14 border-b items-center justify-between px-3 shrink-0 z-30 transition-all w-full relative ${darkMode ? 'border-[rgba(255,255,255,0.07)] bg-[#0B0E14]/95 backdrop-blur-md' : 'border-[#e0e3eb] bg-white/95 backdrop-blur-md shadow-sm'}`}>
+        <div className={`flex min-h-12 border-b items-center justify-between px-2.5 shrink-0 z-30 transition-all w-full relative ${darkMode ? 'border-[rgba(255,255,255,0.07)] bg-[#0B0E14]/95 backdrop-blur-md' : 'border-[#e0e3eb] bg-white/95 backdrop-blur-md shadow-sm'}`}>
           <div className="flex items-center gap-3 min-w-0">
             <button onClick={() => setMobileMenuOpen(true)} className={`p-1.5 -ml-1.5 ${t.muted} ${t.hover} rounded-lg`}><Menu size={22} /></button>
             <div className="flex flex-col cursor-pointer" onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
@@ -127,7 +127,7 @@ export const TopNavbar = (props: any) => {
       )}
 
       {/* DESKTOP HEADER (Hidden on mobile) */}
-      <div className={`${focusMode ? 'hidden' : 'hidden md:flex'} min-h-11 border-b items-center justify-between px-2 md:px-3 shrink-0 z-30 gap-2 w-full transition-all duration-200 overflow-x-auto whitespace-nowrap custom-scrollbar ${darkMode ? 'border-[rgba(255,255,255,0.07)] bg-[#0B0E14]/95 backdrop-blur-md' : 'border-[#e0e3eb] bg-white/95 backdrop-blur-md shadow-sm'}`}>
+      <div className={`${focusMode ? 'hidden' : 'hidden md:flex'} min-h-9 border-b items-center justify-between px-1.5 md:px-2 shrink-0 z-30 gap-1.5 w-full transition-all duration-200 ${darkMode ? 'border-[rgba(255,255,255,0.07)] bg-[#0B0E14]/95 backdrop-blur-md' : 'border-[#e0e3eb] bg-white/95 backdrop-blur-md shadow-sm'}`}>
           <div className="flex items-center gap-1.5 min-w-0 flex-1">
             {onBackToCoins && (
               <button 
@@ -144,7 +144,7 @@ export const TopNavbar = (props: any) => {
             <select
               value={selectedExchange}
               onChange={(e) => handleExchangeChange(e.target.value)}
-              className={`shrink-0 text-[10px] md:text-[11.5px] font-bold rounded-md px-1.5 py-1 border ${t.border} ${t.bg} ${t.text} outline-none cursor-pointer max-w-[76px] md:max-w-none`}
+              className={`shrink-0 text-[10px] md:text-[11px] font-bold rounded px-1 py-0.5 border ${t.border} ${t.bg} ${t.text} outline-none cursor-pointer max-w-[70px] md:max-w-none`}
               title="Select exchange"
             >
               {EXCHANGE_LIST.map((ex) => (
@@ -249,7 +249,7 @@ export const TopNavbar = (props: any) => {
                     setIsStyleDropdownOpen(false);
                     setIsActionsDropdownOpen(false);
                   }}
-                  className={`flex items-center gap-0.5 px-2 py-1.5 rounded text-[13px] font-extrabold transition-colors ${isTimeframeDropdownOpen ? `${t.sec} text-white` : `${t.muted} ${t.hover}`}`}
+                  className={`flex items-center gap-0.5 px-1.5 py-1 rounded text-[12px] font-extrabold transition-colors ${isTimeframeDropdownOpen ? `${t.sec} text-white` : `${t.muted} ${t.hover}`}`}
                   title="Select Timeframe"
                 >
                   <span>{chartInterval}</span>
@@ -320,11 +320,11 @@ export const TopNavbar = (props: any) => {
                     setIsTimeframeDropdownOpen(false);
                     setIsActionsDropdownOpen(false);
                   }} 
-                  className={`flex items-center gap-0.5 px-2 py-1.5 rounded transition-colors ${isStyleDropdownOpen ? `bg-emerald-500/15 text-emerald-400` : `text-emerald-400/60 hover:bg-emerald-500/10 hover:text-emerald-400`}`}
+                  className={`flex items-center gap-0.5 px-1.5 py-1 rounded transition-colors ${isStyleDropdownOpen ? `bg-emerald-500/15 text-emerald-400` : `text-emerald-400/60 hover:bg-emerald-500/10 hover:text-emerald-400`}`}
                   title="Chart Style"
                 >
-                  <CandlestickChart size={14} />
-                  <ChevronDown size={11} className="opacity-60" />
+                  <CandlestickChart size={12} />
+                  <ChevronDown size={9} className="opacity-60" />
                 </button>
                 {isStyleDropdownOpen && (
                   <div className={`absolute top-[calc(100%+6px)] left-0 w-52 max-h-[70vh] overflow-y-auto custom-scrollbar border rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.7)] z-[300] py-1.5 ${darkMode ? 'bg-[#0F1117]/98 backdrop-blur-xl border-[rgba(255,255,255,0.08)]' : 'bg-white border-[#e0e3eb] shadow-lg'}`}>
@@ -390,31 +390,31 @@ export const TopNavbar = (props: any) => {
                   showToast(`Volume Profile: ${!volumeProfile ? 'ON' : 'OFF'}`);
                   requestDraw();
                 }}
-                className={`flex items-center justify-center p-1.5 rounded transition-colors ${
+                className={`flex items-center justify-center p-1 rounded transition-colors ${
                   volumeProfile ? 'bg-purple-500/15 text-purple-400' : `text-purple-400/60 hover:bg-purple-500/10 hover:text-purple-400`
                 }`}
                 title={`Volume Profile: ${volumeProfile ? 'ON' : 'OFF'}`}
               >
-                <BarChartHorizontal size={14} />
+                <BarChartHorizontal size={13} />
               </button>
 
               <div className={`h-4 w-[1px] ${darkMode ? 'bg-[#2a2e39]' : 'bg-[#e0e3eb]'} mx-1`} />
 
               <button 
                 onClick={() => openModal('Indicators, metrics, and strategies', '', 'indicators_search')} 
-                className={`flex items-center justify-center p-1.5 rounded transition-colors text-violet-400/60 hover:bg-violet-500/10 hover:text-violet-400`}
+                className={`flex items-center justify-center p-1 rounded transition-colors text-violet-400/60 hover:bg-violet-500/10 hover:text-violet-400`}
                 title="Indicators"
               >
-                <LineChart size={14} />
+                <LineChart size={13} />
               </button>
 
               {/* ALERTS MODAL */}
               <button 
                 onClick={() => openModal('Create alert on', '', 'alert_creation')} 
-                className={`flex items-center justify-center p-1.5 rounded transition-colors text-amber-400/70 hover:bg-amber-500/10 hover:text-amber-400`}
+                className={`flex items-center justify-center p-1 rounded transition-colors text-amber-400/70 hover:bg-amber-500/10 hover:text-amber-400`}
                 title="Alert"
               >
-                <Bell size={14} />
+                <Bell size={13} />
               </button>
 
               <div className={`h-4 w-[1px] ${darkMode ? 'bg-[#2a2e39]' : 'bg-[#e0e3eb]'} mx-1`} />
@@ -428,8 +428,8 @@ export const TopNavbar = (props: any) => {
                 setReplayMode(!replayMode);
                 if (!replayMode) showToast('⏪ Replay on — use slider');
                 else showToast('▶️ Replay off');
-              }} className={`flex items-center justify-center p-1.5 rounded transition-colors ${replayMode ? 'bg-orange-500/10 text-orange-500' : `text-orange-400/60 hover:bg-orange-500/10 hover:text-orange-400`}`} title="Replay">
-                <Rewind size={14} />
+              }} className={`flex items-center justify-center p-1 rounded transition-colors ${replayMode ? 'bg-orange-500/10 text-orange-500' : `text-orange-400/60 hover:bg-orange-500/10 hover:text-orange-400`}`} title="Replay">
+                <Rewind size={13} />
               </button>
 
               <div className={`h-4 w-[1px] ${darkMode ? 'bg-[#2a2e39]' : 'bg-[#e0e3eb]'} mx-1`} />
@@ -443,10 +443,10 @@ export const TopNavbar = (props: any) => {
                     setIsTimeframeDropdownOpen(false);
                     setIsStyleDropdownOpen(false);
                   }}
-                  className={`p-1.5 rounded transition-colors ${isActionsDropdownOpen ? `bg-blue-500/15 text-blue-400` : `text-blue-400/60 hover:bg-blue-500/10 hover:text-blue-400`}`}
+                  className={`p-1 rounded transition-colors ${isActionsDropdownOpen ? `bg-blue-500/15 text-blue-400` : `text-blue-400/60 hover:bg-blue-500/10 hover:text-blue-400`}`}
                   title="Select Layout"
                 >
-                  <LayoutGrid size={14} />
+                  <LayoutGrid size={13} />
                 </button>
                 {isActionsDropdownOpen && (
                   <div className={`absolute top-[calc(100%+4px)] right-0 w-48 ${t.bg} border ${t.border} rounded-lg shadow-2xl z-[350] p-2 text-[11.5px] font-bold origin-top-right`}>
@@ -487,11 +487,11 @@ export const TopNavbar = (props: any) => {
                     setIsTimeframeDropdownOpen(false);
                     setIsStyleDropdownOpen(false);
                   }}
-                  className={`flex items-center gap-0.5 px-2 py-1.5 rounded transition-colors ${isLayoutMenuOpen ? `bg-stone-500/15 text-stone-400` : `text-stone-400/60 hover:bg-stone-500/10 hover:text-stone-400`}`}
+                  className={`flex items-center gap-0.5 px-1.5 py-1 rounded transition-colors ${isLayoutMenuOpen ? `bg-stone-500/15 text-stone-400` : `text-stone-400/60 hover:bg-stone-500/10 hover:text-stone-400`}`}
                   title="Manage Layouts"
                 >
-                  <Cloud size={14} />
-                  <ChevronDownIcon size={11} className="opacity-60" />
+                  <Cloud size={13} />
+                  <ChevronDownIcon size={10} className="opacity-60" />
                 </button>
 
                 {isLayoutMenuOpen && (
@@ -550,49 +550,49 @@ export const TopNavbar = (props: any) => {
               <div className={`h-4 w-[1px] ${darkMode ? 'bg-[#2a2e39]' : 'bg-[#e0e3eb]'} mx-1`} />
 
               {/* UTILITIES (Camera, Settings) */}
-              <div className="flex items-center gap-1.5 ml-3 border-l border-[#2a2e39]/50 pl-3">
+              <div className="flex items-center gap-1 ml-2 border-l border-[#2a2e39]/50 pl-2">
                   <button 
                     onClick={() => {
                       setTradingTab('Arbitrage Matrix');
                       if (lowerBoxState === 'minimized') setLowerBoxState('normal');
                     }}
-                    className={`p-1.5 rounded transition-colors ${tradingTab === 'Arbitrage Matrix' ? 'text-emerald-400 bg-emerald-500/10' : t.muted} hover:text-emerald-400`}
+                    className={`p-1 rounded transition-colors ${tradingTab === 'Arbitrage Matrix' ? 'text-emerald-400 bg-emerald-500/10' : t.muted} hover:text-emerald-400`}
                     title="Arbitrage Matrix"
                   >
-                    <Zap size={14} className={tradingTab === 'Arbitrage Matrix' ? "fill-emerald-400 animate-pulse" : ""} />
+                    <Zap size={13} className={tradingTab === 'Arbitrage Matrix' ? "fill-emerald-400 animate-pulse" : ""} />
                   </button>
                   <button
                     onClick={() => {
                       setTradingTab('Strategy Tester');
                       if (lowerBoxState === 'minimized') setLowerBoxState('normal');
                     }}
-                    className={`p-1.5 rounded transition-colors ${tradingTab === 'Strategy Tester' ? 'text-blue-400 bg-blue-500/10' : t.muted} hover:text-blue-400`}
+                    className={`p-1 rounded transition-colors ${tradingTab === 'Strategy Tester' ? 'text-blue-400 bg-blue-500/10' : t.muted} hover:text-blue-400`}
                     title="Strategy Tester"
                   >
-                    <FlaskConical size={14} className={tradingTab === 'Strategy Tester' ? "fill-blue-400" : ""} />
+                    <FlaskConical size={13} className={tradingTab === 'Strategy Tester' ? "fill-blue-400" : ""} />
                   </button>
                 </div>
               <div className="flex items-center gap-0.5">
                 <button 
                   onClick={() => openModal('Settings', 'Settings', 'settings')}
-                  className={`p-1.5 rounded transition-colors ${t.muted} ${t.hover}`}
+                  className={`p-1 rounded transition-colors ${t.muted} ${t.hover}`}
                   title="Chart Settings"
                 >
-                  <Settings size={14} />
+                  <Settings size={13} />
                 </button>
                 <button
                   onClick={() => takeRealScreenshot()}
-                  className={`p-1.5 rounded transition-colors ${t.muted} ${t.hover}`}
+                  className={`p-1 rounded transition-colors ${t.muted} ${t.hover}`}
                   title="Take a snapshot"
                 >
-                  <Camera size={14} />
+                  <Camera size={13} />
                 </button>
                 <button 
                   onClick={() => publishStrategy()}
-                  className={`p-1.5 rounded transition-colors ${t.muted} hover:text-purple-400`}
+                  className={`p-1 rounded transition-colors ${t.muted} hover:text-purple-400`}
                   title="Download Code File"
                 >
-                  <Upload size={14} />
+                  <Upload size={13} />
                 </button>
                 <button
                   onClick={() => {
@@ -602,10 +602,10 @@ export const TopNavbar = (props: any) => {
                       showToast('🖥️ Launching Windows Native App Container...');
                     }
                   }}
-                  className="flex items-center gap-1.5 px-2.5 py-1 ml-1.5 rounded bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-500/40 text-xs font-semibold transition-all shadow-sm group"
+                  className="flex items-center gap-1 px-2 py-0.5 ml-1 rounded bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-500/40 text-[11px] font-semibold transition-all shadow-sm group"
                   title="Open / Launch Native Windows Desktop Application (app_src)"
                 >
-                  <Monitor size={14} className="text-cyan-400 group-hover:scale-110 transition-transform" />
+                  <Monitor size={13} className="text-cyan-400 group-hover:scale-110 transition-transform" />
                   <span className="hidden sm:inline">Desktop App</span>
                 </button>
               </div>
@@ -620,32 +620,32 @@ export const TopNavbar = (props: any) => {
             <button onClick={() => setMobileMenuOpen(true)} className={`md:hidden p-2 ${t.muted} ${t.hover} rounded transition-colors`} aria-label="Open menu"><Menu size={18} /></button>
 
             {/* Desktop Clean Utility Panel */}
-            <div className="hidden md:flex items-center gap-1">
+            <div className="hidden md:flex items-center gap-0.5">
               {/* Fullscreen Toggle */}
               <button 
                 onClick={toggleFullscreen} 
-                className={`p-1.5 ${t.muted} ${t.hover} rounded transition-colors`} 
+                className={`p-1 ${t.muted} ${t.hover} rounded transition-colors`} 
                 title="Toggle Fullscreen"
               >
-                <Maximize2 size={14} />
+                <Maximize2 size={13} />
               </button>
 
               {/* Focus Mode Toggle */}
-              <button onClick={() => setFocusMode(!focusMode)} className={`p-1.5 ${t.muted} ${t.hover} rounded transition-colors hidden sm:flex items-center gap-1.5 mr-1`} title="Focus Mode (Maximize Chart)">
-                <Focus size={14} className={focusMode ? 'text-blue-400' : ''} />
+              <button onClick={() => setFocusMode(!focusMode)} className={`p-1 ${t.muted} ${t.hover} rounded transition-colors hidden sm:flex items-center gap-1`} title="Focus Mode (Maximize Chart)">
+                <Focus size={13} className={focusMode ? 'text-blue-400' : ''} />
               </button>
               {/* Theme Toggle (Highly accessible) */}
-              <button onClick={() => { setStealthMode(!stealthMode); if (!stealthMode) document.body.style.background = '#00000000'; }} className={`p-1.5 ${t.muted} ${t.hover} rounded transition-colors hidden sm:flex items-center gap-1.5 mr-1`} title="Stealth / Focus Mode">
-                <Ghost size={14} className={stealthMode ? 'text-blue-400' : ''} />
+              <button onClick={() => { setStealthMode(!stealthMode); if (!stealthMode) document.body.style.background = '#00000000'; }} className={`p-1 ${t.muted} ${t.hover} rounded transition-colors hidden sm:flex items-center gap-1`} title="Stealth / Focus Mode">
+                <Ghost size={13} className={stealthMode ? 'text-blue-400' : ''} />
               </button>
-              <button onClick={() => setDarkMode(!darkMode)} className={`p-1.5 ${t.muted} ${t.hover} rounded transition-colors`} title="Toggle theme">
-                {darkMode ? <Sun size={14} /> : <Moon size={14} />}
+              <button onClick={() => setDarkMode(!darkMode)} className={`p-1 ${t.muted} ${t.hover} rounded transition-colors`} title="Toggle theme">
+                {darkMode ? <Sun size={13} /> : <Moon size={13} />}
               </button>
 
               {/* Timezone Settings Dropdown */}
               <div className="relative">
-                <button onClick={() => setActiveFlyout(activeFlyout === 'timezone' ? null : 'timezone')} className={`p-1.5 ${activeFlyout === 'timezone' ? 'bg-[#7C5CFF] text-white' : `${t.muted} ${t.hover}`} rounded transition-colors`} title="Timezone Settings">
-                  <Clock size={14} />
+                <button onClick={() => setActiveFlyout(activeFlyout === 'timezone' ? null : 'timezone')} className={`p-1 ${activeFlyout === 'timezone' ? 'bg-[#7C5CFF] text-white' : `${t.muted} ${t.hover}`} rounded transition-colors`} title="Timezone Settings">
+                  <Clock size={13} />
                 </button>
                 {activeFlyout === 'timezone' && (
                   <div className={`absolute top-full right-0 mt-1 w-44 rounded-lg shadow-xl border ${t.border} ${t.bg} overflow-hidden z-50 text-[13px] font-medium`}>
@@ -672,13 +672,13 @@ export const TopNavbar = (props: any) => {
                   if (onRefreshChart) onRefreshChart();
                   showToast('🔄 Chart refreshed!');
                 }}
-                className={`p-1.5 rounded transition-all duration-200 ${t.muted} hover:text-blue-400 hover:bg-blue-500/10 active:rotate-180`}
+                className={`p-1 rounded transition-all duration-200 ${t.muted} hover:text-blue-400 hover:bg-blue-500/10 active:rotate-180`}
                 title="Refresh Chart Data"
                 style={{ transition: 'transform 0.4s, color 0.2s, background 0.2s' }}
                 onMouseDown={e => { e.currentTarget.style.transform = 'rotate(360deg)'; }}
                 onMouseUp={e => { setTimeout(() => { if(e.currentTarget) e.currentTarget.style.transform = ''; }, 500); }}
               >
-                <RefreshCw size={14} />
+                <RefreshCw size={13} />
               </button>
 
             </div>
